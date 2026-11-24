@@ -93,21 +93,23 @@ function rulesSummary(rules) {
     <div><dt>최저 공약</dt><dd data-rule-value="minBid">${escape(rules.minBid)}점</dd></div>
     <div><dt>초구 프렌드</dt><dd data-rule-value="allowFirstFriend">${rules.allowFirstFriend ? '허용' : '미허용'}</dd></div>
     <div><dt>초구 조커콜</dt><dd data-rule-value="allowFirstJokerCall">${rules.allowFirstJokerCall ? '허용' : '미허용'}</dd></div>
+    <div><dt>마지막 트릭 조커</dt><dd data-rule-value="allowLastJoker">${rules.allowLastJoker ? '효력 있음' : '효력 없음'}</dd></div>
   </dl>`;
 }
 
 function ruleEditor(rules) {
   const options = Array.from({length:8}, (_, i) => i + 13).map(points =>
     `<option value="${points}"${points === rules.minBid ? ' selected' : ''}>${points}점</option>`).join('');
-  const toggle = (key, title, detail) => `<label class="rule-row">
+  const toggle = (key, title, detail, label = title + ' 허용') => `<label class="rule-row">
     <span><strong>${title}</strong><small>${detail}</small></span>
-    <input type="checkbox" role="switch" name="${key}" aria-label="${title} 허용"${rules[key] ? ' checked' : ''}>
+    <input type="checkbox" role="switch" name="${key}" aria-label="${label}"${rules[key] ? ' checked' : ''}>
   </label>`;
   return `<fieldset class="rule-settings"><legend>테이블 규칙</legend>
     <label class="rule-row"><span><strong>최저 공약</strong><small>경매에서 처음 부를 수 있는 점수</small></span>
       <select name="minBid" aria-label="최저 공약">${options}</select></label>
     ${toggle('allowFirstFriend','초구 프렌드','첫 트릭의 승자를 프렌드로 지정')}
     ${toggle('allowFirstJokerCall','초구 조커콜','첫 트릭부터 조커콜 선언')}
+    ${toggle('allowLastJoker','마지막 트릭 조커','켜면 조커가 기루다를 이깁니다.','마지막 트릭 조커 효력')}
   </fieldset>`;
 }
 
@@ -115,7 +117,8 @@ function readRules(container) {
   return {
     minBid: Number(container.querySelector('[name="minBid"]').value),
     allowFirstFriend: container.querySelector('[name="allowFirstFriend"]').checked,
-    allowFirstJokerCall: container.querySelector('[name="allowFirstJokerCall"]').checked
+    allowFirstJokerCall: container.querySelector('[name="allowFirstJokerCall"]').checked,
+    allowLastJoker: container.querySelector('[name="allowLastJoker"]').checked
   };
 }
 

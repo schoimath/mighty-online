@@ -1,4 +1,4 @@
-import {renderScoreboard} from "./score-ui.js";
+import {isCoveredSeat, seatPile} from "./score-ui.js";
 import {DEFAULT_RULES} from "./engine.js";
 import {playTableSound, soundControl, toggleSound} from "./sound.js";
 
@@ -92,16 +92,15 @@ function seatMarkup(view, nameAt, winner) {
     const seat = (view.seat + offset) % 5, name = nameAt(seat);
     const isTurn = view.turn === seat && view.phase !== "result";
     const role = roleAt(view, seat);
-    const captured = view.phase === "play" || view.phase === "result";
-    const points = view.phase === "play" && view.captured ? view.captured[seat].length : view.scores[seat];
+    const playing = view.phase === "play" || view.phase === "result";
     const inAuction = view.phase === "bid";
     const lastBid = inAuction && view.bidHistory.findLast(entry => entry.seat === seat);
     const bidLabel = lastBid ? (lastBid.pass ? "패스" : suitInfo[lastBid.suit][0] + " " + lastBid.points + "점") : "";
-    const details = captured ? [role, points + "점"].filter(Boolean).join(" · ") : role || bidLabel || (view.counts[seat] + "장");
-    const status = isTurn ? ["차례", captured ? points + "점" : bidLabel].filter(Boolean).join(" · ") : details;
+    const details = role || bidLabel || (playing ? "" : view.counts[seat] + "장");
+    const status = [isTurn ? "차례" : "", details].filter(Boolean).join(" · ");
     const leader = inAuction && view.bid?.seat === seat;
     const avatar = inAuction ? seat + 1 : Array.from(name.trim())[0] || "♠";
-    return `<div class="g-seat g-seat-${offset} ${isTurn ? "g-seat-active" : ""} ${leader ? "g-seat-bidder" : ""} ${winner === seat ? "g-trick-winner" : ""}" data-seat="${seat}"><span class="g-avatar g-avatar-${seat}" aria-label="${seat + 1}번 자리">${escapeHtml(avatar)}</span><span class="g-seat-tag"><span class="g-seat-name">${escapeHtml(name)}${offset === 0 ? '<small>나</small>' : ""}</span><span class="g-seat-detail">${isTurn ? '<i></i>' : ""}${escapeHtml(status)}</span></span></div>`;
+    return `<div class="g-seat g-seat-${offset} ${isTurn ? "g-seat-active" : ""} ${leader ? "g-seat-bidder" : ""} ${winner === seat ? "g-trick-winner" : ""}" data-seat="${seat}" role="group" aria-label="${escapeHtml(name)} 자리"><span class="g-avatar g-avatar-${seat}" aria-label="${seat + 1}번 자리">${escapeHtml(avatar)}</span><span class="g-seat-tag"><span class="g-seat-name">${escapeHtml(name)}${offset === 0 ? '<small>나</small>' : ""}</span><span class="g-seat-detail">${isTurn ? '<i></i>' : ""}${escapeHtml(status)}</span></span>${seatPile(view, seat)}</div>`;
   }).join("");
 }
 function setFlightOffset(element, prefix, from, to) {
@@ -130,17 +129,24 @@ function dealToOtherSeats(root, localSeat) {
 function renderTable(ui, nameAt) {
   const {view, root, resolving} = ui;
   const felt = root.querySelector(".g-felt");
+  const openPile = felt.querySelector(".g-score-pile[open]")?.parentElement.dataset.scoreSeat;
+  felt.classList.toggle("g-with-piles", view.phase === "play" || view.phase === "result");
   felt.querySelector(".g-seats").innerHTML = seatMarkup(view, nameAt, resolving?.winner);
+  if (openPile != null) {
+    const restored = felt.querySelector('[data-score-seat="' + openPile + '"] details');
+    if (restored) restored.open = true;
+  }
   const caption = felt.querySelector(".g-trick-result");
   caption.hidden = !resolving;
-  caption.textContent = resolving ? nameAt(resolving.winner) + " · " + resolving.points + "점 획득" : "";
+  caption.textContent = resolving ? nameAt(resolving.winner) + " · " +
+    (isCoveredSeat(view, resolving.winner) ? "트릭 승리" : resolving.points + "점 획득") : "";
   const trick = felt.querySelector(".g-trick");
   const center = felt.querySelector(".g-table-center");
   center.hidden = view.trick.length > 0;
   trick.hidden = !view.trick.length;
   if (trick.hidden || trick.dataset.number !== String(view.trickNo)) {
     trick.replaceChildren();
-    trick.classList.remove("g-collecting");
+    trick.classList.remove("g-collecting", "g-collect-covered");
     trick.dataset.number = String(view.trickNo);
   }
   if (!center.hidden) {
@@ -296,7 +302,7 @@ function resultControls(view, ui) {
 }
 function previousTrick(view, nameAt) {
   const last = view.lastTrick;
-  if (!last) return "";
+  if (!last || isCoveredSeat(view, last.winner)) return "";
   return `<details class="g-log"><summary>지난 트릭 <b>${escapeHtml(nameAt(last.winner))} 승리</b></summary><p>${escapeHtml(last.number)}트릭 · ${escapeHtml(last.points)}점 획득</p><ul>${last.cards.map(m => `<li><span>${escapeHtml(nameAt(m.seat))}</span><strong>${m.card === "JK" ? "★ 조커" : suitMark(m.card[0]) + " " + escapeHtml(m.card.slice(1))}</strong></li>`).join("")}</ul></details>`;
 }
 function bidHistoryMarkup(view, nameAt) {
@@ -325,7 +331,9 @@ function infoMarkup(view, nameAt) {
 function panelMarkup(view, ui, nameAt) {
   if (ui.resolving) {
     const last = ui.resolving;
-    return `<div class="g-panel-body"><div class="g-panel-caption">트릭 결과</div><div class="g-action" aria-live="polite"><h2>${escapeHtml(nameAt(last.winner))} 승리</h2><p>${escapeHtml(last.number)}번째 트릭에서 ${escapeHtml(last.points)}점을 가져갔어요.</p></div>${infoMarkup(view, nameAt)}</div>${previousTrick(view, nameAt)}`;
+    const message = isCoveredSeat(view, last.winner) ? "획득한 카드를 덮었어요."
+      : last.points + "점을 가져갔어요.";
+    return `<div class="g-panel-body"><div class="g-panel-caption">트릭 결과</div><div class="g-action" aria-live="polite"><h2>${escapeHtml(nameAt(last.winner))} 승리</h2><p>${escapeHtml(last.number)}번째 트릭 · ${escapeHtml(message)}</p></div>${infoMarkup(view, nameAt)}</div>${previousTrick(view, nameAt)}`;
   }
   const mine = view.seat === view.turn;
   const controls = { bid: bidControls, discard: discardControls, friend: friendControls, play: playControls, result: resultControls };
@@ -348,7 +356,7 @@ function mountTable(root) {
         <section class="g-board" aria-label="게임 테이블"><div class="g-felt"><div class="g-felt-line"></div>
           <div class="g-table-center"></div><div class="g-trick" hidden></div><div class="g-seats"></div>
           <p class="g-trick-result" hidden></p></div></section>
-        <section class="g-hand"></section><section class="g-scoreboard" aria-label="획득 점수" hidden></section><aside class="g-panel"></aside>
+        <section class="g-hand"></section><aside class="g-panel"></aside>
       </div>
     </div></div>`;
   soundControl(root.querySelector('[data-do="sound"]'));
@@ -357,7 +365,7 @@ function redraw(ui, newDeal = false) {
   const { view, options, root } = ui;
   const nameAt = seat => String(options.names?.[seat] ?? ((seat + 1) + "번 플레이어"));
   const focused = root.contains(document.activeElement) ? document.activeElement : null;
-  const oldFocus = focused && ["card", "field", "do"].map(attr => [attr, focused.dataset[attr]]).find(([, value]) => value != null);
+  const oldFocus = focused && ["card", "field", "do", "pileToggle"].map(attr => [attr, focused.dataset[attr]]).find(([, value]) => value != null);
   const openLog = root.querySelector(".g-log")?.open;
   const openBids = root.querySelector("details.g-bid-history")?.open;
   root.querySelector("h1").textContent = view.phase === "play" ? `${view.trickNo}번째 트릭` : labels[view.phase];
@@ -368,13 +376,15 @@ function redraw(ui, newDeal = false) {
   renderTable(ui, nameAt);
   renderHand(ui, newDeal);
   if (newDeal) dealToOtherSeats(root, view.seat);
-  renderScoreboard(root.querySelector(".g-scoreboard"), view, nameAt);
   const panel = root.querySelector(".g-panel");
   panel.innerHTML = panelMarkup(view, ui, nameAt);
   panel.classList.toggle("g-result-arrive", view.phase === "result");
   if (openLog && panel.querySelector(".g-log")) panel.querySelector(".g-log").open = true;
   if (openBids && panel.querySelector("details.g-bid-history")) panel.querySelector("details.g-bid-history").open = true;
-  if (oldFocus) root.querySelector(`[data-${oldFocus[0]}="${oldFocus[1]}"]`)?.focus({ preventScroll: true });
+  if (oldFocus) {
+    const [attr, value] = oldFocus;
+    root.querySelector(`[data-${attr === "pileToggle" ? "pile-toggle" : attr}="${value}"]`)?.focus({ preventScroll: true });
+  }
 }
 function submit(ui, kind) {
   const { view } = ui;
@@ -403,6 +413,8 @@ function bind(ui) {
   });
   ui.root.addEventListener("click", event => {
     if (!ui.root.querySelector(".g-screen")) return;
+    const pile = ui.root.querySelector(".g-score-pile[open]");
+    if (pile && !pile.contains(event.target)) pile.open = false;
     const el = event.target.closest("button");
     if (!el || el.disabled) return;
     if (el.dataset.card) {
@@ -422,6 +434,13 @@ function bind(ui) {
       const action = submit(ui, kind);
       if (action) ui.options.onAction(action);
     }
+  });
+  ui.root.addEventListener("keydown", event => {
+    if (event.key !== "Escape") return;
+    const pile = ui.root.querySelector(".g-score-pile[open]");
+    if (!pile) return;
+    pile.open = false;
+    pile.querySelector("summary").focus();
   });
   ui.root.addEventListener("change", event => {
     const el = event.target;
@@ -455,10 +474,17 @@ function collectTrick(ui) {
   if (!motionEnabled()) { finishCollection(ui); return; }
   const trick = ui.root.querySelector(".g-trick");
   const seat = ui.root.querySelector(`[data-seat="${ui.resolving.winner}"]`).getBoundingClientRect();
+  const covered = isCoveredSeat(ui.view, ui.resolving.winner);
   for (const [i, el] of Array.from(trick.children).entries()) {
-    setFlightOffset(el, "collect", seat, el.firstElementChild.getBoundingClientRect());
+    const face = el.firstElementChild;
+    setFlightOffset(el, "collect", seat, face.getBoundingClientRect());
     el.style.setProperty("--collect-rotate", ((2 - i) * 7) + "deg");
+    if (covered) {
+      face.replaceChildren();
+      face.setAttribute("aria-label", "덮은 카드");
+    }
   }
+  trick.classList.toggle("g-collect-covered", covered);
   trick.classList.add("g-collecting");
   playTableSound("collect");
   ui.timer = setTimeout(() => finishCollection(ui), COLLECT_MS);
@@ -489,14 +515,21 @@ export function renderGame(container, publicView, options = {}) {
   if (ui.resolving) {
     // Peers can send the next lead while this client is gathering the trick.
     // Keep the newest snapshot and never dispatch actions from the held frame.
-    if (!document.hidden && publicView.phase !== "bid" && publicView.lastTrick?.number === ui.resolving.number) return;
+    if (!document.hidden && publicView.phase !== "bid" && publicView.lastTrick?.number === ui.resolving.number
+      && publicView.friend === ui.view.friend) return;
     clearTimeout(ui.timer);
     ui.resolving = null;
   }
   const last = publicView.lastTrick;
   if (!document.hidden && last && ui.view?.phase === "play" && ui.view.trickNo === last.number && ui.view.lastTrick?.number !== last.number) {
+    // Protected histories contain only the final move while a trick is being settled.
+    // Animate it with the four cards this client actually saw on the felt.
+    const shown = ui.view.trick;
+    const cards = last.cards.length === 5 ? last.cards : last.finalPlay && shown.length === 4
+      ? [...shown, last.finalPlay] : null;
+    if (!cards) { displayLatest(ui); return; }
     ui.resolving = last;
-    ui.view = {...publicView, phase: "play", trickNo: last.number, trick: last.cards, turn: null};
+    ui.view = {...publicView, phase: "play", trickNo: last.number, trick: cards, turn: null};
     updateDefaults(ui, ui.view);
     redraw(ui);
     ui.timer = setTimeout(() => collectTrick(ui), TRICK_HOLD_MS);
@@ -509,6 +542,9 @@ export function rulesContent(rules = DEFAULT_RULES) {
   const bidRange = rules.minBid === 20 ? "20점을 걸고" : `${escapeHtml(rules.minBid)}~20점 사이에서`;
   const firstFriend = rules.allowFirstFriend ? " 첫 트릭의 승자를 초구 프렌드로 지정할 수도 있습니다." : "";
   const jokerCallFrom = rules.allowFirstJokerCall ? "첫 트릭부터" : "두 번째 트릭부터";
+  const jokerTiming = rules.allowLastJoker
+    ? "첫 트릭에서는 조커가 가장 약하고, 조커로 시작하면 두 번째 카드가 따를 무늬를 정합니다. 2~10번째 트릭에서는 조커가 기루다를 이기며, 조커로 시작하는 사람이 따를 무늬를 부릅니다."
+    : "첫 트릭과 마지막 트릭에서 조커는 가장 약합니다. 이때 조커로 시작하면 두 번째 카드가 따를 무늬를 정합니다. 2~9번째 트릭에서 조커로 시작하면 원하는 무늬를 부릅니다.";
   return `<div class="g-rules">
     <p>다섯 명이 열 번의 트릭을 플레이합니다. 주공과 프렌드는 공약한 점수를 모으고, 나머지 플레이어는 이를 막습니다.</p>
     <h3>경매와 바닥패</h3><p>조커 한 장을 포함한 53장 중 각자 10장씩 받고 3장은 바닥에 둡니다. ${bidRange} 기루다(으뜸 무늬)나 노기루다로 입찰하거나 패스하세요. 같은 점수에서는 노기루다가 무늬 공약보다 높습니다. 모두 패스하면 다시 나눕니다.</p>
@@ -516,8 +552,8 @@ export function rulesContent(rules = DEFAULT_RULES) {
     <h3>프렌드</h3><p>주공이 부른 카드를 가진 사람이 프렌드입니다. 그 카드가 나오면 모두에게 정체가 공개됩니다.${firstFriend} 노프렌드를 선택하거나 주공이 가진 카드나 묻은 카드를 부르면 혼자 플레이합니다.</p>
     <h3>카드 내기</h3><p>주공부터 한 장씩 냅니다. 선이 낸 무늬가 손에 있으면 따라야 합니다. 마이티와 조커는 무늬에 관계없이 낼 수 있습니다. 첫 트릭에서는 다른 무늬를 낼 수 있으면 기루다로 시작할 수 없습니다. 트릭을 이긴 사람이 다음 선입니다.</p>
     <h3>마이티와 조커</h3><p>가장 센 카드는 스페이드 A입니다. 스페이드가 기루다일 때는 다이아몬드 A가 마이티입니다. 그다음은 조커, 기루다, 선의 무늬 순입니다. 같은 무늬 안에서는 A가 가장 높고 2가 가장 낮습니다.</p>
-    <p>첫 트릭과 마지막 트릭에서 조커는 가장 약합니다. 이때 조커로 시작하면 두 번째 카드가 따를 무늬를 정합니다. 2~9번째 트릭에서 조커로 시작하면 원하는 무늬를 부릅니다.</p>
+    <p>${jokerTiming}</p>
     <p>${jokerCallFrom} 선이 클로버 3으로 조커콜을 선언할 수 있습니다. 조커를 가진 사람은 조커 또는 마이티를 내야 하며, 조커는 그 트릭에서 가장 약합니다. 클로버가 기루다일 때의 조커콜 카드는 스페이드 3입니다.</p>
-    <h3>승패</h3><p>10, J, Q, K, A는 각각 1점으로, 한 판에는 총 20점이 있습니다. 열 번째 트릭이 끝났을 때 주공 팀의 점수가 공약 이상이면 주공 팀이 승리합니다.</p>
+    <h3>점수 카드와 승패</h3><p>10, J, Q, K, A는 각각 1점으로, 한 판에는 총 20점이 있습니다. 가져간 점수 카드는 보드의 각자 자리 옆에 모읍니다. 주공은 처음부터 카드를 덮고, 프렌드는 정체가 밝혀지는 즉시 앞서 가져간 카드까지 모두 덮습니다. 열 번째 트릭이 끝났을 때 주공 팀의 점수가 공약 이상이면 주공 팀이 승리합니다.</p>
   </div>`;
 }

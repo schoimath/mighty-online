@@ -37,16 +37,16 @@ test('53 unique cards, ten per player, with private isolated views', () => {
 });
 
 test('new deals enforce a configurable 13–20 minimum and retain all rules on a redeal', () => {
-  assert.deepEqual(DEFAULT_RULES, {minBid: 14, allowFirstFriend: true, allowFirstJokerCall: false});
+  assert.deepEqual(DEFAULT_RULES, {minBid: 14, allowFirstFriend: true, allowFirstJokerCall: false, allowLastJoker: false});
   assert.deepEqual(validateRules(), DEFAULT_RULES);
   assert.ok(Object.isFrozen(DEFAULT_RULES));
   for (const invalid of [null, [], {minBid: 12}, {minBid: 21}, {minBid: 14.5}, {minBid: '14'},
-    {allowFirstFriend: 0}, {allowFirstJokerCall: 'false'}]) {
+    {allowFirstFriend: 0}, {allowFirstJokerCall: 'false'}, {allowLastJoker: 'true'}]) {
     assert.throws(() => createGame({rules: invalid}));
   }
   reject(createGame(), {type: 'bid', suit: 'N', points: 13});
   for (let minBid = 13; minBid <= 20; minBid++) {
-    const rules = {minBid, allowFirstFriend: false, allowFirstJokerCall: true};
+    const rules = {minBid, allowFirstFriend: false, allowFirstJokerCall: true, allowLastJoker: true};
     const game = createGame({rules});
     for (let i = 0; i < 5; i++) act(game, {type: 'pass'});
     const view = getView(game, game.turn);
@@ -193,7 +193,7 @@ test('first-trick friend setting filters the choices and all declarer actions in
   }
 });
 
-test('Joker leads call a suit in middle tricks; first and last trick Joker loses', () => {
+test('Joker leads call a suit in middle tricks; first and last trick Joker loses by default', () => {
   const middle = playFixture([['JK'], ['C2', 'H5'], ['HA'], ['S7'], ['H4']]);
   reject(middle, { type: 'play', card: 'JK' });
   play(middle, 'JK', { suit: 'H' });
@@ -210,6 +210,48 @@ test('Joker leads call a suit in middle tricks; first and last trick Joker loses
   }
 });
 
+test('optional final-trick Joker can declare a suit and beats a trump as leader or follower', () => {
+  const game = playFixture([['JK'], ['DK'], ['H2'], ['CA'], ['S5']], 'H', 10);
+  game.rules = validateRules({allowLastJoker: true});
+  assert.deepEqual(legal(game), ['S', 'H', 'D', 'C'].map(suit => ({card: 'JK', suit})));
+  reject(game, {type: 'play', card: 'JK'});
+  const botLead = botAction(game);
+  assert.ok(legal(game).some(p => p.card === botLead.card && p.suit === botLead.suit));
+  play(game, 'JK', {suit: 'D'});
+  for (const card of ['DK', 'H2', 'CA', 'S5']) play(game, card);
+  assert.equal(game.lastTrick.winner, 0);
+  assert.equal(game.result.points, 2);
+
+  for (const allowLastJoker of [false, true]) {
+    const cards = ['DK', 'JK', 'H2', 'CA', 'S5'];
+    const follower = playFixture(cards.map(card => [card]), 'H', 10);
+    follower.rules = validateRules({allowLastJoker});
+    for (const card of cards) play(follower, card);
+    assert.equal(follower.lastTrick.winner, allowLastJoker ? 1 : 2);
+  }
+});
+
+test('final Joker option still respects the Mighty, Joker call and first-trick restrictions', () => {
+  for (const [trump, lead, trickNo, called, winner] of [
+    ['S', 'DA', 10, false, 0], // Mighty changes to diamonds under spade trump.
+    ['H', 'C3', 10, true, 3],
+    ['C', 'S3', 10, true, 4],
+    ['H', 'D2', 1, false, 3]
+  ]) {
+    const cards = [lead, 'JK', 'D3', 'HK', 'CK'];
+    const game = playFixture(cards.map(card => [card]), trump, trickNo);
+    game.rules = validateRules({allowLastJoker: true});
+    play(game, lead, called ? {jokerCall: true} : {});
+    for (const card of cards.slice(1)) play(game, card);
+    assert.equal(game.lastTrick.winner, winner);
+  }
+  const legacy = playFixture([['JK'], [], [], [], []], 'H', 10);
+  delete legacy.rules.allowLastJoker;
+  assert.equal(validateRules({minBid: 13}, legacy.rules).allowLastJoker, false);
+  assert.equal(getView(legacy, 0).rules.allowLastJoker, false);
+  assert.deepEqual(legal(legacy), [{card: 'JK'}]);
+});
+
 test('first-trick friend resolves once, declarer winning it plays alone', () => {
   for (const [lead, expected] of [['CA', null], ['C2', 1]]) {
     const game = playFixture([[lead], ['CK'], ['C6'], ['D5'], ['C4']], 'N', 1);
@@ -219,10 +261,13 @@ test('first-trick friend resolves once, declarer winning it plays alone', () => 
     for (const card of [lead, 'CK', 'C6', 'D5', 'C4']) play(game, card);
     assert.equal(game.friend, expected);
     assert.equal(game.friendKnown, true);
+    const view = getView(game, 2);
+    assert.equal(view.scores[game.lastTrick.winner], null);
+    assert.deepEqual(view.lastTrick.cards, []);
   }
 });
 
-test('point-card piles appear on completed tricks and buried points stay private until the result', () => {
+test('defenders show captured points while buried cards stay private at settlement', () => {
   const cards = ['H10', 'HJ', 'HQ', 'HK', 'HA'];
   const game = playFixture(cards.map((card, index) => [card, 'H' + (2 + index)]), 'N', 9);
   game.discarded = ['CA', 'DA', 'D8'];
@@ -231,7 +276,7 @@ test('point-card piles appear on completed tricks and buried points stay private
   play(game, 'HA');
   const defenderView = getView(game, 1);
   assert.deepEqual(defenderView.captured[4], cards);
-  assert.deepEqual(defenderView.scores, [0, 0, 0, 0, 5]);
+  assert.deepEqual(defenderView.scores, [null, 0, 0, 0, 5]);
   assert.deepEqual(defenderView.discarded, []);
   defenderView.captured[4].pop();
   assert.equal(game.captured[4].length, 5);
@@ -239,13 +284,60 @@ test('point-card piles appear on completed tricks and buried points stay private
   const final = getView(game, 1);
   assert.equal(final.phase, 'result');
   assert.deepEqual(final.captured, [[], [], [], [], cards]);
-  assert.deepEqual(final.scores, [2, 0, 0, 0, 5]);
-  assert.deepEqual(final.discarded, game.discarded);
+  assert.deepEqual(final.scores, [null, 0, 0, 0, 5]);
+  assert.deepEqual(final.discarded, []);
+  assert.deepEqual(getView(game, 0).discarded, game.discarded);
+  assert.equal(final.result.points, 2);
+});
+
+test('all viewers see the same covered piles when a called-card friend reveals', () => {
+  const game = playFixture([
+    ['HA', 'C3', 'D2'], ['H2', 'CA', 'DA'], ['H10', 'C5', 'D5'],
+    ['HJ', 'C6', 'D3'], ['H6', 'C7', 'D4']
+  ], 'N', 8);
+  game.call = {kind: 'card', card: 'DA'};
+  game.friend = 1;
+  game.friendKnown = false;
+  game.discarded = ['CK', 'D8', 'S5'];
+  for (const card of ['HA', 'H2', 'H10', 'HJ', 'H6']) play(game, card);
+  for (let seat = 0; seat < 5; seat++) {
+    const view = getView(game, seat);
+    assert.deepEqual(view.captured[0], []);
+    assert.equal(view.scores[0], null);
+    assert.deepEqual(view.lastTrick, {number: 8, winner: 0, cards: [], points: null, finalPlay: {seat: 4, card: 'H6'}});
+  }
+  play(game, 'C3');
+  assert.equal(getView(game, 2).lastTrick.finalPlay, undefined);
+  for (const card of ['CA', 'C5', 'C6', 'C7']) play(game, card);
+  for (let seat = 0; seat < 5; seat++) {
+    const view = getView(game, seat);
+    assert.equal(view.friend, null);
+    assert.deepEqual(view.captured[1], ['CA']);
+    assert.equal(view.scores[1], 1);
+    assert.equal(view.lastTrick.cards.length, 5);
+  }
+  play(game, 'DA');
+  for (let seat = 0; seat < 5; seat++) {
+    const view = getView(game, seat);
+    assert.equal(view.friend, 1);
+    assert.deepEqual(view.captured[1], []);
+    assert.equal(view.scores[1], null);
+    assert.deepEqual(view.lastTrick, {number: 9, winner: 1, cards: [], points: null});
+    assert.deepEqual(view.trick, [{seat: 1, card: 'DA'}]);
+  }
+  for (const card of ['D5', 'D3', 'D4', 'D2']) play(game, card);
+  const result = getView(game, 3);
+  assert.deepEqual(result.scores, [null, null, 0, 0, 0]);
+  assert.deepEqual(result.captured, [[], [], [], [], []]);
+  assert.deepEqual(result.lastTrick.cards, []);
+  assert.deepEqual(result.result, {won: false, points: 6, target: 14, declarer: 0, friend: 1});
+  assert.deepEqual(game.captured[1], ['CA', 'DA']);
 });
 
 test('60 complete bot games always make 50 legal plays and account for all 20 points', () => {
   for (let run = 0; run < 60; run++) {
-    const rules = {minBid: 13 + run % 8, allowFirstFriend: Boolean(run % 3), allowFirstJokerCall: Boolean(run % 2)};
+    const rules = {minBid: 13 + run % 8, allowFirstFriend: Boolean(run % 3), allowFirstJokerCall: Boolean(run % 2),
+      allowLastJoker: Boolean(run % 5)};
     const game = createGame({ firstSeat: run % 5, rules });
     let turns = 0;
     let plays = 0;

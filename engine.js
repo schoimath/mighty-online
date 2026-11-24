@@ -6,19 +6,21 @@ const CONTRACTS = Array.from({ length: 8 }, (_, index) =>
   [...SUITS, 'N'].map(suit => ({ points: 13 + index, suit }))
 ).flat();
 const SEATS = 5;
-export const DEFAULT_RULES = Object.freeze({minBid: 14, allowFirstFriend: true, allowFirstJokerCall: false});
+export const DEFAULT_RULES = Object.freeze({
+  minBid: 14, allowFirstFriend: true, allowFirstJokerCall: false, allowLastJoker: false
+});
 const LEGACY_RULES = Object.freeze({...DEFAULT_RULES, minBid: 13});
-const gameRules = state => state.rules ?? LEGACY_RULES;
+const gameRules = state => state.rules ? {...DEFAULT_RULES, ...state.rules} : LEGACY_RULES;
 
 export function validateRules(rules = {}, defaults = DEFAULT_RULES) {
   if (!rules || typeof rules !== 'object' || Array.isArray(rules)) throw new Error('게임 규칙을 확인해 주세요.');
   const {minBid = defaults.minBid, allowFirstFriend = defaults.allowFirstFriend,
-    allowFirstJokerCall = defaults.allowFirstJokerCall} = rules;
+    allowFirstJokerCall = defaults.allowFirstJokerCall, allowLastJoker = defaults.allowLastJoker ?? false} = rules;
   if (!Number.isInteger(minBid) || minBid < 13 || minBid > 20) throw new Error('최저 공약은 13~20점에서 선택해 주세요.');
-  if (typeof allowFirstFriend !== 'boolean' || typeof allowFirstJokerCall !== 'boolean') {
-    throw new Error('초구 규칙의 허용 여부를 선택해 주세요.');
+  if ([allowFirstFriend, allowFirstJokerCall, allowLastJoker].some(value => typeof value !== 'boolean')) {
+    throw new Error('프렌드와 조커 규칙의 허용 여부를 선택해 주세요.');
   }
-  return {minBid, allowFirstFriend, allowFirstJokerCall};
+  return {minBid, allowFirstFriend, allowFirstJokerCall, allowLastJoker};
 }
 const nextSeat = seat => (seat + 1) % SEATS;
 const validSeat = seat => Number.isInteger(seat) && seat >= 0 && seat < SEATS;
@@ -90,21 +92,23 @@ function leadSuit(trick) {
   return trick[0]?.card[0];
 }
 
-function jokerActive(trickNo, trick) {
-  return trickNo > 1 && trickNo < 10 && !trick[0]?.jokerCall;
+function jokerActive(state, trick = state.trick) {
+  return state.trickNo > 1 && (state.trickNo < 10 || gameRules(state).allowLastJoker) && !trick[0]?.jokerCall;
 }
 
-function strength(card, trump, trick, trickNo) {
+function strength(card, trump, trick, activeJoker) {
   if (card === mighty(trump)) return 100;
-  if (card === 'JK') return jokerActive(trickNo, trick) ? 90 : -1;
+  if (card === 'JK') return activeJoker ? 90 : -1;
   if (card[0] === trump) return 50 + rank(card);
   if (card[0] === leadSuit(trick)) return 20 + rank(card);
   return 0;
 }
 
-function winningPlay(trick, trump, number) {
+function winningPlay(state, trick = state.trick) {
+  const trump = state.bid.suit;
+  const activeJoker = jokerActive(state, trick);
   return trick.reduce((best, play) =>
-    strength(play.card, trump, trick, number) > strength(best.card, trump, trick, number) ? play : best
+    strength(play.card, trump, trick, activeJoker) > strength(best.card, trump, trick, activeJoker) ? play : best
   );
 }
 
@@ -117,7 +121,7 @@ function legalPlays(state, hand) {
       cards = hand.filter(card => card[0] !== trump);
     }
     return cards.flatMap(card => {
-      if (card === 'JK' && jokerActive(trickNo, trick)) {
+      if (card === 'JK' && jokerActive(state)) {
         return SUITS.map(suit => ({ card, suit }));
       }
       if (card === caller(trump) && (trickNo > 1 || gameRules(state).allowFirstJokerCall)) {
@@ -171,18 +175,28 @@ export function getView(state, seat) {
   if (!validSeat(seat)) throw new Error('참가 좌석이 올바르지 않습니다.');
   const { phase, turn, dealNo, passed, bid, bidHistory, declarer, friendKnown, call,
     trick, trickNo, lastTrick, scores, captured, result } = state;
+  const friend = friendKnown ? state.friend : null;
+  const covered = player => player === declarer || player === friend;
+  let recentTrick = lastTrick;
+  if (lastTrick && covered(lastTrick.winner)) {
+    recentTrick = {number: lastTrick.number, winner: lastTrick.winner, cards: [], points: null};
+    // The fifth play is public on the felt before the trick is swept into its pile.
+    if (!trick.length) recentTrick.finalPlay = lastTrick.cards.at(-1);
+  }
   const visible = {
     seat, phase, turn, dealNo, rules: gameRules(state), hand: state.hands[seat], counts: state.hands.map(h => h.length),
-    passed, bid, bidHistory, declarer, friendKnown, friend: friendKnown ? state.friend : null,
-    call, selfRole: selfRole(state, seat), trick, trickNo, lastTrick, scores, captured, result,
-    discarded: seat === declarer || phase === 'result' ? state.discarded : [],
+    passed, bid, bidHistory, declarer, friendKnown, friend,
+    call, selfRole: selfRole(state, seat), trick, trickNo, lastTrick: recentTrick, result,
+    scores: scores.map((score, player) => covered(player) ? null : score),
+    captured: captured?.map((cards, player) => covered(player) ? [] : cards),
+    discarded: seat === declarer ? state.discarded : [],
     choices: choicesFor(state, seat)
   };
   return structuredClone(visible);
 }
 
 function finishTrick(state) {
-  const winner = winningPlay(state.trick, state.bid.suit, state.trickNo).seat;
+  const winner = winningPlay(state).seat;
   const scoringCards = state.trick.map(play => play.card).filter(point);
   const points = scoringCards.length;
   state.captured[winner].push(...scoringCards);
@@ -282,7 +296,7 @@ function botPlay(view) {
     const favoredSuit = preferredSuit(hand);
     const leadValue = p => {
       if (p.card === 'JK') {
-        if (!jokerActive(trickNo, trick)) return -100;
+        if (!jokerActive(view)) return -100;
         return (trickNo >= 8 ? 50 : 6) + Number(p.suit === favoredSuit);
       }
       if (p.card === mighty(trump)) return trickNo < 8 ? 1 : 30;
@@ -291,15 +305,15 @@ function botPlay(view) {
     };
     return options.reduce((best, p) => leadValue(p) > leadValue(best) ? p : best);
   }
-  const bestSeat = winningPlay(trick, trump, trickNo).seat;
+  const bestSeat = winningPlay(view).seat;
   const isAlly = view.selfRole === 'friend' ? bestSeat === view.declarer :
     view.selfRole === 'declarer' ? bestSeat === view.friend :
     view.friendKnown && bestSeat !== view.declarer && bestSeat !== view.friend;
   const followValue = p => {
     const after = [...trick, { seat, ...p }];
-    const takesTrick = winningPlay(after, trump, trickNo).seat === seat;
+    const takesTrick = winningPlay(view, after).seat === seat;
     const cost = keepValue(p.card, trump) / 10;
-    if (p.card === 'JK' && !jokerActive(trickNo, trick)) return -2;
+    if (p.card === 'JK' && !jokerActive(view)) return -2;
     if (isAlly) return (takesTrick ? -3 : 0) + point(p.card) * 6 - cost;
     const pointsAtStake = pointsIn(after.map(play => play.card));
     return (takesTrick ? 3 + pointsAtStake * 2 : -point(p.card) * 4) - cost;

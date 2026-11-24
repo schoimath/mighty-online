@@ -20,7 +20,7 @@ test('host room rules are shared before play, frozen for a round and reusable on
   const original = session.view(1);
   original.rules.minBid = 13;
   assert.equal(session.view(0).rules.minBid, 14);
-  const rules = {minBid: 20, allowFirstFriend: false, allowFirstJokerCall: true};
+  const rules = {minBid: 20, allowFirstFriend: false, allowFirstJokerCall: true, allowLastJoker: true};
   session.setRules(rules);
   session.setRules({minBid: 19});
   assert.equal(rules.minBid, 20);
@@ -141,7 +141,10 @@ test('a full room completes ten tricks when a guest disconnects during play', ()
   assert.equal(final.phase, 'result');
   assert.equal(final.lastTrick.number, 10);
   assert.equal(final.result.friend, friend);
-  assert.equal(final.scores.reduce((sum, score) => sum + score, 0), 20);
+  assert.equal(final.scores[declarer], null);
+  assert.equal(final.scores[friend], null);
+  const defense = final.scores.filter(score => score !== null);
+  assert.equal(defense.reduce((sum, score) => sum + score, final.result.points), 20);
   session.returnToRoom();
   assert.equal(session.view(0).game, null);
 });

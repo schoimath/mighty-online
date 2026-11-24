@@ -1,57 +1,69 @@
-.g-scoreboard {
-  grid-column: 1; min-width: 0; border: 1px solid #3c5846; border-radius: 13px;
-  padding: 14px 16px; background: #1a3529; color: #eef1e4;
+.g-felt.g-with-piles { min-height: 348px; }
+.g-with-piles .g-seat-0 { top: 92%; }
+.g-with-piles .g-seat-1, .g-with-piles .g-seat-4 { top: 63%; }
+.g-with-piles .g-trick-result { top: 28%; }
+.g-with-piles .g-seat-detail { word-break: keep-all; }
+.g-with-piles .g-seat-detail:empty { display: none; }
+.g-score-anchor {
+  position: absolute; top: calc(100% + 4px); left: 50%; transform: translateX(-50%);
+  width: max-content; max-width: none; line-height: 1;
 }
-.g-score-heading, .g-score-line {
-  display: flex; align-items: baseline; justify-content: space-between; gap: 8px;
+.g-seat-0 .g-score-anchor { top: auto; bottom: calc(100% + 4px); }
+.g-score-strip, .g-score-covered {
+  display: inline-flex; align-items: center; justify-content: center; gap: 3px;
+  min-height: 23px; padding: 2px 5px; border: 1px solid #67805e; border-radius: 5px;
+  color: #e5ebd9; background: #163e2d;
 }
-.g-score-heading { flex-wrap: wrap; margin-bottom: 12px; }
-.g-score-heading h2 { margin: 0; color: #f8f5e9; font-size: 1rem; font-weight: 650; }
-.g-score-last { color: #f1d59a; font-size: .82rem; overflow-wrap: anywhere; }
-.g-score-list {
-  display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 5px;
-  list-style: none; margin: 0; padding: 0;
+.g-score-total {
+  margin-inline: 1px; color: #f6e2af; font: 650 .74rem/1.2 "Malgun Gothic", sans-serif;
+  white-space: nowrap; font-variant-numeric: tabular-nums;
 }
-.g-score-seat {
-  min-width: 0; padding: 7px; border: 1px solid #45604d;
-  border-radius: 6px; background: #153024;
-}
-.g-score-seat.g-score-winner { border-color: #ab9560; background: #2d3e2b; }
-.g-score-line { flex-wrap: wrap; gap: 0 5px; }
-.g-score-name {
-  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  color: #d7e3d2; font-size: .8rem;
-}
-.g-score-total { white-space: nowrap; color: #fae7b3; font-size: .94rem; font-variant-numeric: tabular-nums; }
-.g-score-cards { display: flex; flex-wrap: wrap; gap: 3px; align-items: center; }
-.g-score-cards:not(:empty) { margin-top: 5px; }
 .g-score-card {
-  display: inline-grid; place-items: center; padding: 2px 3px; min-width: 24px;
-  border: 1px solid #d8d0ac; border-radius: 3px; background: #faf5e4;
-  color: #263a2c; font: 700 .82rem/1.2 Georgia, serif;
+  display: inline-flex; align-items: center; justify-content: center; min-width: 21px;
+  padding: 2px 3px; border: 1px solid #e0d8b6; border-radius: 3px;
+  background: #faf5e4; color: #263a2c; font: 700 .78rem/1 Georgia, serif;
+  white-space: nowrap;
 }
-.g-score-card.g-score-red { color: #a03c3c; }
-.g-score-card.g-score-buried { border: 1px dashed #9b762c; background: #efdfa9; }
-.g-score-note { margin: 9px 0 0; color: #c9d7c4; font-size: .82rem; }
-@media (max-width: 880px) {
-  .g-scoreboard { padding: 12px; }
-  .g-score-list { grid-template-columns: repeat(auto-fit, minmax(94px, 1fr)); }
+.g-score-red { color: #99383a; }
+.g-score-covered { gap: 6px; color: #d0ddc5; font-size: .68rem; font-weight: 600; }
+.g-score-covered i, .g-collect-covered .g-on-table::after {
+  background-color: #355c4c;
+  background-image: repeating-linear-gradient(45deg, transparent 0 3px, #e1ce9799 3px 4px),
+                    repeating-linear-gradient(-45deg, transparent 0 3px, #e1ce9799 3px 4px);
+}
+.g-score-covered i {
+  width: 13px; height: 17px; border: 1px solid #e8dfbe; border-radius: 2px;
+  box-shadow: -2px 1px #234431, -3px 1px #9aa989; transform: rotate(5deg);
+}
+.g-score-pile { position: relative; }
+.g-score-pile summary { list-style: none; cursor: pointer; }
+.g-score-pile summary::-webkit-details-marker { display: none; }
+.g-score-pile summary:hover, .g-score-pile[open] summary { border-color: #e0c68d; }
+.g-score-pile summary i { color: #ddc88d; font: normal .68rem/1 sans-serif; }
+.g-score-pile[open] summary i { transform: rotate(180deg); }
+.g-seat:has(.g-score-pile[open]) { z-index: 4; }
+.g-score-popover {
+  position: absolute; z-index: 1; top: calc(100% + 4px); left: 0; width: max-content;
+  max-width: min(192px, 57vw); padding: 9px; border: 1px solid #9a8d60; border-radius: 7px;
+  background: #153326; box-shadow: 0 5px 12px #0e221b99; color: #f2e6c5;
+}
+.g-score-popover > strong { display: block; margin-bottom: 6px; font-size: .75rem; }
+.g-score-all { display: flex; flex-wrap: wrap; gap: 3px; }
+.g-score-all .g-score-card { min-width: 25px; min-height: 20px; font-size: .85rem; }
+.g-seat-3 .g-score-popover, .g-seat-4 .g-score-popover { left: auto; right: 0; }
+.g-seat-0 .g-score-popover, .g-seat-1 .g-score-popover, .g-seat-4 .g-score-popover { top: auto; bottom: calc(100% + 4px); }
+.g-seat-0 .g-score-popover { left: 50%; transform: translateX(-50%); }
+.g-collect-covered .g-on-table::after {
+  content: ""; position: absolute; inset: 0; border: 2px solid #f0e6c9; border-radius: 5px;
+}
+@media (max-width: 729px) {
+  .g-felt.g-with-piles { min-height: 304px; }
 }
 @media (max-width: 479px) {
-  .g-score-list { grid-template-columns: 1fr; gap: 0; }
-  .g-score-seat {
-    display: grid; grid-template-columns: minmax(82px, 36%) minmax(0, 1fr);
-    align-items: center; gap: 9px; padding: 5px 6px;
-    border: 0; border-top: 1px solid #405844; border-radius: 0; background: transparent;
-  }
-  .g-score-seat.g-score-winner { border-color: #8e8056; }
-  .g-score-line { flex-wrap: nowrap; }
-  .g-score-cards:not(:empty) { margin-top: 0; }
-}
-@media (prefers-reduced-motion: no-preference) {
-  .g-score-arrival { animation: g-score-arrival 420ms cubic-bezier(.2,.75,.3,1) both; }
-}
-@keyframes g-score-arrival {
-  from { opacity: .25; transform: translateY(-11px) rotate(-8deg) scale(.86); }
-  to { opacity: 1; transform: none; }
+  .g-with-piles .g-seat-0 { max-width: 46%; }
+  .g-with-piles .g-seat-1, .g-with-piles .g-seat-4 { top: 65%; }
+  .g-with-piles .g-trick { top: 46%; }
+  .g-seat-1 .g-score-anchor { left: 0; transform: none; }
+  .g-seat-4 .g-score-anchor { left: auto; right: 0; transform: none; }
+  .g-score-strip { min-height: 24px; gap: 2px; padding-inline: 3px; }
 }
