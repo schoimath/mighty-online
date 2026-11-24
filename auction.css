@@ -1,5 +1,7 @@
 .g-leading-bid {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  line-height: 1.2;
   justify-items: center;
   gap: 3px;
   width: max-content;
@@ -8,6 +10,9 @@
   border-block: 1px solid #afbc8152;
 }
 .g-table-center .g-leading-bid > small { color: #cbd7bd; font-size: .8rem; }
+.g-felt:is([data-phase="bid"], [data-phase="discard"]) .g-table-center {
+  grid-template-columns: minmax(0, 1fr); max-width: min(240px, calc(100% - var(--table-card) - 86px));
+}
 .g-table-center .g-leading-bid > strong {
   display: flex;
   align-items: baseline;
@@ -33,8 +38,25 @@
 .g-bid-seat.g-avatar-0 { background: #c1d1a6; color: #113628; }
 .g-seat.g-seat-bidder { border-color: #c9aa66; background: #394734; }
 .g-seat-bidder .g-seat-detail { color: #f1d79b; }
+.g-auction-call {
+  position: absolute; translate: -50% -50%; display: grid; justify-items: center;
+  gap: 3px; width: 68px; pointer-events: none; text-align: center;
+}
+.g-auction-call > strong {
+  display: inline-flex; align-items: center; gap: .25em; padding: 3px 8px;
+  border: 1px solid #d2c6a3; border-radius: 6px; background: #eee9d8; color: #252d23;
+  box-shadow: 0 2px 4px #112b2066; font: 700 1rem/1.2 Georgia, "Malgun Gothic", serif;
+  white-space: nowrap;
+}
+.g-auction-call .g-suit { min-width: 0; background: transparent; }
+.g-auction-call > small {
+  max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: #e1e9d9; font-size: .75rem; line-height: 1.2;
+}
+.g-call-leader > strong { border-color: #ffe1a1; background: #f8d994; }
+.g-call-pass > strong { border-color: #779584; background: #284c3a; color: #dce8da; font: 600 .8rem/1.4 system-ui, sans-serif; }
 @media (prefers-reduced-motion: no-preference) {
-  .g-leading-bid > strong { animation: g-raise-bid 310ms ease-out; }
+  .g-leading-bid > strong, .g-call-new > strong { animation: g-raise-bid 310ms ease-out; }
 }
 @keyframes g-raise-bid {
   from { opacity: .4; transform: translateY(7px) scale(.91); }
@@ -79,6 +101,25 @@
 .g-bid-name { overflow-wrap: anywhere; }
 .g-bid-history strong { white-space: nowrap; font-variant-numeric: tabular-nums; }
 .g-bid-pass { color: #b4c4b7; }
-@media (max-width: 479px) {
-  .g-leading-bid { padding: .3rem .45rem; gap: 2px; }
+@media (max-width: 920px) {
+  .g-leading-bid { padding: .2rem .4rem; gap: 2px; }
+  .g-table-center .g-leading-bid > strong { font-size: 1.45rem; }
+}
+@container (max-width: 550px) {
+  .g-auction-call { width: 50px; }
+  .g-auction-call > strong { padding: 2px 5px; font-size: .84rem; }
+  .g-call-pass > strong, .g-auction-call > small { font-size: .69rem; }
+  .g-felt:is([data-phase="bid"], [data-phase="discard"]) .g-table-center { max-width: calc(100% - var(--table-card) - 65px); }
+  .g-felt[data-phase="bid"] .g-table-symbol { font-size: 28px; }
+  .g-felt[data-phase="bid"] .g-table-center > strong { font-size: .8rem; line-height: 1.25; }
+  .g-leading-bid { padding: .2rem .25rem; gap: 2px; }
+}
+@container (max-width: 330px) {
+  .g-leading-bid { padding-inline: 2px; }
+  .g-table-center .g-leading-bid > small, .g-leading-bid strong > span:last-child { font-size: .68rem; }
+  .g-table-center .g-leading-bid > strong { gap: .08em; font-size: 1.08rem; }
+  .g-leading-bid strong .g-suit-N { font-size: .78em; align-self: center; }
+  .g-bidder { gap: 3px; }
+  .g-bidder b { font-size: .71rem; }
+  .g-bidder .g-bid-seat { width: 13px; height: 13px; font-size: .66rem; }
 }

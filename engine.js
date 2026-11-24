@@ -501,3 +501,5 @@ export function botAction(state, seat = state.turn) {
   if (!validSeat(seat) || seat !== state.turn) throw new Error('컴퓨터의 차례가 아닙니다.');
   return botDecision(botObservation(state, seat));
 }
+
+export {DECK, jokerActive, legalPlays, pointsIn, strength, winningPlay};

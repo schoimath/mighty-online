@@ -1,26 +1,4 @@
-/* Reserve the middle of the felt for the trick. The rail expands with captured cards. */
-.g-felt.g-with-piles {
-  --table-card: clamp(38px, 4.6vw, 54px);
-  --play-slot: calc(var(--table-card) * 1.385 + 19px);
-  grid-template-columns: minmax(0, 22fr) repeat(2, minmax(0, 28fr)) minmax(0, 22fr);
-  grid-template-rows: auto minmax(clamp(204px, 25vw, 276px), auto) auto;
-  align-content: center; gap: 5px 3px; padding: 9px 8px; min-height: 365px;
-}
-.g-with-piles .g-seat {
-  position: relative; inset: auto; transform: none; min-width: 0; max-width: 100%;
-  display: flex; flex-direction: column; align-items: stretch; gap: 2px; padding: 4px;
-}
-.g-seat-head { display: flex; align-items: center; gap: 5px; min-width: 0; }
-.g-with-piles .g-seat-name { padding-right: 2px; }
-.g-with-piles .g-seat-detail { word-break: keep-all; }
-.g-with-piles .g-seat-detail:empty { display: none; }
-.g-with-piles .g-seat-0 { grid-area: 3 / 2 / 4 / 4; }
-.g-with-piles .g-seat-1 { grid-area: 2 / 1; }
-.g-with-piles .g-seat-2 { grid-area: 1 / 1 / 2 / 3; align-self: end; }
-.g-with-piles .g-seat-3 { grid-area: 1 / 3 / 2 / 5; align-self: end; }
-.g-with-piles .g-seat-4 { grid-area: 2 / 4; }
-.g-with-piles .g-table-center { grid-area: 2 / 2 / 3 / 4; max-width: 100%; word-break: keep-all; }
-.g-with-piles .g-trick-result {
+.g-felt .g-trick-result {
   grid-area: 2 / 2 / 3 / 4; position: relative; inset: auto; transform: none;
   max-width: min(150px, calc(100% - var(--table-card) * 2 - 24px));
   border-radius: 7px; white-space: nowrap;
@@ -40,6 +18,8 @@
   background: #faf5e4; color: #263a2c; font: 700 .78rem/1 Georgia, serif; white-space: nowrap;
 }
 .g-score-red { color: #99383a; }
+.g-score-mighty { background: #f7e4a7; border-color: #e1bb62; }
+.g-score-mighty sup { color: #725017; font-size: .55rem; align-self: flex-start; }
 .g-score-covered {
   display: inline-flex; align-items: center; justify-content: center; gap: 5px;
   padding: 1px 3px; color: #d0ddc5; font-size: .72rem; font-weight: 600;
@@ -57,12 +37,7 @@
   content: ""; position: absolute; inset: 0; border: 2px solid #f0e6c9; border-radius: 5px;
 }
 @media (max-width: 479px) {
-  .g-felt.g-with-piles { --table-card: 34px; min-height: 325px; gap: 2px; padding-inline: 2px; }
-  .g-with-piles .g-seat { padding: 3px; }
-  .g-with-piles .g-seat-1 .g-avatar, .g-with-piles .g-seat-4 .g-avatar { display: none; }
-  .g-with-piles .g-seat-1 .g-seat-head, .g-with-piles .g-seat-4 .g-seat-head { justify-content: center; }
-  .g-with-piles .g-seat-detail { justify-content: center; }
-  .g-with-piles .g-trick-result { padding-inline: 2px; font-size: .72rem; }
+  .g-felt .g-trick-result { padding-inline: 2px; font-size: .72rem; }
   .g-score-total { font-size: .72rem; }
   .g-score-card { min-width: 17px; padding: 2px 1px; font-size: .75rem; }
 }

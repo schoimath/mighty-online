@@ -1,0 +1,148 @@
+{
+  "benchmark_version": "mighty-club-duplicate-v3-6347e188967c32b3",
+  "split": "final_test",
+  "hashes": {
+    "legacy": "8245e5e785cb4dc5a96e43f45bc3b71f4e7741ab9de4d9e1d9f7d350d5d148ce",
+    "heuristic": "656112765a742673dc7e76c6681db3344525e0515806514d938f119c2c0e04bb",
+    "conservative": "22206005f05a3e2ad85d91e5f4490bbca9dd2f23f5d1e4f5b4d39580994c17fd",
+    "aggressive": "10f4b52bcbdeff68d91b3c046965f09973cc60fb4de0f20c2dede19c6513e0d3",
+    "random": "8220f4ff47db85563e54b38b868282cd348197e8e4dff5b24582502a76dbcdf7",
+    "win": "7ab9ee8ff352c8509217de7737e08b5b9007fd7d5efbb69aac0a67dac3d47fc4",
+    "score": "c7ccd2e2346e2a1c6605f4166d9e0db43a2a167511a582e025027f249ce1bba5",
+    "balanced": "0fdd162aedc3f1c0efd4ba329db5e82e04ca63f284f5f10d401340eded0c1df2",
+    "downside_averse": "f8401cd73ecf864973fd1cb1ebe9eef08ba4a664b13936102de77dea283ffd86"
+  },
+  "selection": {
+    "win": {
+      "hash": "7ab9ee8ff352c8509217de7737e08b5b9007fd7d5efbb69aac0a67dac3d47fc4",
+      "file": "win-step001.json",
+      "checkpoint": "win-step001.pt",
+      "run_path": "lab/artifacts/run-731",
+      "generation": 1,
+      "training_seed": 731,
+      "validation_utility": 0.4,
+      "selection_scenarios": 16,
+      "alpha": 0.5,
+      "lambdaRisk": 0.5
+    },
+    "score": {
+      "hash": "c7ccd2e2346e2a1c6605f4166d9e0db43a2a167511a582e025027f249ce1bba5",
+      "file": "score-step001.json",
+      "checkpoint": "score-step001.pt",
+      "run_path": "lab/artifacts/run-2731",
+      "generation": 1,
+      "training_seed": 3740,
+      "validation_utility": 0.0256640625,
+      "selection_scenarios": 16,
+      "alpha": 0.5,
+      "lambdaRisk": 0.5
+    },
+    "balanced": {
+      "hash": "0fdd162aedc3f1c0efd4ba329db5e82e04ca63f284f5f10d401340eded0c1df2",
+      "file": "balanced-step004.json",
+      "checkpoint": "balanced-step004.pt",
+      "run_path": "lab/artifacts/run-1731",
+      "generation": 4,
+      "training_seed": 3749,
+      "validation_utility": 0.238564453125,
+      "selection_scenarios": 16,
+      "alpha": 0.5,
+      "lambdaRisk": 0.5
+    },
+    "downside_averse": {
+      "hash": "f8401cd73ecf864973fd1cb1ebe9eef08ba4a664b13936102de77dea283ffd86",
+      "file": "downside_averse-step003.json",
+      "checkpoint": "downside_averse-step003.pt",
+      "run_path": "lab/artifacts/run-2731",
+      "generation": 3,
+      "training_seed": 5758,
+      "validation_utility": 0.0260836181640625,
+      "selection_scenarios": 16,
+      "alpha": 0.5,
+      "lambdaRisk": 0.5
+    }
+  },
+  "rulesHash": "c069f8286cf604982bd3e64f9f45e4cad3ed291839c12b67acfa0c68348edc08",
+  "scoringHash": "823522500242c508bbea46de1901cfbc48efd9a690efcdea31ad28443ff9ad48",
+  "codeHash": "e2d2bf3ea99feebea4e73954e78e608bda7e52a009aa5c8411f830517d317ee0",
+  "observationVersion": "seat-visible-v2",
+  "actionVersion": "mighty-action-v1",
+  "rngVersion": "mulberry32-fisher-yates-v1",
+  "node": "v24.15.0",
+  "platform": "win32/x64",
+  "workers": 3,
+  "config": {
+    "name": "mighty-club-duplicate-v3",
+    "playPolicy": "protect-partner-v3",
+    "reference": "legacy",
+    "agents": [
+      "legacy",
+      "heuristic",
+      "conservative",
+      "aggressive",
+      "random",
+      "win",
+      "score",
+      "balanced",
+      "downside_averse"
+    ],
+    "splits": {
+      "validation": {
+        "startSeed": 1712000,
+        "scenarios": 16
+      },
+      "final_test": {
+        "startSeed": 2811000,
+        "scenarios": 48
+      }
+    },
+    "backgrounds": {
+      "mixed": [
+        "heuristic",
+        "aggressive",
+        "conservative",
+        "random"
+      ],
+      "partnership": [
+        "heuristic",
+        "heuristic",
+        "conservative",
+        "aggressive"
+      ],
+      "pressure": [
+        "aggressive",
+        "conservative",
+        "aggressive",
+        "heuristic"
+      ],
+      "heldout_search": [
+        "legacy",
+        "conservative",
+        "aggressive",
+        "heuristic"
+      ]
+    },
+    "backgroundCycle": {
+      "validation": [
+        "mixed",
+        "partnership",
+        "pressure"
+      ],
+      "final_test": [
+        "mixed",
+        "partnership",
+        "pressure",
+        "heldout_search"
+      ]
+    },
+    "blockSize": 4,
+    "bootstrapDraws": 512,
+    "bootstrapSeed": 940712,
+    "ridge": 0.2,
+    "maxRedeals": 100,
+    "inference": "Strategic models reserve the Mighty behind a safe known teammate using public information. The random model samples legal decisions. Frozen greedy weights; the search model evaluates up to 18 determinizations per play. Independent repeatable RNG per seat.",
+    "decisionTimeLimitMs": 5000
+  },
+  "wall_seconds": 22.5941652,
+  "results_sha256": "aecd6ef6d8b0bac5ad2ce0e5626a6deaf385cd659d3ef5b2dee4dae94981ee81"
+}

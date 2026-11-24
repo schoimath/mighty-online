@@ -41,15 +41,18 @@ function paperSound(cue) {
 }
 
 function makeSound(kind) {
-  if (kind === "bid") {
-    // A struck bell at C4. The contract sets the pitch at playback.
+  if (kind === "bid" || kind === "pass") {
+    // Bids start at C4. A pass is a shorter, softer E3 at every contract.
+    const pass = kind === "pass";
+    const duration = pass ? .23 : .40;
+    const frequency = pass ? 164.81 : 261.63;
     const rate = context.sampleRate;
-    const buffer = context.createBuffer(1, Math.ceil(rate * .40), rate);
+    const buffer = context.createBuffer(1, Math.ceil(rate * duration), rate);
     const samples = buffer.getChannelData(0);
     for (let i = 0; i < samples.length; i++) {
       const t = i / rate;
-      const phase = 2 * Math.PI * 261.63 * t;
-      const envelope = Math.min(1, t / .006, (.40 - t) / .035);
+      const phase = 2 * Math.PI * frequency * t;
+      const envelope = Math.min(1, t / .006, (duration - t) / .035) * (pass ? .73 : 1);
       samples[i] = envelope * (.62 * Math.sin(phase) * Math.exp(-t / .115)
         + .23 * Math.sin(2 * phase) * Math.exp(-t / .073)
         + .10 * Math.sin(3 * phase) * Math.exp(-t / .042));

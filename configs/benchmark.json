@@ -1,6 +1,6 @@
 {
-  "name": "mighty-club-duplicate-v2",
-  "searchPolicy": "reserve-joker-v2",
+  "name": "mighty-club-duplicate-v3",
+  "playPolicy": "protect-partner-v3",
   "reference": "legacy",
   "agents": [
     "legacy",
@@ -15,11 +15,11 @@
   ],
   "splits": {
     "validation": {
-      "startSeed": 1709000,
+      "startSeed": 1712000,
       "scenarios": 16
     },
     "final_test": {
-      "startSeed": 2806000,
+      "startSeed": 2811000,
       "scenarios": 48
     }
   },
@@ -67,6 +67,6 @@
   "bootstrapSeed": 940712,
   "ridge": 0.2,
   "maxRedeals": 100,
-  "inference": "Frozen greedy policies, random samples legal decisions, legacy searches up to 18 determinizations per play. Independent repeatable RNG per seat.",
+  "inference": "Strategic models reserve the Mighty behind a safe known teammate using public information. The random model samples legal decisions. Frozen greedy weights; the search model evaluates up to 18 determinizations per play. Independent repeatable RNG per seat.",
   "decisionTimeLimitMs": 5000
 }

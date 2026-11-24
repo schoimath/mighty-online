@@ -1,6 +1,6 @@
 # 마이티 AI 대국실
 
-게임에서 **혼자 연습하기 → 전체 AI 모델**을 열거나, **자리별 AI 선택**에서 네 모델을 따로 고른다. 온라인 방의 방장도 같은 방식으로 설정한다. 게임과 대국 평가기는 같은 자바스크립트 모델과 합법수 엔진을 사용한다. 게임에는 학습용 프로그램을 설치할 필요가 없다. [게임 열기](https://schoimath.github.io/mighty-online/) · [현재 탐색형을 포함한 독립 대국 성적표](results-v2/final_test.md)
+게임에서 **혼자 연습하기 → 전체 AI 모델**을 열거나, **자리별 AI 선택**에서 네 모델을 따로 고른다. 온라인 방의 방장도 같은 방식으로 설정한다. 게임과 대국 평가기는 같은 자바스크립트 모델과 합법수 엔진을 사용한다. 게임에는 학습용 프로그램을 설치할 필요가 없다. [게임 열기](https://schoimath.github.io/mighty-online/) · [현재 탐색형을 포함한 독립 대국 성적표](results-v3/final_test.md)
 
 ## 실제 선발 과정
 
@@ -31,7 +31,7 @@ node lab/league.mjs fork lab/artifacts/run-731/win-step004.pt lab/local-runs/con
 node lab/cli.mjs train --resume lab/local-runs/continue-win/win-step004.pt --budget-minutes 60
 node lab/cli.mjs evaluate --manifest configs/benchmark.json --split validation --out lab/local-runs/evaluation
 node lab/cli.mjs evaluate --manifest configs/benchmark.json --split final_test --out lab/local-runs/evaluation
-node lab/cli.mjs rate --results lab/results-v2/final_test.jsonl
+node lab/cli.mjs rate --results lab/results-v3/final_test.jsonl
 node lab/cli.mjs diagnose --suite configs/endgames.json --agent win --objective win
 node lab/cli.mjs diagnose --suite configs/endgames.json --agent lab/artifacts/run-2731/score-step001.json --objective score
 ```
@@ -40,9 +40,11 @@ node lab/cli.mjs diagnose --suite configs/endgames.json --agent lab/artifacts/ru
 
 ## 성적표 읽기
 
+현재 게임에서 여덟 전략형 AI는 같은 편이 앞선 트릭에 마이티를 쓸지 판단할 때 다른 자리의 뒷면 카드를 볼 수 없다. 마지막 자리에서 동료가 이기면 마이티를 아낀다. 뒤에 야당이 남아 있으면 자기 손과 공개된 트릭에 맞는 패 배분을 최대 20개 만들어 야당이 실제로 낼 수 있는 카드로 뒤집을 위험을 추정한다. 숨은 프렌드는 주공을 동료로 알지만 주공은 프렌드가 밝혀진 뒤에야 동료로 판단한다. 무작위형은 합법수 전체에서 추첨한다. [플레이 정책](partnership-policy.js) · [초구·마지막 자리·기루다 컷 재현 패](../tests/partnership-policy.test.mjs)
+
 별도 검증 패 16개와 최종 패 48개를 사용했다. 각 패와 첫 자리, 재배분 난수열, 나머지 네 정책의 배치와 좌석별 난수를 고정하고 관심 있는 한 자리의 모델만 교체했다. 이를 다섯 자리 모두에서 반복했다. 최종 2,160판의 독립 표본 단위는 **패 48개**다. 각 패의 다섯 자리와 모든 모델을 함께 복원추출해 95% 구간을 구했다. 새로운 상대 구성으로 탐색형이 들어간 패 12개를 따로 포함했다.
 
-두 Elo는 독립 패 4개를 한 묶음으로 놓고 모델 간 승수 차이·개인 정산 합계 차이의 부호를 각각 집계한다. 동률을 0.5승으로 두고, 기준 탐색형을 1500에 고정해 정규화된 Bradley–Terry 등급을 일괄 적합했다. 원시 승률은 내가 이긴 편이 된 비율이고 정산은 실제 개인 순정산이다. 둘은 카드 획득 수와도 단위가 다르다. 대국 시간은 측정 장비의 실행 속도에 따라 변한다. [원시 최종 대국](results-v2/final_test.jsonl) · [배경별·역할별·상대별 통계](results-v2/final_test.summary.json) · [평가 설정](../configs/benchmark.json)
+두 Elo는 독립 패 4개를 한 묶음으로 놓고 모델 간 승수 차이·개인 정산 합계 차이의 부호를 각각 집계한다. 동률을 0.5승으로 두고, 기준 탐색형을 1500에 고정해 정규화된 Bradley–Terry 등급을 일괄 적합했다. 원시 승률은 내가 이긴 편이 된 비율이고 정산은 실제 개인 순정산이다. 둘은 카드 획득 수와도 단위가 다르다. 대국 시간은 측정 장비의 실행 속도에 따라 변한다. [원시 최종 대국](results-v3/final_test.jsonl) · [배경별·역할별·상대별 통계](results-v3/final_test.summary.json) · [평가 설정](../configs/benchmark.json)
 
 ## 후반 한 수 진단
 

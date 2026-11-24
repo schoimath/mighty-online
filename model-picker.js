@@ -2,7 +2,7 @@ import {DEFAULT_MODEL, MODEL_CATALOG} from './lab/agents.js';
 
 const defaultSeats = () => Array(5).fill(DEFAULT_MODEL);
 const modelsById = new Map(MODEL_CATALOG.map(model => [model.id, model]));
-const resultsLink = '<a class="model-results" href="https://github.com/schoimath/mighty-online/blob/main/lab/results-v2/final_test.md" target="_blank" rel="noopener noreferrer">모델별 대국 성적 ↗</a>';
+const resultsLink = '<a class="model-results" href="https://github.com/schoimath/mighty-online/blob/main/lab/results-v3/final_test.md" target="_blank" rel="noopener noreferrer">모델별 대국 성적 ↗</a>';
 const escape = value => String(value ?? '').replace(/[&<>"']/g,
   char => ({'&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'}[char]));
 

@@ -14,6 +14,7 @@ const cache = new WeakMap();
 const TRICK_HOLD_MS = 810;
 const COLLECT_MS = 390;
 const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+const mightyBadge = '<b class="g-mighty-tag" aria-hidden="true">마이티</b>';
 
 function motionEnabled() {
   return !document.hidden && !reducedMotion.matches;
@@ -44,10 +45,32 @@ function leadingBidMarkup(view, nameAt) {
   const latestBid = view.bidHistory.findLast(entry => !entry.pass);
   const bidder = latestBid?.name ?? nameAt(bid.seat);
   return `<div class="g-leading-bid">
-    <small>현재 최고 공약</small>
+    <small>${view.phase === "discard" ? "낙찰 공약" : "현재 최고 공약"}</small>
     <strong aria-label="${suitInfo[bid.suit][1]} ${escapeHtml(bid.points)}점">${suitMark(bid.suit)} ${escapeHtml(bid.points)}<span>점</span></strong>
     <div class="g-bidder">${bidSeat(bid.seat)}<b title="${escapeHtml(bidder)}">${escapeHtml(bidder)}</b></div>
   </div>`;
+}
+function renderAuctionCalls(ui, felt, nameAt) {
+  const {view} = ui;
+  const calls = felt.querySelector(".g-auction-calls");
+  calls.hidden = view.phase !== "bid" && view.phase !== "discard";
+  if (calls.hidden) return;
+  const newest = view.bidHistory.at(-1);
+  const markup = Array.from({length: 5}, (_, offset) => {
+    const seat = (view.seat + offset) % 5;
+    const entry = view.bidHistory.findLast(call => call.seat === seat);
+    if (!entry) return "";
+    const name = escapeHtml(entry.name ?? nameAt(seat));
+    const leader = !entry.pass && view.bid?.seat === seat;
+    const value = entry.pass ? "패스" : suitMark(entry.suit) + " " + escapeHtml(entry.points);
+    const label = entry.pass ? "패스" : suitInfo[entry.suit][1] + " " + escapeHtml(entry.points) + "점";
+    return `<div class="g-auction-call g-played-${offset}${leader ? " g-call-leader" : ""}${entry.pass ? " g-call-pass" : ""}${entry === newest ? " g-call-new" : ""}" data-bid-seat="${seat}" aria-label="${name} · ${label}">
+      <strong>${value}</strong><small>${name}</small></div>`;
+  }).join("");
+  if (ui.auctionMarkup !== markup) {
+    calls.innerHTML = markup;
+    ui.auctionMarkup = markup;
+  }
 }
 function cardFace(card) {
   if (card === "JK") {
@@ -90,12 +113,19 @@ function updateDefaults(ui, view) {
   ui.bidSuit = longestSuit(view.hand, [...new Set(bids.map(bid => bid.suit))]);
   ui.bidPoints = bids.find(bid => bid.suit === ui.bidSuit)?.points;
   ui.contractIndex = Math.max(0, (view.choices.contracts || []).findIndex(c => c.points === view.bid?.points && c.suit === view.bid?.suit));
+  ui.contractPointsBySuit = new Map();
   const friends = view.choices.friends || [];
-  const master = mighty(view.bid?.suit);
-  const defaultFriend = view.hand.includes(master) || view.discarded?.includes(master) ? "JK" : master;
-  const preferredCard = friends.find(f => f.card === defaultFriend) || friends.find(f => f.kind === "card");
-  ui.friendKind = preferredCard?.kind ?? friends[0]?.kind;
-  ui.friendCard = preferredCard?.card;
+  if (friends.length) {
+    const trump = view.bid.suit;
+    const own = new Set([...view.hand, ...view.discarded]);
+    const candidates = [mighty(trump), "JK"];
+    if (trump !== "N") candidates.push(trump + "A");
+    const preferred = candidates.find(card => !own.has(card));
+    ui.friendKind = preferred ? "card" : "none";
+    // Keep a valid card ready if the declarer switches back from no-friend.
+    const available = friends.filter(f => f.kind === "card" && !own.has(f.card));
+    ui.friendCard = preferred ?? (available.find(f => f.card.endsWith("A")) ?? available[0]).card;
+  }
 }
 function visibleRole(view, seat) {
   if (view.declarer === seat) return "declarer";
@@ -115,14 +145,12 @@ function seatMarkup(view, nameAt, winner, modelLabels) {
     const role = roleAt(view, seat);
     const playing = view.phase === "play" || view.phase === "result";
     const inAuction = view.phase === "bid";
-    const lastBid = inAuction && view.bidHistory.findLast(entry => entry.seat === seat);
-    const bidLabel = lastBid ? (lastBid.pass ? "패스" : suitMark(lastBid.suit) + " " + escapeHtml(lastBid.points) + "점") : "";
-    const details = role || bidLabel || (playing ? "" : escapeHtml(view.counts[seat]) + "장");
+    const details = role || (playing || inAuction ? "" : escapeHtml(view.counts[seat]) + "장");
     const status = [isTurn ? "차례" : "", details].filter(Boolean).join(" · ");
     const leader = inAuction && view.bid?.seat === seat;
     const avatar = inAuction ? seat + 1 : Array.from(name.trim())[0] || "♠";
     const header = `<span class="g-avatar g-avatar-${seat}" aria-label="${seat + 1}번 자리">${escapeHtml(avatar)}</span><span class="g-seat-tag"><span class="g-seat-name">${escapeHtml(name)}${offset === 0 ? '<small>나</small>' : ""}</span><span class="g-seat-detail">${isTurn ? '<i></i>' : ""}${status}</span></span>`;
-    return `<div class="g-seat g-seat-${offset} ${isTurn ? "g-seat-active" : ""} ${leader ? "g-seat-bidder" : ""} ${winner === seat ? "g-trick-winner" : ""}" data-seat="${seat}" data-seat-role="${visibleRole(view, seat)}" role="group" aria-label="${escapeHtml(name)} 자리${model ? ' · ' + escapeHtml(model) : ''}"${model ? ' title="' + escapeHtml(model) + '"' : ""}>${playing ? '<div class="g-seat-head">' + header + '</div>' + seatPile(view, seat) : header}</div>`;
+    return `<div class="g-seat g-seat-${offset} ${isTurn ? "g-seat-active" : ""} ${leader ? "g-seat-bidder" : ""} ${winner === seat ? "g-trick-winner" : ""}" data-seat="${seat}" data-seat-role="${visibleRole(view, seat)}" role="group" aria-label="${escapeHtml(name)} 자리${model ? ' · ' + escapeHtml(model) : ''}"${model ? ' title="' + escapeHtml(model) + '"' : ""}><div class="g-seat-head">${header}</div>${seatPile(view, seat)}</div>`;
   }).join("");
 }
 function setFlightOffset(element, prefix, from, to) {
@@ -151,8 +179,9 @@ function dealToOtherSeats(root, localSeat) {
 function renderTable(ui, nameAt) {
   const {view, root, resolving} = ui;
   const felt = root.querySelector(".g-felt");
-  felt.classList.toggle("g-with-piles", view.phase === "play" || view.phase === "result");
+  felt.dataset.phase = view.phase;
   felt.querySelector(".g-seats").innerHTML = seatMarkup(view, nameAt, resolving?.winner, ui.options.modelLabels);
+  renderAuctionCalls(ui, felt, nameAt);
   const caption = felt.querySelector(".g-trick-result");
   caption.hidden = !resolving;
   if (resolving) {
@@ -170,7 +199,7 @@ function renderTable(ui, nameAt) {
   }
   if (!center.hidden) {
     const emptyLabel = view.phase === "play" ? "첫 카드를 기다리는 중" : labels[view.phase];
-    const markup = view.phase === "bid" ? leadingBidMarkup(view, nameAt)
+    const markup = view.phase === "bid" || view.phase === "discard" ? leadingBidMarkup(view, nameAt)
       : `<span class="g-table-symbol" aria-hidden="true">♠</span><strong>${escapeHtml(emptyLabel)}</strong>`;
     if (ui.centerMarkup !== markup) {
       center.innerHTML = markup;
@@ -186,7 +215,7 @@ function renderTable(ui, nameAt) {
     const ruff = move.card[0] === view.bid.suit && lead !== view.bid.suit;
     const label = escapeHtml(nameAt(move.seat)) + " · " + cardName(move.card) + (isMighty ? " · 마이티" : "");
     const caption = move.jokerCall ? "조커콜" : move.suit ? suitMark(move.suit) + " 요구" : escapeHtml(nameAt(move.seat));
-    trick.insertAdjacentHTML("beforeend", `<div class="g-played g-played-${offset}" data-play-seat="${move.seat}"><div class="g-on-table${isMighty ? " g-mighty-play" : ""}" role="img" aria-label="${label}">${cardFace(move.card)}${isMighty ? '<b class="g-mighty-tag" aria-hidden="true">마이티</b>' : ""}</div><span class="g-play-label">${caption}</span></div>`);
+    trick.insertAdjacentHTML("beforeend", `<div class="g-played g-played-${offset}" data-play-seat="${move.seat}"><div class="g-on-table${isMighty ? " g-mighty-play" : ""}" role="img" aria-label="${label}">${cardFace(move.card)}${isMighty ? mightyBadge : ""}</div><span class="g-play-label">${caption}</span></div>`);
     const face = trick.lastElementChild.firstElementChild;
     if (ruff) face.dataset.ruff = "";
     if (!motionEnabled()) {
@@ -229,10 +258,15 @@ function renderHand(ui, newDeal) {
   }
   settings.hidden = !settingsHtml;
   const legal = new Set((view.choices.plays || []).map(move => move.card));
-  const mightyCard = view.bid && mighty(view.bid.suit);
+  let trump = view.bid?.suit;
+  if (view.phase === "bid" && view.turn === view.seat) trump = ui.bidSuit ?? trump;
+  if (view.phase === "discard") trump = view.choices.contracts?.[ui.contractIndex]?.suit ?? trump;
+  const mightyCard = trump && mighty(trump);
   const arrivals = [];
   for (const [i, card] of view.hand.entries()) {
-    let label = cardName(card) + (card === mightyCard ? " · 마이티" : "");
+    const isMighty = card === mightyCard;
+    let label = cardName(card) + (isMighty ? " · 마이티" : "");
+    if (isMighty && (view.phase === "bid" || view.phase === "discard")) label += " (현재 기루다 기준)";
     if (view.phase === "play" && interactive) {
       if (card === "JK" && ui.jokerSuit) label += " · " + suitInfo[ui.jokerSuit][1] + " 요구";
       if (ui.jokerCall && view.choices.plays.some(move => move.card === card && move.jokerCall)) label += " · 조커콜";
@@ -243,8 +277,11 @@ function renderHand(ui, newDeal) {
       el.type = "button";
       el.className = "g-hand-card";
       el.dataset.card = card;
-      el.innerHTML = cardFace(card);
       if (newDeal || view.phase === "discard") arrivals.push(el);
+    }
+    if (!el.firstElementChild || el.classList.contains("g-hand-mighty") !== isMighty) {
+      el.classList.toggle("g-hand-mighty", isMighty);
+      el.innerHTML = cardFace(card) + (isMighty ? mightyBadge : "");
     }
     const selected = ui.selected.includes(card);
     const allowed = interactive && (view.phase === "discard" ? (selected || ui.selected.length < 3) : legal.has(card));
@@ -309,7 +346,7 @@ function friendControls(view, ui) {
     });
     cardControls = suitPicker("프렌드 무늬","friendSuit",suits,current) + select("프렌드 카드","friendCard",ranks,ui.friendCard);
   }
-  const hint = options.some(choice => choice.kind === "first")
+  const hint = ui.friendKind === "none" ? "주공 혼자 공약에 도전해요." : options.some(choice => choice.kind === "first")
     ? "카드를 부르거나 첫 트릭의 승자를 프렌드로 정할 수 있어요."
     : "함께할 사람이 가진 카드를 부르세요.";
   const solo = ui.friendKind === "card" && (view.hand.includes(ui.friendCard) || view.discarded.includes(ui.friendCard));
@@ -403,7 +440,7 @@ function mountTable(root) {
       <div class="g-heading"><div><div class="g-eyebrow"><i aria-hidden="true">♠</i> 마이티 · 5인전</div><h1></h1></div><span class="g-round-tag"></span></div>
       <div class="g-layout">
         <section class="g-board" aria-label="게임 테이블"><div class="g-felt"><div class="g-felt-line"></div>
-          <div class="g-table-center"></div><div class="g-trick" hidden></div><div class="g-seats"></div>
+          <div class="g-table-center"></div><div class="g-auction-calls" hidden></div><div class="g-trick" hidden></div><div class="g-seats"></div>
           <p class="g-trick-result" hidden><span></span><b></b></p></div></section>
         <section class="g-hand"></section><aside class="g-panel"></aside>
       </div>
@@ -490,7 +527,9 @@ function bind(ui) {
     const field = el.dataset.field;
     if (field === "contractSuit") {
       const contracts = ui.view.choices.contracts;
-      const points = contracts[ui.contractIndex].points;
+      const current = contracts[ui.contractIndex];
+      ui.contractPointsBySuit.set(current.suit, current.points);
+      const points = ui.contractPointsBySuit.get(el.value) ?? current.points;
       const exact = contracts.findIndex(c => c.suit === el.value && c.points === points);
       ui.contractIndex = exact >= 0 ? exact : contracts.findIndex(c => c.suit === el.value);
     } else if (field === "friendSuit") {
@@ -511,9 +550,14 @@ function displayLatest(ui) {
   const view = ui.latest;
   const previous = ui.view;
   const newDeal = view.phase === "bid" && (previous?.phase !== "bid" || previous.dealNo !== view.dealNo);
-  if (previous?.phase === "bid" && previous.dealNo === view.dealNo && view.bidHistory.length > previous.bidHistory.length) {
-    const announcement = view.bidHistory.slice(previous.bidHistory.length).findLast(entry => !entry.pass);
-    if (announcement) playTableSound("bid", announcement);
+  if (previous?.phase === "bid") {
+    if (previous.dealNo === view.dealNo && view.bidHistory.length > previous.bidHistory.length) {
+      const announcement = view.bidHistory.at(-1);
+      playTableSound(announcement.pass ? "pass" : "bid", announcement);
+    } else if (view.phase === "bid" && view.dealNo === previous.dealNo + 1) {
+      // The fifth pass deals a new hand and clears the old auction history.
+      playTableSound("pass");
+    }
   }
   ui.view = view;
   updateDefaults(ui, view);
@@ -563,7 +607,7 @@ export function renderGame(container, publicView, options = {}) {
   }
   if (!container.firstElementChild) {
     mountTable(container);
-    ui.centerMarkup = ui.settingsHtml = null;
+    ui.auctionMarkup = ui.centerMarkup = ui.settingsHtml = null;
   }
   ui.latest = publicView;
   ui.playPending = false;
@@ -605,7 +649,7 @@ export function rulesContent(rules = DEFAULT_RULES) {
     <p>다섯 명이 열 번의 트릭을 플레이합니다. 주공과 프렌드는 공약한 점수를 모으고, 나머지 플레이어는 이를 막습니다.</p>
     <h3>경매와 바닥패</h3><p>조커 한 장을 포함한 53장 중 각자 10장씩 받고 3장은 바닥에 둡니다. 첫 판은 1번 자리부터, 다음 판은 직전 판 프렌드부터 입찰합니다. 노프렌드였다면 직전 주공부터 시작합니다. ${bidRange} 기루다(으뜸 무늬)나 노기루다로 입찰하거나 패스하세요. 같은 점수에서는 노기루다가 무늬 공약보다 높습니다. 모두 패스하면 다시 나눕니다.</p>
     <p>경매의 승자인 주공은 바닥패를 가져와 3장을 묻습니다. 이때 기루다를 바꾸려면 공약을 2점 이상 올려야 합니다. 묻은 점수는 주공 팀의 점수입니다.</p>
-    <h3>프렌드</h3><p>주공이 부른 카드를 가진 사람이 프렌드입니다. 기본 선택은 마이티 프렌드이며, 주공이 마이티를 들고 있거나 묻었으면 조커 프렌드입니다. 부른 카드가 나오면 모두에게 정체가 공개됩니다.${firstFriend} 노프렌드를 선택하거나 주공이 가진 카드나 묻은 카드를 부르면 혼자 플레이합니다.</p>
+    <h3>프렌드</h3><p>주공이 부른 카드를 가진 사람이 프렌드입니다. 기본 선택은 마이티, 조커, 기루다 A 순서이며 주공이 들고 있거나 묻은 카드는 건너뜁니다. 셋 다 주공에게 있으면 노프렌드가 기본입니다. 노기루다에서는 마이티와 조커가 모두 주공에게 있으면 노프렌드입니다. 부른 카드가 나오면 모두에게 정체가 공개됩니다.${firstFriend} 노프렌드를 선택하거나 주공이 가진 카드나 묻은 카드를 부르면 혼자 플레이합니다.</p>
     <h3>카드 내기</h3><p>주공부터 한 장씩 냅니다. 선이 낸 무늬가 손에 있으면 따라야 합니다. 마이티와 조커는 무늬에 관계없이 낼 수 있습니다. 첫 트릭에서는 다른 무늬를 낼 수 있으면 기루다로 시작할 수 없습니다. 트릭을 이긴 사람이 다음 선입니다.</p>
     <h3>마이티와 조커</h3><p>가장 센 카드는 스페이드 A입니다. 스페이드가 기루다일 때는 다이아몬드 A가 마이티입니다. 그다음은 조커, 기루다, 선의 무늬 순입니다. 같은 무늬 안에서는 A가 가장 높고 2가 가장 낮습니다.</p>
     <p>${jokerTiming}</p>
