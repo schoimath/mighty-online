@@ -3,6 +3,7 @@ import {hostRoom, joinRoom, normalizeRoomCode} from './network.js';
 import {HostSession} from './session.js';
 import {chatText, setupChat} from './chat.js';
 import {botObservation, DEFAULT_RULES} from './engine.js';
+import {bindModelSettings, modelLabel, modelSettings, modelSummary, readModelSettings} from './model-picker.js';
 
 const $ = id => document.getElementById(id);
 const escape = text => String(text ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -126,7 +127,7 @@ function readRules(container) {
 
 function showRules() {
   const rules = activeRules();
-  modal('게임 규칙', '<div class="rules-wrap">' + rulesSummary(rules) + rulesContent(rules) + '</div>');
+  modal('게임 규칙', '<div class="rules-wrap">' + rulesSummary(rules) + modelSummary(snapshot) + rulesContent(rules) + '</div>');
 }
 $('nav-rules').onclick = showRules;
 
@@ -220,6 +221,7 @@ function drawRoom() {
   const occupied = snapshot.players.filter(Boolean).length;
   const room = $('room');
   const focus = room.contains(document.activeElement) ? document.activeElement : null;
+  const modelDetailsOpen = room.querySelector('.model-details')?.open;
   const focusSeat = focus?.closest('[data-room-seat]')?.dataset.roomSeat;
   const canChoose = Number.isInteger(snapshot.hostSeat);
   const hostSeat = snapshot.hostSeat ?? 0;
@@ -255,6 +257,7 @@ function drawRoom() {
     '<div class="seat-heading"><h2>' + (canChoose ? '자리 선택' : '참가자') + '</h2><span>참가 ' + occupied + ' / 5</span></div>' +
     (canChoose ? '<p class="seat-hint">자리 번호 순으로 진행합니다. 빈자리에 앉거나 다른 참가자에게 교환을 요청하세요.</p>' : '') +
     '<ol class="seat-list ' + (canChoose ? 'seat-map' : 'seat-readonly') + '" aria-label="자리 번호 순서">' + seats + '</ol>' + swapPanel +
+    (host ? modelSettings(snapshot.botModels, hostSeat, snapshot.players) : modelSummary(snapshot)) +
     (host ? ruleEditor(activeRules()) : '<h2 class="room-heading">테이블 규칙</h2>' + rulesSummary(activeRules())) +
     '<p>' + (host ? (occupied < 5 ? '지금 시작하면 빈자리 ' + (5-occupied) + '곳은 AI가 맡습니다.' : '다섯 명이 모였습니다. 게임을 시작하세요.') : '방장이 게임을 시작하면 카드를 받습니다.') +
     '</p><div class="room-actions">' + (host ? '<button class="primary-button" id="start-round">게임 시작</button>' : '') +
@@ -271,6 +274,11 @@ function drawRoom() {
   if ($('swap-cancel')) $('swap-cancel').onclick = cancelSwap;
   if (host) {
     $('start-round').onclick = startRound;
+    room.querySelector('.model-details').open = Boolean(modelDetailsOpen);
+    bindModelSettings(room, hostSeat, models => {
+      authority.setBotModels(models);
+      publish();
+    });
     const settings = $('room').querySelector('.rule-settings');
     settings.onchange = () => {
       authority.setRules(readRules(settings));
@@ -294,7 +302,8 @@ function draw() {
   showScreen('game');
   renderGame($('game'),snapshot.game,{
     names:snapshot.players.map(p => p?.name), isHost: Boolean(authority),
-    replaySetupLabel: mode === 'practice' ? '규칙 바꿔서 시작' : '대기실로 돌아가기',
+    modelLabels:snapshot.players.map(p => p?.bot && p.modelId ? modelLabel(p.modelId) : ''),
+    replaySetupLabel: mode === 'practice' ? '규칙·AI 바꿔서 시작' : '대기실로 돌아가기',
     onRules:showRules, onLeave:requestLeave, onReplay() {
       if (authority?.round?.phase === 'result') startRound();
     },
@@ -333,13 +342,17 @@ function takeBotTurn() {
   const session = authority;
   if (!session?.botTurn) return;
   const revision = session.revision;
+  const seat = session.round.turn;
+  const modelId = session.players[seat].modelId;
+  // Each decision has its own random stream, including when the worker must retry locally.
+  const seed = crypto.getRandomValues(new Uint32Array(1))[0];
   function finish(action) {
     // The room can change while the worker is thinking, for example when a guest leaves.
     if (authority !== session || session.revision !== revision || !session.botTurn) return;
-    session.runBot(action);
+    session.runBot(action, seed);
     publish();
   }
-  if (session.round.phase !== 'play' || workerUnavailable) {
+  if (workerUnavailable) {
     finish();
     return;
   }
@@ -353,12 +366,16 @@ function takeBotTurn() {
   }
   try {
     botWorker ??= new Worker(new URL('./bot-worker.js', import.meta.url), {type:'module'});
-    botWorker.onmessage = ({data}) => {
-      if (data.revision === revision) finish(data.action);
+    botWorker.onmessage = event => {
+      const {data} = event;
+      if (data?.revision !== revision) return;
+      // Older cached workers compute every turn using the original search model.
+      if (data.modelId !== modelId) { fallback(event); return; }
+      finish(data.action);
     };
     botWorker.onerror = fallback;
     botWorker.onmessageerror = fallback;
-    botWorker.postMessage({revision, view:botObservation(session.round, session.round.turn)});
+    botWorker.postMessage({revision, seed, modelId, view:botObservation(session.round, seat)});
   } catch {
     fallback();
   }
@@ -371,29 +388,33 @@ function startRound() {
 
 function openPracticeSetup() {
   const replay = mode === 'practice' && authority?.round?.phase === 'result';
-  modal('연습 게임 설정', '<form id="practice-setup">' + ruleEditor(replay ? activeRules() : DEFAULT_RULES) +
+  modal('연습 게임 설정', '<form id="practice-setup">' + modelSettings(replay ? authority.botModels : undefined) +
+    ruleEditor(replay ? activeRules() : DEFAULT_RULES) +
     '<button type="submit" class="primary-button form-submit" id="start-practice">연습 시작</button></form>');
+  bindModelSettings($('practice-setup'));
   $('practice-setup').onsubmit = event => {
     event.preventDefault();
     const rules = readRules(event.currentTarget);
+    const models = readModelSettings(event.currentTarget);
     if (replay) {
       authority.returnToRoom();
       authority.setRules(rules);
+      authority.setBotModels(models);
     } else {
       mode = 'practice';
-      authority = new HostSession(nickname, rules);
+      authority = new HostSession(nickname, rules, models);
     }
     closeModal();
     startRound();
   };
 }
 
-async function connectRoom(kind, name, code, signal, rules) {
+async function connectRoom(kind, name, code, signal, rules, models) {
   const token = ++generation;
   const active = () => token === generation && !signal.aborted;
   let link;
   if (kind === 'create') {
-    const session = new HostSession(name, rules);
+    const session = new HostSession(name, rules, models);
     link = await hostRoom({
       signal,
       onJoin(id, guestName) {
@@ -472,9 +493,10 @@ function openForm(kind, code = '') {
   const intro = profile ? '' : '<p>' + (joining ? '친구에게 받은 6자리 방 코드를 입력하세요.' : '테이블을 열면 친구를 초대할 방 코드가 생깁니다. 게임 중에는 방장 탭을 열어 두세요.') + '</p>';
   modal(title, intro + '<form id="setup-form"><label class="field">닉네임<input id="name-field" name="nickname" maxlength="16" required autocomplete="nickname"></label>' +
     (joining ? '<label class="field">방 코드<input class="code-field" id="code-field" name="code" maxlength="12" placeholder="6자리 코드" required autocomplete="off" spellcheck="false"></label>' : '') +
-    (kind === 'create' ? ruleEditor(DEFAULT_RULES) : '') +
+    (kind === 'create' ? modelSettings() + ruleEditor(DEFAULT_RULES) : '') +
     '<div class="form-error" role="alert" id="form-error"></div><button class="primary-button form-submit" id="submit-form">' + (profile ? '저장' : title) + '</button></form>');
   $('name-field').value = nickname;
+  if (kind === 'create') bindModelSettings($('setup-form'));
   if (joining) { $('code-field').value = code; (code ? $('name-field') : $('code-field')).focus(); }
   else { $('name-field').focus(); $('name-field').select(); }
   $('setup-form').onsubmit = async event => {
@@ -490,12 +512,15 @@ function openForm(kind, code = '') {
     pendingConnect = controller;
     const submit = $('submit-form');
     const settings = event.currentTarget.querySelector('.rule-settings');
+    const modelGroup = event.currentTarget.querySelector('.model-settings');
+    const models = modelGroup ? readModelSettings(modelGroup) : undefined;
     const rules = settings ? readRules(settings) : undefined;
     if (settings) settings.disabled = true;
+    if (modelGroup) modelGroup.disabled = true;
     submit.disabled = true;
     submit.textContent = '연결 중…';
     $('form-error').textContent = '';
-    try { await connectRoom(kind,name,code,controller.signal,rules); }
+    try { await connectRoom(kind,name,code,controller.signal,rules,models); }
     catch (error) {
       if (controller.signal.aborted) return;
       $('form-error').textContent = error.message;
@@ -503,6 +528,7 @@ function openForm(kind, code = '') {
       if (pendingConnect === controller) pendingConnect = null;
       if (mode === 'joining' && !transport) mode = 'lobby';
       if (settings) settings.disabled = false;
+      if (modelGroup) modelGroup.disabled = false;
       submit.disabled = false;
       submit.textContent = title;
     }

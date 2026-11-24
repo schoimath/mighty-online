@@ -1,0 +1,518 @@
+[
+  {
+    "method": "A: exact finite information set; all legal plays; frozen heuristic continuation",
+    "prior": "Specified two-deal prior conditional on public legality; no inference from bidding style.",
+    "utility": "win",
+    "actor": "win",
+    "hindsightExample": {
+      "values": [
+        0.7,
+        0.3
+      ],
+      "loss": 0
+    },
+    "positions": [
+      {
+        "seed": 355,
+        "seat": 2,
+        "trick": 8,
+        "hand": [
+          "SQ",
+          "S10",
+          "DK"
+        ],
+        "swap": [
+          "S9",
+          "CA"
+        ],
+        "weights": [
+          0.7,
+          0.3
+        ],
+        "candidates": [
+          {
+            "type": "play",
+            "card": "SQ"
+          },
+          {
+            "type": "play",
+            "card": "S10"
+          },
+          {
+            "type": "play",
+            "card": "DK"
+          }
+        ],
+        "worldUtilities": [
+          [
+            -1,
+            -1
+          ],
+          [
+            -1,
+            1
+          ],
+          [
+            1,
+            -1
+          ]
+        ],
+        "choice": {
+          "type": "play",
+          "card": "DK"
+        },
+        "objective": "win",
+        "values": [
+          -1,
+          -0.39999999999999997,
+          0.39999999999999997
+        ],
+        "loss": 0
+      },
+      {
+        "seed": 359,
+        "seat": 4,
+        "trick": 8,
+        "hand": [
+          "CA",
+          "CJ",
+          "C7"
+        ],
+        "swap": [
+          "S9",
+          "H9"
+        ],
+        "weights": [
+          0.5,
+          0.5
+        ],
+        "candidates": [
+          {
+            "type": "play",
+            "card": "CA"
+          },
+          {
+            "type": "play",
+            "card": "CJ"
+          },
+          {
+            "type": "play",
+            "card": "C7"
+          }
+        ],
+        "worldUtilities": [
+          [
+            -1,
+            -1
+          ],
+          [
+            -1,
+            -1
+          ],
+          [
+            1,
+            -1
+          ]
+        ],
+        "choice": {
+          "type": "play",
+          "card": "CJ"
+        },
+        "objective": "win",
+        "values": [
+          -1,
+          -1,
+          0
+        ],
+        "loss": 1
+      }
+    ]
+  },
+  {
+    "method": "A: exact finite information set; all legal plays; frozen heuristic continuation",
+    "prior": "Specified two-deal prior conditional on public legality; no inference from bidding style.",
+    "utility": "score",
+    "actor": "score",
+    "hindsightExample": {
+      "values": [
+        0.7,
+        0.3
+      ],
+      "loss": 0
+    },
+    "positions": [
+      {
+        "seed": 355,
+        "seat": 2,
+        "trick": 8,
+        "hand": [
+          "SQ",
+          "S10",
+          "DK"
+        ],
+        "swap": [
+          "S9",
+          "CA"
+        ],
+        "weights": [
+          0.7,
+          0.3
+        ],
+        "candidates": [
+          {
+            "type": "play",
+            "card": "SQ"
+          },
+          {
+            "type": "play",
+            "card": "S10"
+          },
+          {
+            "type": "play",
+            "card": "DK"
+          }
+        ],
+        "worldUtilities": [
+          [
+            -0.0078125,
+            -0.00625
+          ],
+          [
+            -0.00625,
+            0.0015625
+          ],
+          [
+            0.0015625,
+            -0.00625
+          ]
+        ],
+        "choice": {
+          "type": "play",
+          "card": "DK"
+        },
+        "objective": "score",
+        "values": [
+          -0.00734375,
+          -0.0039062499999999996,
+          -0.00078125
+        ],
+        "loss": 0
+      },
+      {
+        "seed": 359,
+        "seat": 4,
+        "trick": 8,
+        "hand": [
+          "CA",
+          "CJ",
+          "C7"
+        ],
+        "swap": [
+          "S9",
+          "H9"
+        ],
+        "weights": [
+          0.5,
+          0.5
+        ],
+        "candidates": [
+          {
+            "type": "play",
+            "card": "CA"
+          },
+          {
+            "type": "play",
+            "card": "CJ"
+          },
+          {
+            "type": "play",
+            "card": "C7"
+          }
+        ],
+        "worldUtilities": [
+          [
+            -0.00625,
+            -0.00625
+          ],
+          [
+            -0.00625,
+            -0.00625
+          ],
+          [
+            0.0015625,
+            -0.00625
+          ]
+        ],
+        "choice": {
+          "type": "play",
+          "card": "CJ"
+        },
+        "objective": "score",
+        "values": [
+          -0.00625,
+          -0.00625,
+          -0.0023437500000000003
+        ],
+        "loss": 0.00390625
+      }
+    ]
+  },
+  {
+    "method": "A: exact finite information set; all legal plays; frozen heuristic continuation",
+    "prior": "Specified two-deal prior conditional on public legality; no inference from bidding style.",
+    "utility": "balanced",
+    "actor": "balanced",
+    "hindsightExample": {
+      "values": [
+        0.7,
+        0.3
+      ],
+      "loss": 0
+    },
+    "positions": [
+      {
+        "seed": 355,
+        "seat": 2,
+        "trick": 8,
+        "hand": [
+          "SQ",
+          "S10",
+          "DK"
+        ],
+        "swap": [
+          "S9",
+          "CA"
+        ],
+        "weights": [
+          0.7,
+          0.3
+        ],
+        "candidates": [
+          {
+            "type": "play",
+            "card": "SQ"
+          },
+          {
+            "type": "play",
+            "card": "S10"
+          },
+          {
+            "type": "play",
+            "card": "DK"
+          }
+        ],
+        "worldUtilities": [
+          [
+            -0.50390625,
+            -0.503125
+          ],
+          [
+            -0.503125,
+            0.50078125
+          ],
+          [
+            0.50078125,
+            -0.503125
+          ]
+        ],
+        "choice": {
+          "type": "play",
+          "card": "DK"
+        },
+        "objective": "balanced",
+        "values": [
+          -0.503671875,
+          -0.201953125,
+          0.19960937499999992
+        ],
+        "loss": 0
+      },
+      {
+        "seed": 359,
+        "seat": 4,
+        "trick": 8,
+        "hand": [
+          "CA",
+          "CJ",
+          "C7"
+        ],
+        "swap": [
+          "S9",
+          "H9"
+        ],
+        "weights": [
+          0.5,
+          0.5
+        ],
+        "candidates": [
+          {
+            "type": "play",
+            "card": "CA"
+          },
+          {
+            "type": "play",
+            "card": "CJ"
+          },
+          {
+            "type": "play",
+            "card": "C7"
+          }
+        ],
+        "worldUtilities": [
+          [
+            -0.503125,
+            -0.503125
+          ],
+          [
+            -0.503125,
+            -0.503125
+          ],
+          [
+            0.50078125,
+            -0.503125
+          ]
+        ],
+        "choice": {
+          "type": "play",
+          "card": "CJ"
+        },
+        "objective": "balanced",
+        "values": [
+          -0.503125,
+          -0.503125,
+          -0.0011718750000000444
+        ],
+        "loss": 0.501953125
+      }
+    ]
+  },
+  {
+    "method": "A: exact finite information set; all legal plays; frozen heuristic continuation",
+    "prior": "Specified two-deal prior conditional on public legality; no inference from bidding style.",
+    "utility": "downside_averse",
+    "actor": "downside_averse",
+    "hindsightExample": {
+      "values": [
+        0.7,
+        0.3
+      ],
+      "loss": 0
+    },
+    "positions": [
+      {
+        "seed": 355,
+        "seat": 2,
+        "trick": 8,
+        "hand": [
+          "SQ",
+          "S10",
+          "DK"
+        ],
+        "swap": [
+          "S9",
+          "CA"
+        ],
+        "weights": [
+          0.7,
+          0.3
+        ],
+        "candidates": [
+          {
+            "type": "play",
+            "card": "SQ"
+          },
+          {
+            "type": "play",
+            "card": "S10"
+          },
+          {
+            "type": "play",
+            "card": "DK"
+          }
+        ],
+        "worldUtilities": [
+          [
+            -0.007843017578125,
+            -0.00626953125
+          ],
+          [
+            -0.00626953125,
+            0.0015625
+          ],
+          [
+            0.0015625,
+            -0.00626953125
+          ]
+        ],
+        "choice": {
+          "type": "play",
+          "card": "DK"
+        },
+        "objective": "downside_averse",
+        "values": [
+          -0.0073709716796874995,
+          -0.003919921874999999,
+          -0.000787109375
+        ],
+        "loss": 0
+      },
+      {
+        "seed": 359,
+        "seat": 4,
+        "trick": 8,
+        "hand": [
+          "CA",
+          "CJ",
+          "C7"
+        ],
+        "swap": [
+          "S9",
+          "H9"
+        ],
+        "weights": [
+          0.5,
+          0.5
+        ],
+        "candidates": [
+          {
+            "type": "play",
+            "card": "CA"
+          },
+          {
+            "type": "play",
+            "card": "CJ"
+          },
+          {
+            "type": "play",
+            "card": "C7"
+          }
+        ],
+        "worldUtilities": [
+          [
+            -0.00626953125,
+            -0.00626953125
+          ],
+          [
+            -0.00626953125,
+            -0.00626953125
+          ],
+          [
+            0.0015625,
+            -0.00626953125
+          ]
+        ],
+        "choice": {
+          "type": "play",
+          "card": "CJ"
+        },
+        "objective": "downside_averse",
+        "values": [
+          -0.00626953125,
+          -0.00626953125,
+          -0.002353515625
+        ],
+        "loss": 0.003916015625
+      }
+    ]
+  }
+]

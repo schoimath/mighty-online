@@ -1,0 +1,7 @@
+{
+  "version": 1,
+  "positions": [
+    {"seed": 355, "trick": 8, "swapIndex": 0, "weights": [0.7,0.3]},
+    {"seed": 359, "trick": 8, "swapIndex": 0, "weights": [0.5,0.5]}
+  ]
+}

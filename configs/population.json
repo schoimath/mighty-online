@@ -1,0 +1,17 @@
+{
+  "rules": [
+    "heuristic",
+    "aggressive",
+    "conservative",
+    "random"
+  ],
+  "history_probability": 0.45,
+  "max_archived": 24,
+  "selection_backgrounds": [
+    "aggressive",
+    "heuristic",
+    "conservative",
+    "random",
+    "heuristic"
+  ]
+}

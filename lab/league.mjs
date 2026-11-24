@@ -1,0 +1,100 @@
+// Freeze other training seeds into the league, select on held-out validation, or branch a checkpoint.
+import {copyFileSync,existsSync,mkdirSync,readFileSync,readdirSync,writeFileSync} from 'node:fs';
+import {createHash} from 'node:crypto';
+import path from 'node:path';
+import {fileURLToPath} from 'node:url';
+const root=fileURLToPath(new URL('../',import.meta.url));
+const read=file=>JSON.parse(readFileSync(file,'utf8'));
+const relative=file=>path.relative(root,file).split(path.sep).join('/');
+const save=(file,value)=>writeFileSync(file,JSON.stringify(value,null,2)+'\n');
+const objectives=['win','score','balanced','downside_averse'];
+const digest=value=>createHash('sha256').update(value).digest('hex');
+function fresh(dir){
+  if(existsSync(dir)&&readdirSync(dir).length)throw Error('Please choose an empty destination: '+dir);
+  mkdirSync(dir,{recursive:true});
+}
+function trainRecords(dir){
+  return readFileSync(path.join(dir,'training.jsonl'),'utf8').trim().split('\n').map(JSON.parse);
+}
+function getWeights(dir,entry){
+  const file=path.join(dir,entry.file), value=read(file);
+  if(digest(JSON.stringify(value))!==entry.weight_hash)throw Error('Unexpected portable model hash: '+file);
+  return value;
+}
+function seedPool(from,into){
+  fresh(into);
+  const selected=read(path.join(from,'selection.json'));
+  const manifest={};
+  for(const objective of objectives){
+    const entry=selected[objective];
+    getWeights(from,entry);
+    const name='external-'+entry.base_seed+'-'+objective+'-step000.json';
+    copyFileSync(path.join(from,entry.file),path.join(into,name));
+    manifest[name]={weight_hash:entry.weight_hash,source_run:relative(from),source_file:entry.file};
+  }
+  save(path.join(into,'external-pool.json'),manifest);
+}
+function fork(checkpoint,into){
+  const from=path.dirname(checkpoint), match=path.basename(checkpoint).match(/^(.+)-step(\d+)\.pt$/);
+  if(!match||!existsSync(checkpoint))throw Error('Checkpoint must be an existing training step');
+  const limit=Number(match[2]);
+  const records=trainRecords(from).filter(r=>r.stage==='imitation'||r.generation<=limit);
+  const target=records.find(r=>r.checkpoint===path.basename(checkpoint));
+  if(!target||digest(readFileSync(checkpoint))!==target.checkpoint_hash)throw Error('Checkpoint checksum mismatch');
+  fresh(into);
+  const selected={};
+  for(const r of records.filter(r=>r.generation)){
+    getWeights(from,r);
+    copyFileSync(path.join(from,r.file),path.join(into,r.file));
+    if(!selected[r.objective]||r.validation_utility>selected[r.objective].validation_utility) {
+      const {episodes,...entry}=r;selected[r.objective]=entry;
+    }
+  }
+  for(const file of new Set([path.basename(checkpoint),...Object.values(selected).map(r=>r.checkpoint)]))
+    copyFileSync(path.join(from,file),path.join(into,file));
+  for(const file of readdirSync(from).filter(n=>n.startsWith('external-')))
+    copyFileSync(path.join(from,file),path.join(into,file));
+  save(path.join(into,'selection.json'),selected);
+  writeFileSync(path.join(into,'training.jsonl'),records.map(r=>JSON.stringify(r)+'\n').join(''));
+  const validations=readFileSync(path.join(from,'validation.jsonl'),'utf8').trim().split('\n').map(JSON.parse)
+    .filter(r=>r.generation<=limit);
+  writeFileSync(path.join(into,'validation.jsonl'),validations.map(r=>JSON.stringify(r)+'\n').join(''));
+  console.log(path.join(into,path.basename(checkpoint)));
+}
+function select(runs,publish){
+  if(!runs.length)throw Error('Supply at least one training directory');
+  const candidates=Object.fromEntries(objectives.map(o=>[o,[]])), selected={}, models={};
+  let signature;
+  for(const dir of runs) {
+    const log=trainRecords(dir);
+    const records=log.filter(r=>r.generation);
+    for(const r of records.sort((a,b)=>a.generation-b.generation)) {
+      const sig=JSON.stringify([r.schema,r.config.alpha,r.config.lambdaRisk,r.config.validation_seed,r.config.validation_scenarios]);
+      signature??=sig;
+      if(sig!==signature)throw Error('Cannot pool incompatible schemas, objectives or validation splits');
+      const {episodes,...entry}=r;
+      const totalDecisions=log.filter(p=>p.objective===r.objective && (p.generation??0)<=r.generation)
+        .reduce((total,p)=>total+p.decisions,0);
+      const item={...entry,run_path:relative(dir),update_decisions:r.decisions,total_training_decisions:totalDecisions};
+      candidates[r.objective].push({base_seed:r.base_seed,generation:r.generation,validation_utility:r.validation_utility,weight_hash:r.weight_hash});
+      if(!selected[r.objective]||r.validation_utility>selected[r.objective].validation_utility){
+        models[r.objective]=getWeights(dir,item);
+        selected[r.objective]=item;
+      }
+    }
+  }
+  if(objectives.some(id=>!selected[id]))throw Error('Each objective requires at least one validated candidate');
+  if(publish) {
+    const bundle=path.join(root,'lab/champions.js');
+    const source='// Selected by held-out validation; generated by lab/league.mjs.\nexport const champions = '+JSON.stringify(models)+';\n';
+    if(!existsSync(bundle)||readFileSync(bundle,'utf8')!==source)writeFileSync(bundle,source);
+    save(path.join(root,'lab/artifacts/champions.json'),selected);
+    save(path.join(root,'lab/artifacts/selection-league.json'),{selection:'highest own objective on the shared held-out deal set; ties follow directory order then earliest generation',runs:runs.map(relative),candidates});
+  }
+  console.log(Object.fromEntries(objectives.map(k=>[k,[selected[k].base_seed,selected[k].generation,selected[k].weight_hash]])));
+}
+const [cmd,...args]=process.argv.slice(2);
+if(cmd==='seed-pool'&&args.length===2)seedPool(...args.map(p=>path.resolve(p)));
+else if(cmd==='fork'&&args.length===2)fork(...args.map(p=>path.resolve(p)));
+else if(cmd==='select')select(args.filter(p=>p!=='--publish').map(p=>path.resolve(p)),args.includes('--publish'));
+else { console.log('node lab/league.mjs seed-pool SOURCE_RUN EMPTY_DEST\nnode lab/league.mjs fork SOURCE_CHECKPOINT EMPTY_DEST\nnode lab/league.mjs select RUN [RUN ...] [--publish]'); if(cmd!=='--help')process.exitCode=1;}

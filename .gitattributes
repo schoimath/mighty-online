@@ -1,0 +1,8 @@
+# Inference, checkpoint metadata and version stamps use reproducible source bytes.
+*.js text eol=lf
+*.mjs text eol=lf
+*.py text eol=lf
+*.json text eol=lf
+lab/artifacts/** -text
+*.jsonl text eol=lf
+*.pt binary

@@ -1,0 +1,22 @@
+{
+  "external-731-win-step000.json": {
+    "weight_hash": "7ab9ee8ff352c8509217de7737e08b5b9007fd7d5efbb69aac0a67dac3d47fc4",
+    "source_run": "lab/artifacts/run-731",
+    "source_file": "win-step001.json"
+  },
+  "external-731-score-step000.json": {
+    "weight_hash": "2f12531f54eb60fb34e43da96a9f033321f8feb7c9b8b11bcf4cf4fd7eb78116",
+    "source_run": "lab/artifacts/run-731",
+    "source_file": "score-step001.json"
+  },
+  "external-731-balanced-step000.json": {
+    "weight_hash": "014c2c03e0c99d28038f599c530a4b8f707fabcfde87fbbd09043dd5e6dfa966",
+    "source_run": "lab/artifacts/run-731",
+    "source_file": "balanced-step001.json"
+  },
+  "external-731-downside_averse-step000.json": {
+    "weight_hash": "198d6d9a000a87a748c58aaafb146b11ec892975b62e861de17e525b0997d32d",
+    "source_run": "lab/artifacts/run-731",
+    "source_file": "downside_averse-step003.json"
+  }
+}

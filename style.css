@@ -127,7 +127,7 @@ button.seat-place:hover { border-color:#47744d; background:#ecf4e8; }
 .rule-row strong, .rule-row small { display: block; }
 .rule-row strong { font-size: .94rem; font-weight: 700; }
 .rule-row small { margin-top: 3px; color: #5f6d5d; font-size: .81rem; line-height: 1.4; }
-.rule-row select {
+.rule-row select, .model-row select {
   min-width: 73px; padding: 6px 25px 6px 10px; appearance: none; color: #264833;
   border-radius: 6px; border: 1px solid #afbfaa; font-size: .92rem; font-weight: 660;
   background: linear-gradient(45deg, transparent 50%, #5c705c 51%) calc(100% - 13px) 50% / 4px 4px no-repeat,
@@ -143,6 +143,28 @@ button.seat-place:hover { border-color:#47744d; background:#ecf4e8; }
 }
 .rule-row input[role=switch]:checked { border-color: #2f6548; background: #32694d; }
 .rule-row input[role=switch]:checked::after { transform: translateX(16px); }
+.model-settings {
+  min-width: 0; margin: 18px 0 14px; padding: 7px 15px 12px; color: #294634;
+  border: 1px solid #c4d2c5; border-radius: 10px; background: #f0f5ef;
+}
+.model-settings legend { padding: 0 5px; font-size: .95rem; font-weight: 750; }
+.model-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; min-width: 0; padding: 5px 0; }
+.model-row strong { font-size: .9rem; }
+.model-row select { min-width: 0; max-width: 60%; }
+.model-row small { display: block; color: #5c6c60; font-size: .76rem; overflow-wrap: anywhere; }
+.modal-inner .model-description, .room-panel .model-description {
+  margin: 3px 0 10px; color: #536858; font-size: .82rem; line-height: 1.45; word-break: keep-all;
+}
+.model-details { border-top: 1px solid #d6e1d4; font-size: .85rem; }
+.model-details summary { width: fit-content; padding: 8px 0; color: #315f42; cursor: pointer; font-weight: 650; }
+.model-details .model-row { border-top: 1px solid #dce6da; padding-block: 7px; }
+.model-results { color: #3f634a; font-size: .78rem; text-underline-offset: 2px; }
+.model-summary { margin: 18px 0; }
+.model-summary h3 { margin: 0 0 7px; font-size: .99rem; }
+.model-summary dl { margin: 0; }
+.model-summary dl > div { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; border-bottom: 1px solid #dce3da; padding: 7px 2px; font-size: .86rem; }
+.model-summary dt { color: #556b59; overflow-wrap: anywhere; }
+.model-summary dd { margin: 0; text-align: right; font-weight: 650; }
 .rules-summary { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 8px; margin: 14px 0 20px; }
 .rules-summary > div { min-width: 0; padding: 8px 10px; background: #eef3e9; border-radius: 6px; }
 .rules-summary dt { color: #51664e; font-size: .8rem; }

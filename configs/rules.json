@@ -1,0 +1,12 @@
+{
+  "ruleset_id": "mighty_online_5",
+  "rules_version": 2,
+  "defaults": {"minBid": 14, "allowFirstFriend": true, "allowFirstJokerCall": false, "allowLastJoker": false},
+  "seats": 5, "cards": 53, "tricks": 10, "points": 20,
+  "passIsFinal": true, "redealAfterAllPass": true, "allowDeclaredMisdeal": false,
+  "allowPreKittyContractChange": false, "postKittyTrumpChangeIncrease": 2,
+  "previousFriendOpens": true, "soloDeclarerOpens": true,
+  "scoring": {"version": "ten-base-v1", "successBase": 10, "runPoints": 20,
+    "backrunDeficit": 10, "runOrBackrunMultiplier": 2, "noTrumpMultiplier": 2,
+    "soloMultiplier": 2, "declarerShares": 2, "friendShares": 1, "soloShares": 4, "scale": 640}
+}

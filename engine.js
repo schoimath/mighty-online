@@ -42,22 +42,25 @@ function sortHand(cards) {
   });
 }
 
-function shuffledDeck() {
+function shuffledDeck(random) {
   const cards = [...DECK];
   const sample = new Uint32Array(1);
   for (let remaining = cards.length; remaining > 1; remaining--) {
     const limit = 2 ** 32 - (2 ** 32 % remaining);
-    do { globalThis.crypto.getRandomValues(sample); } while (sample[0] >= limit);
+    do {
+      if (random) sample[0] = Math.floor(random() * 2 ** 32);
+      else globalThis.crypto.getRandomValues(sample);
+    } while (sample[0] >= limit);
     const index = sample[0] % remaining;
     [cards[remaining - 1], cards[index]] = [cards[index], cards[remaining - 1]];
   }
   return cards;
 }
 
-export function createGame({ firstSeat = 0, rules = DEFAULT_RULES } = {}) {
+export function createGame({ firstSeat = 0, rules = DEFAULT_RULES, random } = {}) {
   if (!validSeat(firstSeat)) throw new Error('첫 좌석이 올바르지 않습니다.');
   const roundRules = validateRules(rules);
-  const deck = shuffledDeck();
+  const deck = shuffledDeck(random);
   return {
     phase: 'bid', firstSeat, turn: firstSeat, dealNo: 1, rules: roundRules,
     hands: Array.from({ length: SEATS }, (_, s) => sortHand(deck.slice(10 * s, 10 * s + 10))),
@@ -73,16 +76,17 @@ function higherBid(bid, previous) {
     (bid.points === previous.points && bid.suit === 'N' && previous.suit !== 'N');
 }
 
-function advanceAuction(state) {
+function advanceAuction(state, random) {
   if (state.passed.every(Boolean)) {
     const dealNo = state.dealNo + 1;
-    Object.assign(state, createGame({ firstSeat: nextSeat(state.firstSeat), rules: gameRules(state) }), { dealNo });
+    Object.assign(state, createGame({ firstSeat: nextSeat(state.firstSeat), rules: gameRules(state), random }), { dealNo });
     return;
   }
   if (state.bid && state.passed.filter(Boolean).length === SEATS - 1) {
     state.declarer = state.bid.seat;
     state.turn = state.declarer;
     state.phase = 'discard';
+    state.knownKitty = [...state.kitty];
     state.hands[state.turn] = sortHand([...state.hands[state.turn], ...state.kitty]);
     state.kitty = [];
     return;
@@ -235,7 +239,7 @@ function placeCard(state, seat, play) {
   else state.turn = nextSeat(seat);
 }
 
-export function applyAction(state, seat, action) {
+export function applyAction(state, seat, action, dealRandom) {
   if (!validSeat(seat) || seat !== state.turn) throw new Error('지금은 내 차례가 아닙니다.');
   if (!action || typeof action !== 'object') throw new Error('행동을 선택해 주세요.');
   const choices = choicesFor(state, seat);
@@ -249,7 +253,7 @@ export function applyAction(state, seat, action) {
       state.bid = { seat, ...bid };
       state.bidHistory.push({ ...state.bid });
     }
-    advanceAuction(state);
+    advanceAuction(state, dealRandom);
   } else if (choices.discard && action.type === 'discard') {
     const { cards, contract = state.bid } = action;
     if (!Array.isArray(cards) || cards.length !== 3 || new Set(cards).size !== 3 ||
@@ -337,7 +341,7 @@ function allyChance(view, seat) {
   return view.friendKnown ? 1 : 2 / 3;
 }
 
-function ratedPlays(view, weights) {
+export function ratedPlays(view, weights = playWeights) {
   const options = view.choices.plays;
   const {trick, trickNo, hand} = view;
   const trump = view.bid.suit, master = mighty(trump);
@@ -398,7 +402,7 @@ function ratedPlays(view, weights) {
       -Number(isMighty) * handSize / 10,
       -Number(isJoker && active) * Math.max(0, (view.rules.allowLastJoker ? 10 : 9) - trickNo) / 8,
       Number(!trick.length && isTrump) * (attack ? 1 : -1),
-      Number(!trick.length && move.jokerCall && !hand.includes('JK') && view.call?.card !== 'JK'),
+      Number(!trick.length && move.jokerCall === true && !hand.includes('JK') && view.call?.card !== 'JK'),
       Number(suit !== trump && length === 1 && !isMighty && !isJoker),
       move.suit ? suitsInHand[move.suit] / 5 : 0
     ];
@@ -458,6 +462,7 @@ export function searchPlay(view, weights = playWeights) {
 export function botObservation(state,seat) {
   const view = getView(state,seat);
   view.playedTricks = structuredClone(state.playedTricks || []);
+  view.knownKitty = seat === state.declarer ? [...(state.knownKitty || [])] : [];
   return view;
 }
 

@@ -1,6 +1,7 @@
 import {isCoveredSeat, seatPile} from "./score-ui.js";
 import {DEFAULT_RULES, leadSuit, mighty} from "./engine.js";
 import {playTableSound, soundControl, toggleSound} from "./sound.js";
+import {settlements} from "./lab/scoring.js";
 
 const suitInfo = {
   S: ["♠", "스페이드"], H: ["♥", "하트"], D: ["♦", "다이아몬드"],
@@ -91,9 +92,10 @@ function roleAt(view, seat) {
   if (view.phase === "result") return "수비";
   return "";
 }
-function seatMarkup(view, nameAt, winner) {
+function seatMarkup(view, nameAt, winner, modelLabels) {
   return Array.from({ length: 5 }, (_, offset) => {
     const seat = (view.seat + offset) % 5, name = nameAt(seat);
+    const model = modelLabels?.[seat];
     const isTurn = view.turn === seat && view.phase !== "result";
     const role = roleAt(view, seat);
     const playing = view.phase === "play" || view.phase === "result";
@@ -105,7 +107,7 @@ function seatMarkup(view, nameAt, winner) {
     const leader = inAuction && view.bid?.seat === seat;
     const avatar = inAuction ? seat + 1 : Array.from(name.trim())[0] || "♠";
     const header = `<span class="g-avatar g-avatar-${seat}" aria-label="${seat + 1}번 자리">${escapeHtml(avatar)}</span><span class="g-seat-tag"><span class="g-seat-name">${escapeHtml(name)}${offset === 0 ? '<small>나</small>' : ""}</span><span class="g-seat-detail">${isTurn ? '<i></i>' : ""}${escapeHtml(status)}</span></span>`;
-    return `<div class="g-seat g-seat-${offset} ${isTurn ? "g-seat-active" : ""} ${leader ? "g-seat-bidder" : ""} ${winner === seat ? "g-trick-winner" : ""}" data-seat="${seat}" role="group" aria-label="${escapeHtml(name)} 자리">${playing ? '<div class="g-seat-head">' + header + '</div>' + seatPile(view, seat) : header}</div>`;
+    return `<div class="g-seat g-seat-${offset} ${isTurn ? "g-seat-active" : ""} ${leader ? "g-seat-bidder" : ""} ${winner === seat ? "g-trick-winner" : ""}" data-seat="${seat}" role="group" aria-label="${escapeHtml(name)} 자리${model ? ' · ' + escapeHtml(model) : ''}"${model ? ' title="' + escapeHtml(model) + '"' : ""}>${playing ? '<div class="g-seat-head">' + header + '</div>' + seatPile(view, seat) : header}</div>`;
   }).join("");
 }
 function setFlightOffset(element, prefix, from, to) {
@@ -135,7 +137,7 @@ function renderTable(ui, nameAt) {
   const {view, root, resolving} = ui;
   const felt = root.querySelector(".g-felt");
   felt.classList.toggle("g-with-piles", view.phase === "play" || view.phase === "result");
-  felt.querySelector(".g-seats").innerHTML = seatMarkup(view, nameAt, resolving?.winner);
+  felt.querySelector(".g-seats").innerHTML = seatMarkup(view, nameAt, resolving?.winner, ui.options.modelLabels);
   const caption = felt.querySelector(".g-trick-result");
   caption.hidden = !resolving;
   if (resolving) {
@@ -306,9 +308,11 @@ function playCard(ui, card) {
 }
 function resultControls(view, ui) {
   const result = view.result;
+  const net = settlements(result, view.bid.suit)[view.seat];
   return `<h2>주공 팀 ${result.won ? "승리" : "패배"}</h2>
     <p>공약은 ${escapeHtml(result.target)}점, 주공 팀은 ${escapeHtml(result.points)}점을 획득했어요.</p>
     <div class="g-result-score"><strong>${escapeHtml(result.points)}</strong><span>/ 20점</span></div>
+    <p>내 정산 <strong>${net > 0 ? "+" : ""}${net}점</strong></p>
     ${ui.options.isHost ? button("다시 한 판", "replay") : "<p>방장이 다시 한 판을 누르면 이 자리에서 다음 판이 시작됩니다.</p>"}
     ${ui.options.isHost && ui.options.onReplaySetup ? button(escapeHtml(ui.options.replaySetupLabel), "replay-setup", true, "secondary") : ""}`;
 }
@@ -560,5 +564,6 @@ export function rulesContent(rules = DEFAULT_RULES) {
     <p>${jokerTiming}</p>
     <p>${jokerCallFrom} 선이 클로버 3으로 조커콜을 선언할 수 있습니다. 조커를 가진 사람은 조커 또는 마이티를 내야 하며, 조커는 그 트릭에서 가장 약합니다. 클로버가 기루다일 때의 조커콜 카드는 스페이드 3입니다.</p>
     <h3>점수 카드와 승패</h3><p>10, J, Q, K, A는 각각 1점으로, 한 판에는 총 20점이 있습니다. 가져간 점수 카드는 보드의 각자 자리 옆에 모읍니다. 주공은 처음부터 카드를 덮고, 프렌드는 정체가 밝혀지는 즉시 앞서 가져간 카드까지 모두 덮습니다. 열 번째 트릭이 끝났을 때 주공 팀의 점수가 공약 이상이면 주공 팀이 승리합니다.</p>
+    <p>개인 정산은 성공하면 주공 팀 점수에서 10을 뺀 값, 실패하면 공약에 모자란 값으로 계산합니다. 주공은 두 몫, 프렌드는 한 몫, 야당은 각각 반대 부호 한 몫입니다. 노프렌드 주공은 네 몫입니다. 런(20점) 또는 백런(공약보다 10점 이상 부족), 노기루다, 노프렌드의 배율은 각각 2배씩 곱합니다.</p>
   </div>`;
 }

@@ -1,0 +1,71 @@
+{
+  "name": "mighty-club-duplicate-v1",
+  "reference": "legacy",
+  "agents": [
+    "legacy",
+    "heuristic",
+    "conservative",
+    "aggressive",
+    "random",
+    "win",
+    "score",
+    "balanced",
+    "downside_averse"
+  ],
+  "splits": {
+    "validation": {
+      "startSeed": 1665000,
+      "scenarios": 16
+    },
+    "final_test": {
+      "startSeed": 2675000,
+      "scenarios": 48
+    }
+  },
+  "backgrounds": {
+    "mixed": [
+      "heuristic",
+      "aggressive",
+      "conservative",
+      "random"
+    ],
+    "partnership": [
+      "heuristic",
+      "heuristic",
+      "conservative",
+      "aggressive"
+    ],
+    "pressure": [
+      "aggressive",
+      "conservative",
+      "aggressive",
+      "heuristic"
+    ],
+    "heldout_search": [
+      "legacy",
+      "conservative",
+      "aggressive",
+      "heuristic"
+    ]
+  },
+  "backgroundCycle": {
+    "validation": [
+      "mixed",
+      "partnership",
+      "pressure"
+    ],
+    "final_test": [
+      "mixed",
+      "partnership",
+      "pressure",
+      "heldout_search"
+    ]
+  },
+  "blockSize": 4,
+  "bootstrapDraws": 512,
+  "bootstrapSeed": 940712,
+  "ridge": 0.2,
+  "maxRedeals": 100,
+  "inference": "Frozen greedy policies, random samples legal decisions, legacy searches up to 18 determinizations per play. Independent repeatable RNG per seat.",
+  "decisionTimeLimitMs": 5000
+}

@@ -1,0 +1,306 @@
+{
+  "selection": "highest own objective on the shared held-out deal set; ties follow directory order then earliest generation",
+  "runs": [
+    "lab/artifacts/run-731",
+    "lab/artifacts/run-1731",
+    "lab/artifacts/run-2731"
+  ],
+  "candidates": {
+    "win": [
+      {
+        "base_seed": 731,
+        "generation": 1,
+        "validation_utility": 0.4,
+        "weight_hash": "7ab9ee8ff352c8509217de7737e08b5b9007fd7d5efbb69aac0a67dac3d47fc4"
+      },
+      {
+        "base_seed": 731,
+        "generation": 2,
+        "validation_utility": 0.4,
+        "weight_hash": "057dc13007d410ca54ea3074de6ae3c1569be137e176669d0a4974782bede9d1"
+      },
+      {
+        "base_seed": 731,
+        "generation": 3,
+        "validation_utility": 0.4,
+        "weight_hash": "8660627e0313dc015e2becf0ab3b642b24ebeaf7ab3e2983450ae318cc6dcbdf"
+      },
+      {
+        "base_seed": 731,
+        "generation": 4,
+        "validation_utility": 0.4,
+        "weight_hash": "45ffe955815fc74168220d818a84bb94d8831abbab01d144b5037b91eb3f56ad"
+      },
+      {
+        "base_seed": 1731,
+        "generation": 1,
+        "validation_utility": 0.4,
+        "weight_hash": "080b80371d1e37ef5463eda4fb4e28b71598006c3373c6581512403c0e287ec4"
+      },
+      {
+        "base_seed": 1731,
+        "generation": 2,
+        "validation_utility": 0.4,
+        "weight_hash": "c1b58cbf81a22bff129539a3f820d699e4792edc617d9dc550ccf37349cf3d3a"
+      },
+      {
+        "base_seed": 1731,
+        "generation": 3,
+        "validation_utility": 0.4,
+        "weight_hash": "24c9fddc29c771efb40b138bf8cd3bbab39899bdd372e287c8a6e475fe0c136b"
+      },
+      {
+        "base_seed": 1731,
+        "generation": 4,
+        "validation_utility": 0.4,
+        "weight_hash": "94095268353a8b34c8d888b3a0c509571a82679a984ac869ea4b96f358f31957"
+      },
+      {
+        "base_seed": 2731,
+        "generation": 1,
+        "validation_utility": 0.4,
+        "weight_hash": "729efcb2bcc54a718c12ae629355d29e0b352c8073797526251772fa32fdf481"
+      },
+      {
+        "base_seed": 2731,
+        "generation": 2,
+        "validation_utility": 0.4,
+        "weight_hash": "fd626a5147be09553c795463a50c35dfbe9c98aec455a6121079ab5b3a7f3385"
+      },
+      {
+        "base_seed": 2731,
+        "generation": 3,
+        "validation_utility": 0.4,
+        "weight_hash": "e2ec33452fbda6d49a7e9aaada6dd50dbd3c1d8bbf27a0a00fdf737a08753d30"
+      },
+      {
+        "base_seed": 2731,
+        "generation": 4,
+        "validation_utility": 0.4,
+        "weight_hash": "4edc80fa66cd16929c10c6f9b66e47bbc7eb735f71c77e387dff157d48dc69c0"
+      }
+    ],
+    "score": [
+      {
+        "base_seed": 731,
+        "generation": 1,
+        "validation_utility": 0.025,
+        "weight_hash": "2f12531f54eb60fb34e43da96a9f033321f8feb7c9b8b11bcf4cf4fd7eb78116"
+      },
+      {
+        "base_seed": 731,
+        "generation": 2,
+        "validation_utility": 0.02396484375,
+        "weight_hash": "5eeba6a11dd0be653d5eb6cd9c1fcd9d99a4e6058901897338b76885ab7264cf"
+      },
+      {
+        "base_seed": 731,
+        "generation": 3,
+        "validation_utility": 0.02443359375,
+        "weight_hash": "f1e496bc5e17dccb53be19e5458d4785e375c097d90a13a7820ef30cd02e805b"
+      },
+      {
+        "base_seed": 731,
+        "generation": 4,
+        "validation_utility": 0.02455078125,
+        "weight_hash": "c66f60d4c2822048bd50a764e1b86a9eed500a3d52b7fcca58bb1eaa6f64b454"
+      },
+      {
+        "base_seed": 1731,
+        "generation": 1,
+        "validation_utility": 0.025546875,
+        "weight_hash": "4cf47d137be1a0f20fda34b7424778dccb0b20b5e433d57302316ef3d4f9746b"
+      },
+      {
+        "base_seed": 1731,
+        "generation": 2,
+        "validation_utility": 0.02529296875,
+        "weight_hash": "e30bfbd7866f98b0ea14789062e43ee22ca1695b876233401220cc9d04c8fbf0"
+      },
+      {
+        "base_seed": 1731,
+        "generation": 3,
+        "validation_utility": 0.02564453125,
+        "weight_hash": "b99a6b7d1d14b57591e247046efbab3438cc5b6e7007c64764c55521dd5607c3"
+      },
+      {
+        "base_seed": 1731,
+        "generation": 4,
+        "validation_utility": 0.02486328125,
+        "weight_hash": "98bdd5b339f4c2567dcca23a69bc026d2293c52c7c071afdffc13592941be812"
+      },
+      {
+        "base_seed": 2731,
+        "generation": 1,
+        "validation_utility": 0.0256640625,
+        "weight_hash": "c7ccd2e2346e2a1c6605f4166d9e0db43a2a167511a582e025027f249ce1bba5"
+      },
+      {
+        "base_seed": 2731,
+        "generation": 2,
+        "validation_utility": 0.0251953125,
+        "weight_hash": "5b89618eca97232698f3f8ccb168f4b3be845ab8b69275bcc8abff7bf30d24a2"
+      },
+      {
+        "base_seed": 2731,
+        "generation": 3,
+        "validation_utility": 0.0248828125,
+        "weight_hash": "cbe08358b967ab563d9459f559aff68c7bc38fec2a97f51a5edd695471fbdd17"
+      },
+      {
+        "base_seed": 2731,
+        "generation": 4,
+        "validation_utility": 0.0254296875,
+        "weight_hash": "b75b3ccacbbf703fd7081ee3f9ef4a949c7761e2dd43fec6af3a41742af3a9c9"
+      }
+    ],
+    "balanced": [
+      {
+        "base_seed": 731,
+        "generation": 1,
+        "validation_utility": 0.212060546875,
+        "weight_hash": "014c2c03e0c99d28038f599c530a4b8f707fabcfde87fbbd09043dd5e6dfa966"
+      },
+      {
+        "base_seed": 731,
+        "generation": 2,
+        "validation_utility": 0.211943359375,
+        "weight_hash": "d1dd3f109dcd8c7f5cdc1a31219fc68afcf8794f5515a31910a4ce189e6b9740"
+      },
+      {
+        "base_seed": 731,
+        "generation": 3,
+        "validation_utility": 0.2119140625,
+        "weight_hash": "a04a9a05159b0bdded21f9dd16c8b5970b795a6166370d8e0fc272d240964851"
+      },
+      {
+        "base_seed": 731,
+        "generation": 4,
+        "validation_utility": 0.211875,
+        "weight_hash": "5de5d9e67048f41109e619c9964463eb602cc92ced7cd134aa8e2af9e8560aac"
+      },
+      {
+        "base_seed": 1731,
+        "generation": 1,
+        "validation_utility": 0.237861328125,
+        "weight_hash": "c48903dc1ac3651e8f43146a69f9702bb0f6f716fb6c20496eb0d2e23e0cc73b"
+      },
+      {
+        "base_seed": 1731,
+        "generation": 2,
+        "validation_utility": 0.237998046875,
+        "weight_hash": "158ac968c3f83bc0cb458b88a92e07e403ff412cc3b3579b7dfb435cdbce7835"
+      },
+      {
+        "base_seed": 1731,
+        "generation": 3,
+        "validation_utility": 0.225478515625,
+        "weight_hash": "ec3a01ee2d29cfc1e5c23409692179990ce5173a7a67c228465a61b59108f634"
+      },
+      {
+        "base_seed": 1731,
+        "generation": 4,
+        "validation_utility": 0.238564453125,
+        "weight_hash": "0fdd162aedc3f1c0efd4ba329db5e82e04ca63f284f5f10d401340eded0c1df2"
+      },
+      {
+        "base_seed": 2731,
+        "generation": 1,
+        "validation_utility": 0.212861328125,
+        "weight_hash": "720a5af49237ad8bd509234fb3628898c52022a14766992cc2b2c43fe6495e36"
+      },
+      {
+        "base_seed": 2731,
+        "generation": 2,
+        "validation_utility": 0.2125,
+        "weight_hash": "dd725b8e354199ee890aa60b68a3301cc3ec456462e49e50972e4b17f2030cbe"
+      },
+      {
+        "base_seed": 2731,
+        "generation": 3,
+        "validation_utility": 0.21281250000000002,
+        "weight_hash": "08cb8248b45a4fa8cbebfd2beae8b9b217864cfdc659c47ab563556fffea6c3a"
+      },
+      {
+        "base_seed": 2731,
+        "generation": 4,
+        "validation_utility": 0.21284179687500002,
+        "weight_hash": "5f53acbbb20f39ffaee62253ddc0dfcab2ccadb9e6c4e586aa90d85d9e7422d4"
+      }
+    ],
+    "downside_averse": [
+      {
+        "base_seed": 731,
+        "generation": 1,
+        "validation_utility": 0.025050750732421877,
+        "weight_hash": "65114e7e7e6c7ca057e782978c03b6ea78da8a24065fa6dd0be261ea1ebb3291"
+      },
+      {
+        "base_seed": 731,
+        "generation": 2,
+        "validation_utility": 0.024846298217773437,
+        "weight_hash": "fd2af868db446ec2e491c7c21198519f7d73af72835bde14d71acc35008ca803"
+      },
+      {
+        "base_seed": 731,
+        "generation": 3,
+        "validation_utility": 0.025584426879882813,
+        "weight_hash": "198d6d9a000a87a748c58aaafb146b11ec892975b62e861de17e525b0997d32d"
+      },
+      {
+        "base_seed": 731,
+        "generation": 4,
+        "validation_utility": 0.02482330322265625,
+        "weight_hash": "54fb0a0f77bb1c5ea37383f823b3072a4530c2d2fd1c1f556e00b683a0586d66"
+      },
+      {
+        "base_seed": 1731,
+        "generation": 1,
+        "validation_utility": 0.025759094238281252,
+        "weight_hash": "2e3efb587dfed303031417a3fb0cbbf4aee3c871bc2360b7f89456d2df081ea3"
+      },
+      {
+        "base_seed": 1731,
+        "generation": 2,
+        "validation_utility": 0.025486831665039063,
+        "weight_hash": "4ed01d3887489db3ffc19ca2236d373f5726165aa14f372cc931fa48fbb1984e"
+      },
+      {
+        "base_seed": 1731,
+        "generation": 3,
+        "validation_utility": 0.025447006225585937,
+        "weight_hash": "6fcaea85cca38ef73220227cceca379f336b19703e1e31505f1ad6cd5a5944c1"
+      },
+      {
+        "base_seed": 1731,
+        "generation": 4,
+        "validation_utility": 0.024640487670898437,
+        "weight_hash": "b42dc5fd420e0181819e7be135b875757df87e5cf8b76a5a17bb1620057c3e3b"
+      },
+      {
+        "base_seed": 2731,
+        "generation": 1,
+        "validation_utility": 0.025212692260742187,
+        "weight_hash": "125c08ea74bc8409388341280e010add8e555350b22e6fba5d463d8205c082f0"
+      },
+      {
+        "base_seed": 2731,
+        "generation": 2,
+        "validation_utility": 0.026021575927734374,
+        "weight_hash": "f1c12b3b3976fc22fd7d6fdf551e233ee62c634d73f83e2c8133337a7ca15ac6"
+      },
+      {
+        "base_seed": 2731,
+        "generation": 3,
+        "validation_utility": 0.0260836181640625,
+        "weight_hash": "f8401cd73ecf864973fd1cb1ebe9eef08ba4a664b13936102de77dea283ffd86"
+      },
+      {
+        "base_seed": 2731,
+        "generation": 4,
+        "validation_utility": 0.0256732177734375,
+        "weight_hash": "a6b53408afd658f6582261c419e5b4bfade72d50ad2ec8f1259c53f6a52db922"
+      }
+    ]
+  }
+}

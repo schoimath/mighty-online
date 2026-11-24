@@ -1,6 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {botAction} from '../engine.js';
+import {Worker} from 'node:worker_threads';
+import {once} from 'node:events';
+import {botAction, botObservation} from '../engine.js';
+import {chooseModelAction} from '../lab/agents.js';
+import {rngFor} from '../lab/game.js';
 import { HostSession } from '../session.js';
 
 const guests = ['conn-amber', 'conn-blue', 'conn-coral', 'conn-denim'];
@@ -27,6 +31,77 @@ function finishWithFriend(session, friendSeat) {
   }
   assert.equal(session.round.result.friend, friendSeat);
 }
+
+test('AI models follow their configured seats through replacements and rematches', () => {
+  const room = fullRoom();
+  assert.deepEqual(room.view(0).botModels, Array(5).fill('legacy'));
+  const models = ['heuristic', 'random', 'conservative', 'aggressive', 'legacy'];
+  room.setBotModels(models);
+  models[0] = 'random';
+  const snapshot = room.view(1);
+  assert.equal(snapshot.botModels[0], 'heuristic');
+  snapshot.botModels[4] = 'random';
+  assert.equal(room.view(1).botModels[4], 'legacy');
+  const revision = room.revision;
+  for (const invalid of [[], Array(5), Array(5).fill('other'), 'random']) {
+    assert.throws(() => room.setBotModels(invalid), /모델/);
+    assert.equal(room.revision, revision);
+  }
+  room.start();
+  assert.throws(() => room.setBotModels(models), /대기실/);
+  finishWithFriend(room, 1);
+  room.removeGuest(guests[0]);
+  assert.equal(room.players[1].modelId, 'random');
+  room.start();
+  assert.equal(room.players[1].modelId, 'random');
+  assert.equal(room.round.turn, 1);
+  assert.equal(room.view(2).game.botModels, undefined);
+});
+
+test('the main-thread bot uses the seat model for the auction', () => {
+  const room = new HostSession('방장', undefined, ['legacy','aggressive','legacy','legacy','legacy']);
+  room.start();
+  room.act(0, room.revision, {type:'pass'});
+  room.round.hands[1] = ['HA','HK','HQ','H6','H5','H4','S2','D3','C4','C5'];
+  room.runBot();
+  assert.deepEqual(room.round.bid, {suit:'H', points:15, seat:1});
+});
+
+test('a worker retry keeps the same random action for the seat', () => {
+  const room = new HostSession('방장', undefined, Array(5).fill('random'));
+  room.start();
+  room.act(0, room.revision, {type:'pass'});
+  const seed = 8421;
+  const expected = chooseModelAction('random', botObservation(room.round, 1), rngFor(seed));
+  room.runBot(undefined, seed);
+  const bid = room.round.bidHistory.at(-1);
+  assert.equal(bid.seat, 1);
+  if (expected.type === 'bid') assert.deepEqual([bid.suit, bid.points], [expected.suit, expected.points]);
+  else assert.equal(bid.pass, true);
+});
+
+test('the browser worker identifies the model that made each decision', async () => {
+  const workerSource = `
+    import {parentPort} from 'node:worker_threads';
+    globalThis.self = {postMessage: data => parentPort.postMessage(data)};
+    await import(${JSON.stringify(new URL('../bot-worker.js', import.meta.url).href)});
+    parentPort.on('message', data => self.onmessage({data}));
+  `;
+  const worker = new Worker(new URL('data:text/javascript,' + encodeURIComponent(workerSource)));
+  try {
+    const room = new HostSession('방장');
+    room.start();
+    const view = botObservation(room.round, room.round.turn), seed = 102;
+    for (const modelId of ['random','aggressive']) {
+      const reply = once(worker,'message');
+      worker.postMessage({revision:17, modelId, seed, view});
+      const [packet] = await reply;
+      assert.deepEqual(packet, {revision:17, modelId, action:chooseModelAction(modelId, view, rngFor(seed))});
+    }
+  } finally {
+    await worker.terminate();
+  }
+});
 
 test('host and guests choose open seats without changing connection identity', () => {
   const room = new HostSession('방장');

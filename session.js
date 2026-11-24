@@ -1,16 +1,26 @@
-import {applyAction, botAction, createGame, DEFAULT_RULES, getView, validateRules} from './engine.js';
+import {applyAction, botObservation, createGame, DEFAULT_RULES, getView, validateRules} from './engine.js';
+import {chooseModelAction, DEFAULT_MODEL, isModelId} from './lab/agents.js';
+import {rngFor} from './lab/game.js';
 
 const BOT_NAMES = ['솔', '달', '별', '구름', '바다'];
 const validSeat = seat => Number.isInteger(seat) && seat >= 0 && seat < BOT_NAMES.length;
+
+function validateBotModels(models) {
+  if (!Array.isArray(models) || models.length !== BOT_NAMES.length || !Array.from(models).every(isModelId)) {
+    throw new Error('다섯 자리의 AI 모델을 확인해 주세요.');
+  }
+  return [...models];
+}
 
 export class HostSession {
   #swaps = [];
   #nextBidder = {seat: 0, player: null};
 
-  constructor(hostName, rules = DEFAULT_RULES) {
+  constructor(hostName, rules = DEFAULT_RULES, botModels = BOT_NAMES.map(() => DEFAULT_MODEL)) {
     this.players = [{name: hostName, bot: false}, null, null, null, null];
     this.hostSeat = 0;
     this.rules = validateRules(rules);
+    this.botModels = validateBotModels(botModels);
     this.connections = new Map();
     this.revision = 0;
     this.round = null;
@@ -112,7 +122,13 @@ export class HostSession {
   }
 
   botPlayer(seat) {
-    return {name: 'AI ' + BOT_NAMES[seat], bot: true};
+    return {name: 'AI ' + BOT_NAMES[seat], bot: true, modelId: this.botModels[seat]};
+  }
+
+  setBotModels(models) {
+    if (this.round) throw new Error('AI 모델은 대기실에서 변경할 수 있습니다.');
+    this.botModels = validateBotModels(models);
+    this.revision++;
   }
 
   setRules(rules) {
@@ -148,10 +164,14 @@ export class HostSession {
     return Boolean(this.round && this.round.phase !== 'result' && this.players[this.round.turn]?.bot);
   }
 
-  runBot(action) {
+  runBot(action, seed) {
     if (!this.botTurn) return;
     const seat = this.round.turn;
-    this.#applyTurn(seat, action ?? botAction(this.round, seat));
+    if (action == null) {
+      const rng = rngFor(seed ?? crypto.getRandomValues(new Uint32Array(1))[0]);
+      action = chooseModelAction(this.players[seat].modelId, botObservation(this.round, seat), rng);
+    }
+    this.#applyTurn(seat, action);
   }
 
   #applyTurn(seat, action) {
@@ -171,7 +191,7 @@ export class HostSession {
     if (!validSeat(seat)) throw new Error('유효하지 않은 자리입니다.');
     const swap = this.#swapAt(seat);
     return {revision: this.revision, seat, hostSeat: this.hostSeat, swap: swap ? {...swap} : null,
-      rules: {...this.rules}, players: this.players.map(p => p && {...p}),
+      rules: {...this.rules}, botModels: [...this.botModels], players: this.players.map(p => p && {...p}),
       game: this.round ? getView(this.round, seat) : null};
   }
 }

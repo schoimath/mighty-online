@@ -1,0 +1,226 @@
+[
+  {
+    "objective": "win",
+    "generation": 1,
+    "independent_scenarios": 16,
+    "utility": 0.4,
+    "reference": "heuristic",
+    "paired_utility_difference": 0,
+    "ci95": [
+      0,
+      0
+    ],
+    "inference": "inconclusive on validation",
+    "selected": true
+  },
+  {
+    "objective": "score",
+    "generation": 1,
+    "independent_scenarios": 16,
+    "utility": 0.025546875000000007,
+    "reference": "heuristic",
+    "paired_utility_difference": 0.00017578124999999994,
+    "ci95": [
+      -0.0010156250000000003,
+      0.00197265625
+    ],
+    "inference": "inconclusive on validation",
+    "selected": false
+  },
+  {
+    "objective": "balanced",
+    "generation": 1,
+    "independent_scenarios": 16,
+    "utility": 0.23786132812500002,
+    "reference": "heuristic",
+    "paired_utility_difference": 0.025175781249999994,
+    "ci95": [
+      -0.0003808593749999992,
+      0.06327148437499999
+    ],
+    "inference": "inconclusive on validation",
+    "selected": false
+  },
+  {
+    "objective": "downside_averse",
+    "generation": 1,
+    "independent_scenarios": 16,
+    "utility": 0.02575909423828126,
+    "reference": "heuristic",
+    "paired_utility_difference": 0.0005742645263671878,
+    "ci95": [
+      -0.0008884277343749994,
+      0.002291198730468751
+    ],
+    "inference": "inconclusive on validation",
+    "selected": true
+  },
+  {
+    "objective": "win",
+    "generation": 2,
+    "independent_scenarios": 16,
+    "utility": 0.4,
+    "reference": "heuristic",
+    "paired_utility_difference": 0,
+    "ci95": [
+      0,
+      0
+    ],
+    "inference": "inconclusive on validation",
+    "selected": false
+  },
+  {
+    "objective": "score",
+    "generation": 2,
+    "independent_scenarios": 16,
+    "utility": 0.025292968750000012,
+    "reference": "heuristic",
+    "paired_utility_difference": -0.00007812499999999999,
+    "ci95": [
+      -0.0013867187500000001,
+      0.001796875
+    ],
+    "inference": "inconclusive on validation",
+    "selected": false
+  },
+  {
+    "objective": "balanced",
+    "generation": 2,
+    "independent_scenarios": 16,
+    "utility": 0.23799804687500004,
+    "reference": "heuristic",
+    "paired_utility_difference": 0.025312499999999998,
+    "ci95": [
+      -0.0006054687500000016,
+      0.06347656249999999
+    ],
+    "inference": "inconclusive on validation",
+    "selected": false
+  },
+  {
+    "objective": "downside_averse",
+    "generation": 2,
+    "independent_scenarios": 16,
+    "utility": 0.025486831665039074,
+    "reference": "heuristic",
+    "paired_utility_difference": 0.000302001953125,
+    "ci95": [
+      -0.0006601562499999996,
+      0.0015168457031249998
+    ],
+    "inference": "inconclusive on validation",
+    "selected": false
+  },
+  {
+    "objective": "win",
+    "generation": 3,
+    "independent_scenarios": 16,
+    "utility": 0.4,
+    "reference": "heuristic",
+    "paired_utility_difference": 0,
+    "ci95": [
+      0,
+      0
+    ],
+    "inference": "inconclusive on validation",
+    "selected": false
+  },
+  {
+    "objective": "score",
+    "generation": 3,
+    "independent_scenarios": 16,
+    "utility": 0.025644531250000012,
+    "reference": "heuristic",
+    "paired_utility_difference": 0.0002734375,
+    "ci95": [
+      -0.00115234375,
+      0.002109375
+    ],
+    "inference": "inconclusive on validation",
+    "selected": true
+  },
+  {
+    "objective": "balanced",
+    "generation": 3,
+    "independent_scenarios": 16,
+    "utility": 0.22547851562500001,
+    "reference": "heuristic",
+    "paired_utility_difference": 0.012792968749999994,
+    "ci95": [
+      -0.00035156250000000085,
+      0.03861328124999999
+    ],
+    "inference": "inconclusive on validation",
+    "selected": false
+  },
+  {
+    "objective": "downside_averse",
+    "generation": 3,
+    "independent_scenarios": 16,
+    "utility": 0.02544700622558595,
+    "reference": "heuristic",
+    "paired_utility_difference": 0.00026217651367187514,
+    "ci95": [
+      -0.0011093749999999995,
+      0.0018260650634765625
+    ],
+    "inference": "inconclusive on validation",
+    "selected": false
+  },
+  {
+    "objective": "win",
+    "generation": 4,
+    "independent_scenarios": 16,
+    "utility": 0.4,
+    "reference": "heuristic",
+    "paired_utility_difference": 0,
+    "ci95": [
+      0,
+      0
+    ],
+    "inference": "inconclusive on validation",
+    "selected": false
+  },
+  {
+    "objective": "score",
+    "generation": 4,
+    "independent_scenarios": 16,
+    "utility": 0.024863281250000015,
+    "reference": "heuristic",
+    "paired_utility_difference": -0.0005078124999999999,
+    "ci95": [
+      -0.0016210937499999997,
+      0.0006250000000000001
+    ],
+    "inference": "inconclusive on validation",
+    "selected": false
+  },
+  {
+    "objective": "balanced",
+    "generation": 4,
+    "independent_scenarios": 16,
+    "utility": 0.23856445312500002,
+    "reference": "heuristic",
+    "paired_utility_difference": 0.02587890625,
+    "ci95": [
+      0.00031249999999999334,
+      0.06390625000000001
+    ],
+    "inference": "positive on validation",
+    "selected": true
+  },
+  {
+    "objective": "downside_averse",
+    "generation": 4,
+    "independent_scenarios": 16,
+    "utility": 0.024640487670898447,
+    "reference": "heuristic",
+    "paired_utility_difference": -0.000544342041015625,
+    "ci95": [
+      -0.0017038879394531245,
+      0.0005704040527343748
+    ],
+    "inference": "inconclusive on validation",
+    "selected": false
+  }
+]
