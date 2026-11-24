@@ -9,6 +9,9 @@
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 60 60'%3E%3Crect width='60' height='60' rx='12' fill='%23174639'/%3E%3Ctext x='30' y='48' text-anchor='middle' font-size='50' fill='%23f8f3de'%3E♠%3C/text%3E%3C/svg%3E">
   <link rel="stylesheet" href="./style.css">
   <link rel="stylesheet" href="./game.css">
+  <link rel="stylesheet" href="./score.css">
+  <link rel="stylesheet" href="./auction.css">
+  <link rel="stylesheet" href="./chat.css">
   <script type="module" src="./app.js"></script>
 </head>
 <body>
@@ -48,6 +51,19 @@
   </main>
   <main id="room" class="page-wrap room-page" hidden></main>
   <div id="game" hidden></div>
+  <button id="chat-toggle" type="button" class="chat-toggle" aria-controls="chat-panel" aria-expanded="false" hidden>채팅<span id="chat-unread" hidden></span></button>
+  <section id="chat-panel" class="chat-panel" aria-labelledby="chat-title" hidden>
+    <header class="chat-heading"><h2 id="chat-title">방 채팅</h2><button type="button" id="chat-close" aria-label="채팅 닫기">×</button></header>
+    <div class="chat-scroll" id="chat-scroll">
+      <p class="chat-empty" id="chat-empty">이 방의 첫 메시지를 보내 보세요.</p>
+      <ol id="chat-list" role="log" aria-label="방 메시지" aria-live="polite" aria-relevant="additions"></ol>
+    </div>
+    <form id="chat-form" class="chat-compose">
+      <input id="chat-input" type="text" maxlength="280" placeholder="메시지 입력" aria-label="채팅 메시지" autocomplete="off">
+      <button id="chat-send" type="submit" disabled>보내기</button>
+    </form>
+    <p id="chat-feedback" class="chat-feedback" role="status" hidden></p>
+  </section>
   <footer class="site-footer" id="site-footer"><div><span class="footer-name">♠ &nbsp; Mighty Club</span><span class="footer-suits" aria-hidden="true">♠ <b>♥</b> ♣ <b>♦</b></span></div></footer>
   <dialog class="modal" id="modal" aria-labelledby="modal-title"><div class="modal-inner"><button class="close-icon" id="close-modal" aria-label="닫기">×</button><div id="modal-content"></div></div></dialog>
   <div id="notice" role="status" class="toast" hidden></div>

@@ -43,7 +43,8 @@ export function createGame({ firstSeat = 0 } = {}) {
     hands: Array.from({ length: SEATS }, (_, s) => sortHand(deck.slice(10 * s, 10 * s + 10))),
     kitty: deck.slice(50), discarded: [], bid: null, bidHistory: [],
     passed: Array(SEATS).fill(false), declarer: null, call: null, friend: null, friendKnown: false,
-    trick: [], trickNo: 1, lastTrick: null, scores: Array(SEATS).fill(0), result: null
+    trick: [], trickNo: 1, lastTrick: null, scores: Array(SEATS).fill(0),
+    captured: Array.from({ length: SEATS }, () => []), result: null
   };
 }
 
@@ -151,11 +152,11 @@ function selfRole(state, seat) {
 export function getView(state, seat) {
   if (!validSeat(seat)) throw new Error('참가 좌석이 올바르지 않습니다.');
   const { phase, turn, dealNo, passed, bid, bidHistory, declarer, friendKnown, call,
-    trick, trickNo, lastTrick, scores, result } = state;
+    trick, trickNo, lastTrick, scores, captured, result } = state;
   const visible = {
     seat, phase, turn, dealNo, hand: state.hands[seat], counts: state.hands.map(h => h.length),
     passed, bid, bidHistory, declarer, friendKnown, friend: friendKnown ? state.friend : null,
-    call, selfRole: selfRole(state, seat), trick, trickNo, lastTrick, scores, result,
+    call, selfRole: selfRole(state, seat), trick, trickNo, lastTrick, scores, captured, result,
     discarded: seat === declarer || phase === 'result' ? state.discarded : [],
     choices: choicesFor(state, seat)
   };
@@ -164,7 +165,9 @@ export function getView(state, seat) {
 
 function finishTrick(state) {
   const winner = winningPlay(state.trick, state.bid.suit, state.trickNo).seat;
-  const points = pointsIn(state.trick.map(play => play.card));
+  const scoringCards = state.trick.map(play => play.card).filter(point);
+  const points = scoringCards.length;
+  state.captured[winner].push(...scoringCards);
   state.scores[winner] += points;
   state.lastTrick = { cards: state.trick, winner, points, number: state.trickNo };
   state.trick = [];

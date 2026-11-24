@@ -146,6 +146,27 @@ test('first-trick friend resolves once, declarer winning it plays alone', () => 
   }
 });
 
+test('point-card piles appear on completed tricks and buried points stay private until the result', () => {
+  const cards = ['H10', 'HJ', 'HQ', 'HK', 'HA'];
+  const game = playFixture(cards.map((card, index) => [card, 'H' + (2 + index)]), 'N', 9);
+  game.discarded = ['CA', 'DA', 'D8'];
+  for (const card of cards.slice(0, 4)) play(game, card);
+  assert.deepEqual(getView(game, 1).captured, [[], [], [], [], []]);
+  play(game, 'HA');
+  const defenderView = getView(game, 1);
+  assert.deepEqual(defenderView.captured[4], cards);
+  assert.deepEqual(defenderView.scores, [0, 0, 0, 0, 5]);
+  assert.deepEqual(defenderView.discarded, []);
+  defenderView.captured[4].pop();
+  assert.equal(game.captured[4].length, 5);
+  for (const card of ['H6', 'H2', 'H3', 'H4', 'H5']) play(game, card);
+  const final = getView(game, 1);
+  assert.equal(final.phase, 'result');
+  assert.deepEqual(final.captured, [[], [], [], [], cards]);
+  assert.deepEqual(final.scores, [2, 0, 0, 0, 5]);
+  assert.deepEqual(final.discarded, game.discarded);
+});
+
 test('60 complete bot games always make 50 legal plays and account for all 20 points', () => {
   for (let run = 0; run < 60; run++) {
     const game = createGame({ firstSeat: run % 5 });
@@ -160,6 +181,11 @@ test('60 complete bot games always make 50 legal plays and account for all 20 po
     assert.equal(plays, 50);
     assert.equal(game.trickNo, 10);
     assert.equal(game.scores.reduce((a, b) => a + b), 20);
+    const buriedPoints = game.discarded.filter(card => /^(S|H|D|C)(10|J|Q|K|A)$/.test(card));
+    assert.equal(new Set([...game.captured.flat(), ...buriedPoints]).size, 20);
+    for (let seat = 0; seat < 5; seat++) {
+      assert.equal(game.captured[seat].length + (seat === game.declarer ? buriedPoints.length : 0), game.scores[seat]);
+    }
     assert.deepEqual(game.hands.map(hand => hand.length), [0, 0, 0, 0, 0]);
     assert.equal(game.result.points, game.scores[game.declarer] + (game.scores[game.friend] || 0));
     assert.equal(game.result.won, game.result.points >= game.bid.points);

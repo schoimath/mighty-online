@@ -1,0 +1,57 @@
+.g-scoreboard {
+  grid-column: 1; min-width: 0; border: 1px solid #3c5846; border-radius: 13px;
+  padding: 14px 16px; background: #1a3529; color: #eef1e4;
+}
+.g-score-heading, .g-score-line {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 8px;
+}
+.g-score-heading { flex-wrap: wrap; margin-bottom: 12px; }
+.g-score-heading h2 { margin: 0; color: #f8f5e9; font-size: 1rem; font-weight: 650; }
+.g-score-last { color: #f1d59a; font-size: .82rem; overflow-wrap: anywhere; }
+.g-score-list {
+  display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 5px;
+  list-style: none; margin: 0; padding: 0;
+}
+.g-score-seat {
+  min-width: 0; padding: 7px; border: 1px solid #45604d;
+  border-radius: 6px; background: #153024;
+}
+.g-score-seat.g-score-winner { border-color: #ab9560; background: #2d3e2b; }
+.g-score-line { flex-wrap: wrap; gap: 0 5px; }
+.g-score-name {
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: #d7e3d2; font-size: .8rem;
+}
+.g-score-total { white-space: nowrap; color: #fae7b3; font-size: .94rem; font-variant-numeric: tabular-nums; }
+.g-score-cards { display: flex; flex-wrap: wrap; gap: 3px; align-items: center; }
+.g-score-cards:not(:empty) { margin-top: 5px; }
+.g-score-card {
+  display: inline-grid; place-items: center; padding: 2px 3px; min-width: 24px;
+  border: 1px solid #d8d0ac; border-radius: 3px; background: #faf5e4;
+  color: #263a2c; font: 700 .82rem/1.2 Georgia, serif;
+}
+.g-score-card.g-score-red { color: #a03c3c; }
+.g-score-card.g-score-buried { border: 1px dashed #9b762c; background: #efdfa9; }
+.g-score-note { margin: 9px 0 0; color: #c9d7c4; font-size: .82rem; }
+@media (max-width: 880px) {
+  .g-scoreboard { padding: 12px; }
+  .g-score-list { grid-template-columns: repeat(auto-fit, minmax(94px, 1fr)); }
+}
+@media (max-width: 479px) {
+  .g-score-list { grid-template-columns: 1fr; gap: 0; }
+  .g-score-seat {
+    display: grid; grid-template-columns: minmax(82px, 36%) minmax(0, 1fr);
+    align-items: center; gap: 9px; padding: 5px 6px;
+    border: 0; border-top: 1px solid #405844; border-radius: 0; background: transparent;
+  }
+  .g-score-seat.g-score-winner { border-color: #8e8056; }
+  .g-score-line { flex-wrap: nowrap; }
+  .g-score-cards:not(:empty) { margin-top: 0; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .g-score-arrival { animation: g-score-arrival 420ms cubic-bezier(.2,.75,.3,1) both; }
+}
+@keyframes g-score-arrival {
+  from { opacity: .25; transform: translateY(-11px) rotate(-8deg) scale(.86); }
+  to { opacity: 1; transform: none; }
+}

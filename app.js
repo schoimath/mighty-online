@@ -1,6 +1,7 @@
 import {clearGame, renderGame, rulesContent} from './game-ui.js';
 import {hostRoom, joinRoom, normalizeRoomCode} from './network.js';
 import {HostSession} from './session.js';
+import {chatText, setupChat} from './chat.js';
 
 const $ = id => document.getElementById(id);
 const escape = text => String(text ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -37,6 +38,22 @@ let generation = 0;
 let botTimer, toastTimer;
 let pendingConnect = null;
 let roomCode = '';
+const chat = setupChat(sendChat);
+
+function broadcastChat(seat, text) {
+  const player = authority?.players[seat];
+  if (!player || player.bot || !chatText(text)) return false;
+  const message = {id: chat.log.lastId + 1, time: Date.now(), seat, name: player.name, text: text.trim()};
+  if (!chat.receive(message, seat === 0)) return false;
+  for (const [id, guestSeat] of authority.connections) {
+    transport.send(id, {type:'chat-message', message, own:guestSeat === seat});
+  }
+  return true;
+}
+function sendChat(text) {
+  if (mode === 'host') return broadcastChat(0, text);
+  return mode === 'guest' && Boolean(transport?.send({type:'chat-send', text}));
+}
 
 function toast(message) {
   clearTimeout(toastTimer);
@@ -76,6 +93,7 @@ function stopSession(message) {
   authority = snapshot = null;
   roomCode = '';
   mode = 'lobby';
+  chat.reset();
   if ($('modal').open) closeModal();
   $('room').replaceChildren();
   clearGame($('game'));
@@ -132,6 +150,7 @@ function drawRoom() {
   $('copy-invite').onclick = copyInvite;
   $('room-leave').onclick = requestLeave;
   if (host) $('start-round').onclick = startRound;
+  chat.attach($('room').querySelector('.room-actions'));
 }
 
 function draw() {
@@ -148,13 +167,15 @@ function draw() {
     },
     onAction(action) {
       if (authority) {
-        try { authority.act(0,snapshot.revision,action); publish(); }
-        catch (error) { toast(error.message); }
-      } else if (!transport?.send({type:'action',revision:snapshot.revision,action})) {
-        toast('방장과의 연결을 확인해 주세요.');
+        try { authority.act(0,snapshot.revision,action); publish(); return true; }
+        catch (error) { toast(error.message); return false; }
       }
+      if (transport?.send({type:'action',revision:snapshot.revision,action})) return true;
+      toast('방장과의 연결을 확인해 주세요.');
+      return false;
     }
   });
+  if (mode === 'host' || mode === 'guest') chat.attach($('game').querySelector('.g-nav-actions'));
 }
 
 function publish() {
@@ -194,12 +215,18 @@ async function connectRoom(kind, name, code, signal) {
         const reason = session.addGuest(id,guestName);
         if (reason) return reason;
         publish();
+        transport.send(id, {type:'chat-history', messages:chat.log.messages});
         return true;
       },
       onMessage(id, packet) {
-        if (!active() || packet?.type !== 'action') return;
+        if (!active() || !packet) return;
         const seat = session.seatFor(id);
         if (seat < 0) return;
+        if (packet.type === 'chat-send') {
+          broadcastChat(seat, packet.text);
+          return;
+        }
+        if (packet.type !== 'action') return;
         try { session.act(seat,packet.revision,packet.action); publish(); }
         catch (error) { transport.send(id,{type:'error',message:error.message}); }
       },
@@ -221,7 +248,9 @@ async function connectRoom(kind, name, code, signal) {
       signal,
       onMessage(packet) {
         if (!active()) return;
-        if (packet?.type === 'error') { toast(packet.message); return; }
+        if (packet?.type === 'chat-message') { chat.receive(packet.message, packet.own === true); return; }
+        if (packet?.type === 'chat-history') { chat.restore(packet.messages); return; }
+        if (packet?.type === 'error') { toast(packet.message); if (mode === 'guest') draw(); return; }
         if (packet?.type === 'state') {
           snapshot = packet.view;
           if (mode === 'guest') draw();

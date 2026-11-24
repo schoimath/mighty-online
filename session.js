@@ -57,8 +57,7 @@ export class HostSession {
   act(seat, revision, action) {
     if (!this.round || !Number.isInteger(seat) || seat < 0 || seat > 4 || this.players[seat]?.bot) throw new Error('플레이어 자리를 확인해 주세요.');
     if (revision !== this.revision) throw new Error('테이블 상태가 바뀌었습니다. 다시 선택해 주세요.');
-    applyAction(this.round, seat, action);
-    this.revision++;
+    this.#applyTurn(seat, action);
   }
 
   get botTurn() {
@@ -68,7 +67,15 @@ export class HostSession {
   runBot() {
     if (!this.botTurn) return;
     const seat = this.round.turn;
-    applyAction(this.round, seat, botAction(this.round, seat));
+    this.#applyTurn(seat, botAction(this.round, seat));
+  }
+
+  #applyTurn(seat, action) {
+    applyAction(this.round, seat, action);
+    if (action.type === 'bid' || action.type === 'pass') {
+      const entry = this.round.bidHistory.at(-1);
+      if (entry) entry.name = this.players[seat].name;
+    }
     this.revision++;
   }
 

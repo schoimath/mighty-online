@@ -48,6 +48,21 @@ test('each connection has one seat, one private hand, and a revision-checked tur
   assert.deepEqual(session.view(0), next);
 });
 
+test('auction entries keep the bidder name after a bot takes the seat', () => {
+  const session = fullRoom();
+  session.start();
+  session.act(0, session.revision, {type: 'pass'});
+  session.act(1, session.revision, {type: 'bid', suit: 'H', points: 18, name: '다른 이름'});
+  session.removeGuest(guests[0]);
+  const view = session.view(0);
+  assert.equal(view.players[1].bot, true);
+  assert.equal(view.game.bidHistory[0].name, '방장');
+  assert.equal(view.game.bidHistory[1].name, '친구 1');
+  session.removeGuest(guests[1]);
+  session.runBot();
+  assert.equal(session.view(0).game.bidHistory.at(-1).name, session.players[2].name);
+});
+
 test('a full room completes ten tricks when a guest disconnects during play', () => {
   const session = fullRoom();
   session.start();
