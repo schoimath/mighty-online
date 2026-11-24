@@ -1,0 +1,2063 @@
+{
+  "benchmark_version": "mighty-club-duplicate-v2-ef70c675b41ffaf4",
+  "split": "final_test",
+  "hashes": {
+    "legacy": "652b176de6a74841457ba00cd15cae0727a00c1be225600456bf2e3ecb73c91f",
+    "heuristic": "eb67697acf3f47d0db5c690349b32b92ff6b12174383f0fbd107ba765c90381b",
+    "conservative": "fc9f664961b6249c9c08f1ae16e7874805bcdaca8ad735167ebc0ce590537113",
+    "aggressive": "e4fe92c30895577e53d4d0cc7c108c06894ef6e66611a9dbf6194667bfe02b5d",
+    "random": "8220f4ff47db85563e54b38b868282cd348197e8e4dff5b24582502a76dbcdf7",
+    "win": "7ab9ee8ff352c8509217de7737e08b5b9007fd7d5efbb69aac0a67dac3d47fc4",
+    "score": "c7ccd2e2346e2a1c6605f4166d9e0db43a2a167511a582e025027f249ce1bba5",
+    "balanced": "0fdd162aedc3f1c0efd4ba329db5e82e04ca63f284f5f10d401340eded0c1df2",
+    "downside_averse": "f8401cd73ecf864973fd1cb1ebe9eef08ba4a664b13936102de77dea283ffd86"
+  },
+  "selection": {
+    "win": {
+      "hash": "7ab9ee8ff352c8509217de7737e08b5b9007fd7d5efbb69aac0a67dac3d47fc4",
+      "file": "win-step001.json",
+      "checkpoint": "win-step001.pt",
+      "run_path": "lab/artifacts/run-731",
+      "generation": 1,
+      "training_seed": 731,
+      "validation_utility": 0.4,
+      "selection_scenarios": 16,
+      "alpha": 0.5,
+      "lambdaRisk": 0.5
+    },
+    "score": {
+      "hash": "c7ccd2e2346e2a1c6605f4166d9e0db43a2a167511a582e025027f249ce1bba5",
+      "file": "score-step001.json",
+      "checkpoint": "score-step001.pt",
+      "run_path": "lab/artifacts/run-2731",
+      "generation": 1,
+      "training_seed": 3740,
+      "validation_utility": 0.0256640625,
+      "selection_scenarios": 16,
+      "alpha": 0.5,
+      "lambdaRisk": 0.5
+    },
+    "balanced": {
+      "hash": "0fdd162aedc3f1c0efd4ba329db5e82e04ca63f284f5f10d401340eded0c1df2",
+      "file": "balanced-step004.json",
+      "checkpoint": "balanced-step004.pt",
+      "run_path": "lab/artifacts/run-1731",
+      "generation": 4,
+      "training_seed": 3749,
+      "validation_utility": 0.238564453125,
+      "selection_scenarios": 16,
+      "alpha": 0.5,
+      "lambdaRisk": 0.5
+    },
+    "downside_averse": {
+      "hash": "f8401cd73ecf864973fd1cb1ebe9eef08ba4a664b13936102de77dea283ffd86",
+      "file": "downside_averse-step003.json",
+      "checkpoint": "downside_averse-step003.pt",
+      "run_path": "lab/artifacts/run-2731",
+      "generation": 3,
+      "training_seed": 5758,
+      "validation_utility": 0.0260836181640625,
+      "selection_scenarios": 16,
+      "alpha": 0.5,
+      "lambdaRisk": 0.5
+    }
+  },
+  "rulesHash": "c069f8286cf604982bd3e64f9f45e4cad3ed291839c12b67acfa0c68348edc08",
+  "scoringHash": "823522500242c508bbea46de1901cfbc48efd9a690efcdea31ad28443ff9ad48",
+  "codeHash": "4c5ff885de3a086025040292be362ed895bbb212abd0e6e4cf3b5e6eadb21e62",
+  "observationVersion": "seat-visible-v2",
+  "actionVersion": "mighty-action-v1",
+  "rngVersion": "mulberry32-fisher-yates-v1",
+  "node": "v24.15.0",
+  "platform": "win32/x64",
+  "workers": 3,
+  "config": {
+    "name": "mighty-club-duplicate-v2",
+    "searchPolicy": "reserve-joker-v2",
+    "reference": "legacy",
+    "agents": [
+      "legacy",
+      "heuristic",
+      "conservative",
+      "aggressive",
+      "random",
+      "win",
+      "score",
+      "balanced",
+      "downside_averse"
+    ],
+    "splits": {
+      "validation": {
+        "startSeed": 1709000,
+        "scenarios": 16
+      },
+      "final_test": {
+        "startSeed": 2806000,
+        "scenarios": 48
+      }
+    },
+    "backgrounds": {
+      "mixed": [
+        "heuristic",
+        "aggressive",
+        "conservative",
+        "random"
+      ],
+      "partnership": [
+        "heuristic",
+        "heuristic",
+        "conservative",
+        "aggressive"
+      ],
+      "pressure": [
+        "aggressive",
+        "conservative",
+        "aggressive",
+        "heuristic"
+      ],
+      "heldout_search": [
+        "legacy",
+        "conservative",
+        "aggressive",
+        "heuristic"
+      ]
+    },
+    "backgroundCycle": {
+      "validation": [
+        "mixed",
+        "partnership",
+        "pressure"
+      ],
+      "final_test": [
+        "mixed",
+        "partnership",
+        "pressure",
+        "heldout_search"
+      ]
+    },
+    "blockSize": 4,
+    "bootstrapDraws": 512,
+    "bootstrapSeed": 940712,
+    "ridge": 0.2,
+    "maxRedeals": 100,
+    "inference": "Frozen greedy policies, random samples legal decisions, legacy searches up to 18 determinizations per play. Independent repeatable RNG per seat.",
+    "decisionTimeLimitMs": 5000
+  },
+  "wall_seconds": 27.0987869,
+  "results_sha256": "2cafb0c327bc11ff8c8a7728cbff6d3632147d150461428d360e344a41729db1",
+  "provisional": true,
+  "scenarios": 48,
+  "games": 2160,
+  "redeals": 9,
+  "illegal": 0,
+  "timeouts": 0,
+  "agents": {
+    "legacy": {
+      "win": {
+        "value": 0.6583333333333333,
+        "ci95": [
+          0.6032291666666666,
+          0.7092708333333332
+        ]
+      },
+      "score": {
+        "value": 8.054166666666667,
+        "ci95": [
+          5.791145833333333,
+          10.539375
+        ]
+      },
+      "winDifference": {
+        "value": 0,
+        "ci95": [
+          0,
+          0
+        ]
+      },
+      "scoreDifference100": {
+        "value": 0,
+        "ci95": [
+          0,
+          0
+        ]
+      },
+      "winElo": {
+        "value": 1500,
+        "ci95": [
+          1500,
+          1500
+        ]
+      },
+      "scoreElo": {
+        "value": 1500,
+        "ci95": [
+          1500,
+          1500
+        ]
+      },
+      "inference_ms": {
+        "p50": 2.907,
+        "p95": 26.184399999999982,
+        "decisions": 2745
+      },
+      "background": {
+        "mixed": {
+          "games": 60,
+          "team_win": 0.8333333333333334,
+          "settlement": 27.7,
+          "contract_success": 0.08333333333333333,
+          "fraction": 0.25
+        },
+        "partnership": {
+          "games": 60,
+          "team_win": 0.55,
+          "settlement": 1.0833333333333333,
+          "contract_success": 0.4166666666666667,
+          "fraction": 0.25
+        },
+        "pressure": {
+          "games": 60,
+          "team_win": 0.6833333333333333,
+          "settlement": 2.4,
+          "contract_success": 0.45,
+          "fraction": 0.25
+        },
+        "heldout_search": {
+          "games": 60,
+          "team_win": 0.5666666666666667,
+          "settlement": 1.0333333333333334,
+          "contract_success": 0.36666666666666664,
+          "fraction": 0.25
+        }
+      },
+      "roles": {
+        "friend": {
+          "games": 50,
+          "team_win": 0.38,
+          "settlement": -2.38,
+          "contract_success": 0.38,
+          "fraction": 0.20833333333333334
+        },
+        "declarer": {
+          "games": 31,
+          "team_win": 0.6451612903225806,
+          "settlement": 8,
+          "contract_success": 0.6451612903225806,
+          "fraction": 0.12916666666666668
+        },
+        "opposition": {
+          "games": 159,
+          "team_win": 0.7484276729559748,
+          "settlement": 11.345911949685535,
+          "contract_success": 0.25157232704402516,
+          "fraction": 0.6625
+        }
+      },
+      "final_contracts": {
+        "C14": 18,
+        "H15": 13,
+        "D20": 10,
+        "H16": 6,
+        "S15": 35,
+        "H14": 19,
+        "S14": 18,
+        "D15": 9,
+        "H20": 11,
+        "S20": 5,
+        "N14": 3,
+        "D14": 12,
+        "D17": 1,
+        "C15": 24,
+        "C19": 1,
+        "C16": 3,
+        "N19": 6,
+        "D16": 9,
+        "H19": 7,
+        "N18": 2,
+        "N17": 1,
+        "D19": 2,
+        "N15": 11,
+        "S18": 3,
+        "S16": 1,
+        "H17": 4,
+        "C18": 2,
+        "C20": 4
+      },
+      "focal_contracts": {
+        "C14": 4,
+        "H15": 3,
+        "H16": 2,
+        "S15": 6,
+        "H14": 3,
+        "S14": 3,
+        "D14": 1,
+        "C15": 5,
+        "D16": 2,
+        "D15": 2
+      },
+      "objective_mean": null,
+      "checkpoint_sha256": "652b176de6a74841457ba00cd15cae0727a00c1be225600456bf2e3ecb73c91f",
+      "redeals": 1
+    },
+    "heuristic": {
+      "win": {
+        "value": 0.625,
+        "ci95": [
+          0.5875,
+          0.6592708333333331
+        ]
+      },
+      "score": {
+        "value": 6.904166666666667,
+        "ci95": [
+          4.4591666666666665,
+          9.632083333333332
+        ]
+      },
+      "winDifference": {
+        "value": -0.033333333333333326,
+        "ci95": [
+          -0.07083333333333341,
+          0.004166666666666652
+        ]
+      },
+      "scoreDifference100": {
+        "value": -115.00000000000003,
+        "ci95": [
+          -202.49999999999997,
+          -29.531250000000128
+        ]
+      },
+      "winElo": {
+        "value": 1375.9366806690603,
+        "ci95": [
+          1228.0922261464864,
+          1537.0411626722812
+        ]
+      },
+      "scoreElo": {
+        "value": 1331.7506961802385,
+        "ci95": [
+          1185.0963036364892,
+          1491.749971381104
+        ]
+      },
+      "inference_ms": {
+        "p50": 0.023,
+        "p95": 0.07579999999999973,
+        "decisions": 2745
+      },
+      "background": {
+        "mixed": {
+          "games": 60,
+          "team_win": 0.8333333333333334,
+          "settlement": 26.1,
+          "contract_success": 0.08333333333333333,
+          "fraction": 0.25
+        },
+        "partnership": {
+          "games": 60,
+          "team_win": 0.5,
+          "settlement": 0.65,
+          "contract_success": 0.4666666666666667,
+          "fraction": 0.25
+        },
+        "pressure": {
+          "games": 60,
+          "team_win": 0.6,
+          "settlement": 0.48333333333333334,
+          "contract_success": 0.36666666666666664,
+          "fraction": 0.25
+        },
+        "heldout_search": {
+          "games": 60,
+          "team_win": 0.5666666666666667,
+          "settlement": 0.38333333333333336,
+          "contract_success": 0.3333333333333333,
+          "fraction": 0.25
+        }
+      },
+      "roles": {
+        "friend": {
+          "games": 50,
+          "team_win": 0.4,
+          "settlement": -2.9,
+          "contract_success": 0.4,
+          "fraction": 0.20833333333333334
+        },
+        "declarer": {
+          "games": 31,
+          "team_win": 0.41935483870967744,
+          "settlement": 3.032258064516129,
+          "contract_success": 0.41935483870967744,
+          "fraction": 0.12916666666666668
+        },
+        "opposition": {
+          "games": 159,
+          "team_win": 0.7358490566037735,
+          "settlement": 10.742138364779874,
+          "contract_success": 0.2641509433962264,
+          "fraction": 0.6625
+        }
+      },
+      "final_contracts": {
+        "C14": 18,
+        "H15": 13,
+        "D20": 10,
+        "H16": 6,
+        "S15": 35,
+        "H14": 19,
+        "S14": 18,
+        "D15": 9,
+        "H20": 11,
+        "S20": 5,
+        "N14": 3,
+        "D14": 12,
+        "D17": 1,
+        "C15": 24,
+        "C19": 1,
+        "C16": 3,
+        "N19": 6,
+        "D16": 9,
+        "H19": 7,
+        "N18": 2,
+        "N17": 1,
+        "D19": 2,
+        "N15": 11,
+        "S18": 3,
+        "S16": 1,
+        "H17": 4,
+        "C18": 2,
+        "C20": 4
+      },
+      "focal_contracts": {
+        "C14": 4,
+        "H15": 3,
+        "H16": 2,
+        "S15": 6,
+        "H14": 3,
+        "S14": 3,
+        "D14": 1,
+        "C15": 5,
+        "D16": 2,
+        "D15": 2
+      },
+      "objective_mean": null,
+      "checkpoint_sha256": "eb67697acf3f47d0db5c690349b32b92ff6b12174383f0fbd107ba765c90381b",
+      "redeals": 1
+    },
+    "conservative": {
+      "win": {
+        "value": 0.6083333333333333,
+        "ci95": [
+          0.5416666666666666,
+          0.6717708333333332
+        ]
+      },
+      "score": {
+        "value": 5.416666666666667,
+        "ci95": [
+          2.6022916666666664,
+          8.297291666666665
+        ]
+      },
+      "winDifference": {
+        "value": -0.050000000000000044,
+        "ci95": [
+          -0.10416666666666674,
+          -0.004166666666666652
+        ]
+      },
+      "scoreDifference100": {
+        "value": -263.75,
+        "ci95": [
+          -346.1666666666667,
+          -180.83333333333343
+        ]
+      },
+      "winElo": {
+        "value": 1397.9965730286958,
+        "ci95": [
+          1178.2335515180687,
+          1524.1867761994401
+        ]
+      },
+      "scoreElo": {
+        "value": 1112.1824319092607,
+        "ci95": [
+          811.476101199467,
+          1215.696458076432
+        ]
+      },
+      "inference_ms": {
+        "p50": 0.007,
+        "p95": 0.019,
+        "decisions": 2679
+      },
+      "background": {
+        "mixed": {
+          "games": 60,
+          "team_win": 0.7833333333333333,
+          "settlement": 21.916666666666668,
+          "contract_success": 0.05,
+          "fraction": 0.25
+        },
+        "partnership": {
+          "games": 60,
+          "team_win": 0.5666666666666667,
+          "settlement": 0.11666666666666667,
+          "contract_success": 0.38333333333333336,
+          "fraction": 0.25
+        },
+        "pressure": {
+          "games": 60,
+          "team_win": 0.5666666666666667,
+          "settlement": 0.1,
+          "contract_success": 0.36666666666666664,
+          "fraction": 0.25
+        },
+        "heldout_search": {
+          "games": 60,
+          "team_win": 0.5166666666666667,
+          "settlement": -0.4666666666666667,
+          "contract_success": 0.26666666666666666,
+          "fraction": 0.25
+        }
+      },
+      "roles": {
+        "friend": {
+          "games": 52,
+          "team_win": 0.2692307692307692,
+          "settlement": -5.153846153846154,
+          "contract_success": 0.2692307692307692,
+          "fraction": 0.21666666666666667
+        },
+        "opposition": {
+          "games": 176,
+          "team_win": 0.7329545454545454,
+          "settlement": 9.068181818181818,
+          "contract_success": 0.26704545454545453,
+          "fraction": 0.7333333333333333
+        },
+        "declarer": {
+          "games": 12,
+          "team_win": 0.25,
+          "settlement": -2.3333333333333335,
+          "contract_success": 0.25,
+          "fraction": 0.05
+        }
+      },
+      "final_contracts": {
+        "C14": 21,
+        "H14": 19,
+        "D20": 8,
+        "H16": 5,
+        "S15": 29,
+        "H15": 12,
+        "D14": 16,
+        "D15": 8,
+        "H20": 12,
+        "S20": 5,
+        "S14": 25,
+        "N14": 6,
+        "D17": 1,
+        "C19": 2,
+        "C15": 20,
+        "C16": 2,
+        "N19": 6,
+        "D16": 7,
+        "H19": 6,
+        "N18": 3,
+        "N17": 1,
+        "D19": 2,
+        "N15": 9,
+        "N20": 1,
+        "S18": 2,
+        "S16": 2,
+        "H17": 4,
+        "C18": 2,
+        "C20": 4
+      },
+      "focal_contracts": {
+        "H16": 2,
+        "D14": 2,
+        "N14": 2,
+        "C15": 1,
+        "S15": 1,
+        "D16": 1,
+        "C14": 2,
+        "S14": 1
+      },
+      "objective_mean": null,
+      "checkpoint_sha256": "fc9f664961b6249c9c08f1ae16e7874805bcdaca8ad735167ebc0ce590537113",
+      "redeals": 3
+    },
+    "aggressive": {
+      "win": {
+        "value": 0.5958333333333333,
+        "ci95": [
+          0.5583333333333333,
+          0.6291666666666667
+        ]
+      },
+      "score": {
+        "value": 6.779166666666667,
+        "ci95": [
+          4.151770833333333,
+          9.750520833333333
+        ]
+      },
+      "winDifference": {
+        "value": -0.0625,
+        "ci95": [
+          -0.11249999999999993,
+          -0.008333333333333304
+        ]
+      },
+      "scoreDifference100": {
+        "value": -127.50000000000003,
+        "ci95": [
+          -265,
+          29.635416666666686
+        ]
+      },
+      "winElo": {
+        "value": 1280.2491736493826,
+        "ci95": [
+          1120.2479765428823,
+          1499.39784253775
+        ]
+      },
+      "scoreElo": {
+        "value": 1304.7759697430556,
+        "ci95": [
+          1068.4705595393084,
+          1554.1172640442871
+        ]
+      },
+      "inference_ms": {
+        "p50": 0.023,
+        "p95": 0.077,
+        "decisions": 2840
+      },
+      "background": {
+        "mixed": {
+          "games": 60,
+          "team_win": 0.8333333333333334,
+          "settlement": 26.35,
+          "contract_success": 0.08333333333333333,
+          "fraction": 0.25
+        },
+        "partnership": {
+          "games": 60,
+          "team_win": 0.5,
+          "settlement": 0.8833333333333333,
+          "contract_success": 0.48333333333333334,
+          "fraction": 0.25
+        },
+        "pressure": {
+          "games": 60,
+          "team_win": 0.48333333333333334,
+          "settlement": -0.25,
+          "contract_success": 0.4,
+          "fraction": 0.25
+        },
+        "heldout_search": {
+          "games": 60,
+          "team_win": 0.5666666666666667,
+          "settlement": 0.13333333333333333,
+          "contract_success": 0.31666666666666665,
+          "fraction": 0.25
+        }
+      },
+      "roles": {
+        "declarer": {
+          "games": 62,
+          "team_win": 0.43548387096774194,
+          "settlement": 2,
+          "contract_success": 0.43548387096774194,
+          "fraction": 0.25833333333333336
+        },
+        "opposition": {
+          "games": 146,
+          "team_win": 0.726027397260274,
+          "settlement": 11.767123287671232,
+          "contract_success": 0.273972602739726,
+          "fraction": 0.6083333333333333
+        },
+        "friend": {
+          "games": 32,
+          "team_win": 0.3125,
+          "settlement": -6.71875,
+          "contract_success": 0.3125,
+          "fraction": 0.13333333333333333
+        }
+      },
+      "final_contracts": {
+        "H14": 6,
+        "C14": 17,
+        "H15": 15,
+        "D20": 10,
+        "H16": 4,
+        "H17": 6,
+        "S15": 35,
+        "S16": 6,
+        "D15": 18,
+        "H20": 12,
+        "S20": 4,
+        "N15": 16,
+        "N14": 4,
+        "D14": 6,
+        "D17": 3,
+        "S14": 9,
+        "C19": 1,
+        "N19": 7,
+        "C15": 22,
+        "C16": 10,
+        "D16": 8,
+        "H19": 6,
+        "N18": 1,
+        "N17": 1,
+        "D19": 3,
+        "S18": 4,
+        "S19": 1,
+        "C18": 1,
+        "C20": 4
+      },
+      "focal_contracts": {
+        "H14": 2,
+        "C14": 5,
+        "H15": 7,
+        "H17": 2,
+        "S15": 8,
+        "D15": 9,
+        "N15": 6,
+        "C16": 5,
+        "S16": 3,
+        "D16": 2,
+        "C15": 8,
+        "D17": 1,
+        "S14": 2,
+        "N14": 1,
+        "D14": 1
+      },
+      "objective_mean": null,
+      "checkpoint_sha256": "e4fe92c30895577e53d4d0cc7c108c06894ef6e66611a9dbf6194667bfe02b5d",
+      "redeals": 0
+    },
+    "random": {
+      "win": {
+        "value": 0.1,
+        "ci95": [
+          0.07083333333333333,
+          0.13333333333333333
+        ]
+      },
+      "score": {
+        "value": -81.39166666666667,
+        "ci95": [
+          -91.89395833333333,
+          -71.82552083333334
+        ]
+      },
+      "winDifference": {
+        "value": -0.5583333333333333,
+        "ci95": [
+          -0.6083333333333334,
+          -0.5073958333333335
+        ]
+      },
+      "scoreDifference100": {
+        "value": -8944.583333333332,
+        "ci95": [
+          -9986.625,
+          -7975.03125
+        ]
+      },
+      "winElo": {
+        "value": 603.8211830402637,
+        "ci95": [
+          483.70164394477115,
+          706.9886359010859
+        ]
+      },
+      "scoreElo": {
+        "value": 532.9147566707884,
+        "ci95": [
+          354.40353588968554,
+          600.747648751101
+        ]
+      },
+      "inference_ms": {
+        "p50": 0.001,
+        "p95": 0.004,
+        "decisions": 3131
+      },
+      "background": {
+        "mixed": {
+          "games": 60,
+          "team_win": 0.35,
+          "settlement": -57.21666666666667,
+          "contract_success": 0,
+          "fraction": 0.25
+        },
+        "partnership": {
+          "games": 60,
+          "team_win": 0.03333333333333333,
+          "settlement": -76.8,
+          "contract_success": 0.03333333333333333,
+          "fraction": 0.25
+        },
+        "pressure": {
+          "games": 60,
+          "team_win": 0.016666666666666666,
+          "settlement": -103.18333333333334,
+          "contract_success": 0.016666666666666666,
+          "fraction": 0.25
+        },
+        "heldout_search": {
+          "games": 60,
+          "team_win": 0,
+          "settlement": -88.36666666666666,
+          "contract_success": 0,
+          "fraction": 0.25
+        }
+      },
+      "roles": {
+        "declarer": {
+          "games": 168,
+          "team_win": 0.005952380952380952,
+          "settlement": -51.82142857142857,
+          "contract_success": 0.005952380952380952,
+          "fraction": 0.7
+        },
+        "friend": {
+          "games": 7,
+          "team_win": 0,
+          "settlement": -24.285714285714285,
+          "contract_success": 0,
+          "fraction": 0.029166666666666667
+        },
+        "solo": {
+          "games": 40,
+          "team_win": 0,
+          "settlement": -290,
+          "contract_success": 0,
+          "fraction": 0.16666666666666666
+        },
+        "opposition": {
+          "games": 25,
+          "team_win": 0.92,
+          "settlement": 37.68,
+          "contract_success": 0.08,
+          "fraction": 0.10416666666666667
+        }
+      },
+      "final_contracts": {
+        "H20": 30,
+        "D18": 9,
+        "S19": 8,
+        "D20": 20,
+        "S20": 28,
+        "C19": 9,
+        "D19": 6,
+        "C17": 2,
+        "S18": 7,
+        "C20": 26,
+        "N20": 51,
+        "C18": 8,
+        "N14": 1,
+        "H18": 3,
+        "N19": 12,
+        "C16": 1,
+        "N18": 3,
+        "H19": 6,
+        "S14": 1,
+        "N16": 1,
+        "D16": 2,
+        "D17": 3,
+        "S16": 2,
+        "H15": 1
+      },
+      "focal_contracts": {
+        "H20": 28,
+        "D18": 9,
+        "S19": 8,
+        "D20": 17,
+        "S20": 24,
+        "C19": 9,
+        "D19": 6,
+        "C17": 2,
+        "S18": 6,
+        "C20": 24,
+        "N20": 38,
+        "C18": 8,
+        "H18": 3,
+        "N19": 11,
+        "N18": 3,
+        "H19": 5,
+        "N16": 1,
+        "D17": 3,
+        "S16": 2,
+        "H15": 1
+      },
+      "objective_mean": null,
+      "checkpoint_sha256": "8220f4ff47db85563e54b38b868282cd348197e8e4dff5b24582502a76dbcdf7",
+      "redeals": 0
+    },
+    "win": {
+      "win": {
+        "value": 0.625,
+        "ci95": [
+          0.5823958333333333,
+          0.6666666666666666
+        ]
+      },
+      "score": {
+        "value": 6.875,
+        "ci95": [
+          4.442083333333334,
+          9.575
+        ]
+      },
+      "winDifference": {
+        "value": -0.033333333333333326,
+        "ci95": [
+          -0.0708333333333333,
+          0.008333333333333304
+        ]
+      },
+      "scoreDifference100": {
+        "value": -117.91666666666671,
+        "ci95": [
+          -207.3229166666667,
+          -30.416666666666714
+        ]
+      },
+      "winElo": {
+        "value": 1386.9770724007078,
+        "ci95": [
+          1240.0199960060074,
+          1537.2202487061202
+        ]
+      },
+      "scoreElo": {
+        "value": 1362.432759227281,
+        "ci95": [
+          1155.0995855303083,
+          1490.6950629735902
+        ]
+      },
+      "objective": {
+        "value": 0.25,
+        "ci95": [
+          0.16479166666666667,
+          0.3333333333333333
+        ]
+      },
+      "objectiveDifference": {
+        "value": -0.06666666666666667,
+        "ci95": [
+          -0.14166666666666666,
+          0.016666666666666666
+        ]
+      },
+      "inference_ms": {
+        "p50": 0.089,
+        "p95": 0.32879999999999976,
+        "decisions": 2745
+      },
+      "background": {
+        "mixed": {
+          "games": 60,
+          "team_win": 0.8333333333333334,
+          "settlement": 26.016666666666666,
+          "contract_success": 0.08333333333333333,
+          "fraction": 0.25
+        },
+        "partnership": {
+          "games": 60,
+          "team_win": 0.5,
+          "settlement": 0.5333333333333333,
+          "contract_success": 0.4666666666666667,
+          "fraction": 0.25
+        },
+        "pressure": {
+          "games": 60,
+          "team_win": 0.6,
+          "settlement": 0.4666666666666667,
+          "contract_success": 0.36666666666666664,
+          "fraction": 0.25
+        },
+        "heldout_search": {
+          "games": 60,
+          "team_win": 0.5666666666666667,
+          "settlement": 0.48333333333333334,
+          "contract_success": 0.3333333333333333,
+          "fraction": 0.25
+        }
+      },
+      "roles": {
+        "friend": {
+          "games": 50,
+          "team_win": 0.38,
+          "settlement": -3.28,
+          "contract_success": 0.38,
+          "fraction": 0.20833333333333334
+        },
+        "declarer": {
+          "games": 31,
+          "team_win": 0.45161290322580644,
+          "settlement": 3.4193548387096775,
+          "contract_success": 0.45161290322580644,
+          "fraction": 0.12916666666666668
+        },
+        "opposition": {
+          "games": 159,
+          "team_win": 0.7358490566037735,
+          "settlement": 10.742138364779874,
+          "contract_success": 0.2641509433962264,
+          "fraction": 0.6625
+        }
+      },
+      "final_contracts": {
+        "C14": 18,
+        "H15": 13,
+        "D20": 10,
+        "H16": 6,
+        "S15": 35,
+        "H14": 19,
+        "S14": 18,
+        "D15": 9,
+        "H20": 11,
+        "S20": 5,
+        "N14": 3,
+        "D14": 12,
+        "D17": 1,
+        "C15": 24,
+        "C19": 1,
+        "C16": 3,
+        "N19": 6,
+        "D16": 9,
+        "H19": 7,
+        "N18": 2,
+        "N17": 1,
+        "D19": 2,
+        "N15": 11,
+        "S18": 3,
+        "S16": 1,
+        "H17": 4,
+        "C18": 2,
+        "C20": 4
+      },
+      "focal_contracts": {
+        "C14": 4,
+        "H15": 3,
+        "H16": 2,
+        "S15": 6,
+        "H14": 3,
+        "S14": 3,
+        "D14": 1,
+        "C15": 5,
+        "D16": 2,
+        "D15": 2
+      },
+      "objective_mean": 0.25,
+      "checkpoint_sha256": "7ab9ee8ff352c8509217de7737e08b5b9007fd7d5efbb69aac0a67dac3d47fc4",
+      "redeals": 1
+    },
+    "score": {
+      "win": {
+        "value": 0.625,
+        "ci95": [
+          0.5791666666666667,
+          0.6666666666666666
+        ]
+      },
+      "score": {
+        "value": 7.0375,
+        "ci95": [
+          4.765729166666667,
+          9.566770833333333
+        ]
+      },
+      "winDifference": {
+        "value": -0.033333333333333326,
+        "ci95": [
+          -0.07593750000000003,
+          0.009270833333333244
+        ]
+      },
+      "scoreDifference100": {
+        "value": -101.66666666666674,
+        "ci95": [
+          -187.96874999999994,
+          -17.635416666666753
+        ]
+      },
+      "winElo": {
+        "value": 1405.3411554698432,
+        "ci95": [
+          1213.640527221987,
+          1557.128508679013
+        ]
+      },
+      "scoreElo": {
+        "value": 1381.6963062216662,
+        "ci95": [
+          1183.5433879984698,
+          1515.5048593307542
+        ]
+      },
+      "objective": {
+        "value": 0.010996093749999996,
+        "ci95": [
+          0.007446451822916665,
+          0.01494807942708333
+        ]
+      },
+      "objectiveDifference": {
+        "value": -0.0015885416666666671,
+        "ci95": [
+          -0.0029370117187500003,
+          -0.00027555338541666787
+        ]
+      },
+      "inference_ms": {
+        "p50": 0.088,
+        "p95": 0.296,
+        "decisions": 2745
+      },
+      "background": {
+        "mixed": {
+          "games": 60,
+          "team_win": 0.8333333333333334,
+          "settlement": 26.433333333333334,
+          "contract_success": 0.08333333333333333,
+          "fraction": 0.25
+        },
+        "partnership": {
+          "games": 60,
+          "team_win": 0.5,
+          "settlement": 0.5166666666666667,
+          "contract_success": 0.4666666666666667,
+          "fraction": 0.25
+        },
+        "pressure": {
+          "games": 60,
+          "team_win": 0.6,
+          "settlement": 0.8833333333333333,
+          "contract_success": 0.36666666666666664,
+          "fraction": 0.25
+        },
+        "heldout_search": {
+          "games": 60,
+          "team_win": 0.5666666666666667,
+          "settlement": 0.31666666666666665,
+          "contract_success": 0.3,
+          "fraction": 0.25
+        }
+      },
+      "roles": {
+        "friend": {
+          "games": 50,
+          "team_win": 0.36,
+          "settlement": -3.16,
+          "contract_success": 0.36,
+          "fraction": 0.20833333333333334
+        },
+        "declarer": {
+          "games": 31,
+          "team_win": 0.45161290322580644,
+          "settlement": 4.645161290322581,
+          "contract_success": 0.45161290322580644,
+          "fraction": 0.12916666666666668
+        },
+        "opposition": {
+          "games": 159,
+          "team_win": 0.7421383647798742,
+          "settlement": 10.71069182389937,
+          "contract_success": 0.2578616352201258,
+          "fraction": 0.6625
+        }
+      },
+      "final_contracts": {
+        "C14": 18,
+        "H15": 13,
+        "D20": 10,
+        "H16": 6,
+        "S15": 35,
+        "H14": 19,
+        "S14": 18,
+        "D15": 9,
+        "H20": 11,
+        "S20": 5,
+        "N14": 3,
+        "D14": 12,
+        "D17": 1,
+        "C15": 24,
+        "C19": 1,
+        "C16": 3,
+        "N19": 6,
+        "D16": 9,
+        "H19": 7,
+        "N18": 2,
+        "N17": 1,
+        "D19": 2,
+        "N15": 11,
+        "S18": 3,
+        "S16": 1,
+        "H17": 4,
+        "C18": 2,
+        "C20": 4
+      },
+      "focal_contracts": {
+        "C14": 4,
+        "H15": 3,
+        "H16": 2,
+        "S15": 6,
+        "H14": 3,
+        "S14": 3,
+        "D14": 1,
+        "C15": 5,
+        "D16": 2,
+        "D15": 2
+      },
+      "objective_mean": 0.010996093749999998,
+      "checkpoint_sha256": "c7ccd2e2346e2a1c6605f4166d9e0db43a2a167511a582e025027f249ce1bba5",
+      "redeals": 1
+    },
+    "balanced": {
+      "win": {
+        "value": 0.625,
+        "ci95": [
+          0.5782291666666667,
+          0.6708333333333333
+        ]
+      },
+      "score": {
+        "value": 6.745833333333334,
+        "ci95": [
+          4.23375,
+          9.444999999999999
+        ]
+      },
+      "winDifference": {
+        "value": -0.033333333333333326,
+        "ci95": [
+          -0.07499999999999996,
+          0.008333333333333304
+        ]
+      },
+      "scoreDifference100": {
+        "value": -130.83333333333337,
+        "ci95": [
+          -240.84374999999994,
+          -19.812500000000036
+        ]
+      },
+      "winElo": {
+        "value": 1394.3244943281911,
+        "ci95": [
+          1222.134311374703,
+          1549.1824622518398
+        ]
+      },
+      "scoreElo": {
+        "value": 1350.9223344511358,
+        "ci95": [
+          1076.0617506725998,
+          1475.8641995558646
+        ]
+      },
+      "objective": {
+        "value": 0.13027018229166665,
+        "ci95": [
+          0.08167366536458333,
+          0.17676310221354166
+        ]
+      },
+      "objectiveDifference": {
+        "value": -0.03435546875,
+        "ci95": [
+          -0.07621565755208332,
+          0.0073434244791666745
+        ]
+      },
+      "inference_ms": {
+        "p50": 0.087,
+        "p95": 0.28215000000000007,
+        "decisions": 2738
+      },
+      "background": {
+        "mixed": {
+          "games": 60,
+          "team_win": 0.8333333333333334,
+          "settlement": 25.7,
+          "contract_success": 0.06666666666666667,
+          "fraction": 0.25
+        },
+        "partnership": {
+          "games": 60,
+          "team_win": 0.5166666666666667,
+          "settlement": 0.75,
+          "contract_success": 0.4666666666666667,
+          "fraction": 0.25
+        },
+        "pressure": {
+          "games": 60,
+          "team_win": 0.5833333333333334,
+          "settlement": 0.31666666666666665,
+          "contract_success": 0.38333333333333336,
+          "fraction": 0.25
+        },
+        "heldout_search": {
+          "games": 60,
+          "team_win": 0.5666666666666667,
+          "settlement": 0.21666666666666667,
+          "contract_success": 0.3333333333333333,
+          "fraction": 0.25
+        }
+      },
+      "roles": {
+        "friend": {
+          "games": 51,
+          "team_win": 0.39215686274509803,
+          "settlement": -3.2941176470588234,
+          "contract_success": 0.39215686274509803,
+          "fraction": 0.2125
+        },
+        "declarer": {
+          "games": 28,
+          "team_win": 0.42857142857142855,
+          "settlement": 2.7857142857142856,
+          "contract_success": 0.42857142857142855,
+          "fraction": 0.11666666666666667
+        },
+        "opposition": {
+          "games": 161,
+          "team_win": 0.7329192546583851,
+          "settlement": 10.614906832298137,
+          "contract_success": 0.2670807453416149,
+          "fraction": 0.6708333333333333
+        }
+      },
+      "final_contracts": {
+        "C14": 19,
+        "H15": 13,
+        "D20": 10,
+        "H16": 6,
+        "S15": 34,
+        "H14": 20,
+        "S14": 18,
+        "D15": 7,
+        "H20": 11,
+        "S20": 5,
+        "N14": 3,
+        "D14": 12,
+        "D17": 1,
+        "C15": 25,
+        "C19": 1,
+        "C16": 2,
+        "N19": 6,
+        "D16": 9,
+        "H19": 7,
+        "N18": 2,
+        "N17": 1,
+        "D19": 2,
+        "N15": 11,
+        "N20": 1,
+        "S18": 3,
+        "S16": 1,
+        "H17": 4,
+        "C18": 2,
+        "C20": 4
+      },
+      "focal_contracts": {
+        "C14": 4,
+        "H15": 3,
+        "H16": 2,
+        "S15": 5,
+        "H14": 3,
+        "S14": 3,
+        "D14": 1,
+        "C15": 5,
+        "D16": 2
+      },
+      "objective_mean": 0.13027018229166676,
+      "checkpoint_sha256": "0fdd162aedc3f1c0efd4ba329db5e82e04ca63f284f5f10d401340eded0c1df2",
+      "redeals": 1
+    },
+    "downside_averse": {
+      "win": {
+        "value": 0.6416666666666667,
+        "ci95": [
+          0.5958333333333333,
+          0.6875
+        ]
+      },
+      "score": {
+        "value": 6.85,
+        "ci95": [
+          4.6240625,
+          9.566874999999998
+        ]
+      },
+      "winDifference": {
+        "value": -0.016666666666666607,
+        "ci95": [
+          -0.05833333333333335,
+          0.029166666666666674
+        ]
+      },
+      "scoreDifference100": {
+        "value": -120.41666666666674,
+        "ci95": [
+          -213.84375000000003,
+          -34.62500000000002
+        ]
+      },
+      "winElo": {
+        "value": 1457.2464954406144,
+        "ci95": [
+          1316.275746881682,
+          1670.7125471970887
+        ]
+      },
+      "scoreElo": {
+        "value": 1366.275423839752,
+        "ci95": [
+          1161.451550684096,
+          1475.0244452294098
+        ]
+      },
+      "objective": {
+        "value": 0.010655339558919273,
+        "ci95": [
+          0.007174057388305666,
+          0.014894385147094727
+        ]
+      },
+      "objectiveDifference": {
+        "value": -0.0018885040283203132,
+        "ci95": [
+          -0.00335155766805013,
+          -0.0005423514048258469
+        ]
+      },
+      "inference_ms": {
+        "p50": 0.087,
+        "p95": 0.28639999999999916,
+        "decisions": 2745
+      },
+      "background": {
+        "mixed": {
+          "games": 60,
+          "team_win": 0.8166666666666667,
+          "settlement": 25.333333333333332,
+          "contract_success": 0.06666666666666667,
+          "fraction": 0.25
+        },
+        "partnership": {
+          "games": 60,
+          "team_win": 0.5333333333333333,
+          "settlement": 0.25,
+          "contract_success": 0.4666666666666667,
+          "fraction": 0.25
+        },
+        "pressure": {
+          "games": 60,
+          "team_win": 0.6,
+          "settlement": 0.9833333333333333,
+          "contract_success": 0.4,
+          "fraction": 0.25
+        },
+        "heldout_search": {
+          "games": 60,
+          "team_win": 0.6166666666666667,
+          "settlement": 0.8333333333333334,
+          "contract_success": 0.35,
+          "fraction": 0.25
+        }
+      },
+      "roles": {
+        "friend": {
+          "games": 50,
+          "team_win": 0.42,
+          "settlement": -2.7,
+          "contract_success": 0.42,
+          "fraction": 0.20833333333333334
+        },
+        "declarer": {
+          "games": 31,
+          "team_win": 0.4838709677419355,
+          "settlement": 3.6129032258064515,
+          "contract_success": 0.4838709677419355,
+          "fraction": 0.12916666666666668
+        },
+        "opposition": {
+          "games": 159,
+          "team_win": 0.7421383647798742,
+          "settlement": 10.484276729559749,
+          "contract_success": 0.2578616352201258,
+          "fraction": 0.6625
+        }
+      },
+      "final_contracts": {
+        "C14": 18,
+        "H15": 13,
+        "D20": 10,
+        "H16": 6,
+        "S15": 35,
+        "H14": 19,
+        "S14": 18,
+        "D15": 9,
+        "H20": 11,
+        "S20": 5,
+        "N14": 3,
+        "D14": 12,
+        "D17": 1,
+        "C15": 24,
+        "C19": 1,
+        "C16": 3,
+        "N19": 6,
+        "D16": 9,
+        "H19": 7,
+        "N18": 2,
+        "N17": 1,
+        "D19": 2,
+        "N15": 11,
+        "S18": 3,
+        "S16": 1,
+        "H17": 4,
+        "C18": 2,
+        "C20": 4
+      },
+      "focal_contracts": {
+        "C14": 4,
+        "H15": 3,
+        "H16": 2,
+        "S15": 6,
+        "H14": 3,
+        "S14": 3,
+        "D14": 1,
+        "C15": 5,
+        "D16": 2,
+        "D15": 2
+      },
+      "objective_mean": 0.010655339558919268,
+      "checkpoint_sha256": "f8401cd73ecf864973fd1cb1ebe9eef08ba4a664b13936102de77dea283ffd86",
+      "redeals": 1
+    }
+  },
+  "matches": {
+    "win": [
+      {
+        "a": "legacy",
+        "b": "heuristic",
+        "wins": 7,
+        "ties": 2,
+        "losses": 3
+      },
+      {
+        "a": "legacy",
+        "b": "conservative",
+        "wins": 6,
+        "ties": 2,
+        "losses": 4
+      },
+      {
+        "a": "legacy",
+        "b": "aggressive",
+        "wins": 9,
+        "ties": 1,
+        "losses": 2
+      },
+      {
+        "a": "legacy",
+        "b": "random",
+        "wins": 12,
+        "ties": 0,
+        "losses": 0
+      },
+      {
+        "a": "legacy",
+        "b": "win",
+        "wins": 8,
+        "ties": 2,
+        "losses": 2
+      },
+      {
+        "a": "legacy",
+        "b": "score",
+        "wins": 6,
+        "ties": 4,
+        "losses": 2
+      },
+      {
+        "a": "legacy",
+        "b": "balanced",
+        "wins": 7,
+        "ties": 2,
+        "losses": 3
+      },
+      {
+        "a": "legacy",
+        "b": "downside_averse",
+        "wins": 6,
+        "ties": 3,
+        "losses": 3
+      },
+      {
+        "a": "heuristic",
+        "b": "conservative",
+        "wins": 5,
+        "ties": 2,
+        "losses": 5
+      },
+      {
+        "a": "heuristic",
+        "b": "aggressive",
+        "wins": 7,
+        "ties": 3,
+        "losses": 2
+      },
+      {
+        "a": "heuristic",
+        "b": "random",
+        "wins": 12,
+        "ties": 0,
+        "losses": 0
+      },
+      {
+        "a": "heuristic",
+        "b": "win",
+        "wins": 2,
+        "ties": 7,
+        "losses": 3
+      },
+      {
+        "a": "heuristic",
+        "b": "score",
+        "wins": 2,
+        "ties": 7,
+        "losses": 3
+      },
+      {
+        "a": "heuristic",
+        "b": "balanced",
+        "wins": 2,
+        "ties": 7,
+        "losses": 3
+      },
+      {
+        "a": "heuristic",
+        "b": "downside_averse",
+        "wins": 1,
+        "ties": 5,
+        "losses": 6
+      },
+      {
+        "a": "conservative",
+        "b": "aggressive",
+        "wins": 6,
+        "ties": 1,
+        "losses": 5
+      },
+      {
+        "a": "conservative",
+        "b": "random",
+        "wins": 12,
+        "ties": 0,
+        "losses": 0
+      },
+      {
+        "a": "conservative",
+        "b": "win",
+        "wins": 5,
+        "ties": 2,
+        "losses": 5
+      },
+      {
+        "a": "conservative",
+        "b": "score",
+        "wins": 5,
+        "ties": 2,
+        "losses": 5
+      },
+      {
+        "a": "conservative",
+        "b": "balanced",
+        "wins": 5,
+        "ties": 2,
+        "losses": 5
+      },
+      {
+        "a": "conservative",
+        "b": "downside_averse",
+        "wins": 4,
+        "ties": 4,
+        "losses": 4
+      },
+      {
+        "a": "aggressive",
+        "b": "random",
+        "wins": 12,
+        "ties": 0,
+        "losses": 0
+      },
+      {
+        "a": "aggressive",
+        "b": "win",
+        "wins": 2,
+        "ties": 3,
+        "losses": 7
+      },
+      {
+        "a": "aggressive",
+        "b": "score",
+        "wins": 1,
+        "ties": 5,
+        "losses": 6
+      },
+      {
+        "a": "aggressive",
+        "b": "balanced",
+        "wins": 3,
+        "ties": 3,
+        "losses": 6
+      },
+      {
+        "a": "aggressive",
+        "b": "downside_averse",
+        "wins": 2,
+        "ties": 2,
+        "losses": 8
+      },
+      {
+        "a": "random",
+        "b": "win",
+        "wins": 0,
+        "ties": 0,
+        "losses": 12
+      },
+      {
+        "a": "random",
+        "b": "score",
+        "wins": 0,
+        "ties": 0,
+        "losses": 12
+      },
+      {
+        "a": "random",
+        "b": "balanced",
+        "wins": 0,
+        "ties": 0,
+        "losses": 12
+      },
+      {
+        "a": "random",
+        "b": "downside_averse",
+        "wins": 0,
+        "ties": 0,
+        "losses": 12
+      },
+      {
+        "a": "win",
+        "b": "score",
+        "wins": 1,
+        "ties": 9,
+        "losses": 2
+      },
+      {
+        "a": "win",
+        "b": "balanced",
+        "wins": 3,
+        "ties": 6,
+        "losses": 3
+      },
+      {
+        "a": "win",
+        "b": "downside_averse",
+        "wins": 1,
+        "ties": 7,
+        "losses": 4
+      },
+      {
+        "a": "score",
+        "b": "balanced",
+        "wins": 3,
+        "ties": 6,
+        "losses": 3
+      },
+      {
+        "a": "score",
+        "b": "downside_averse",
+        "wins": 1,
+        "ties": 8,
+        "losses": 3
+      },
+      {
+        "a": "balanced",
+        "b": "downside_averse",
+        "wins": 2,
+        "ties": 6,
+        "losses": 4
+      }
+    ],
+    "score": [
+      {
+        "a": "legacy",
+        "b": "heuristic",
+        "wins": 9,
+        "ties": 0,
+        "losses": 3
+      },
+      {
+        "a": "legacy",
+        "b": "conservative",
+        "wins": 12,
+        "ties": 0,
+        "losses": 0
+      },
+      {
+        "a": "legacy",
+        "b": "aggressive",
+        "wins": 9,
+        "ties": 0,
+        "losses": 3
+      },
+      {
+        "a": "legacy",
+        "b": "random",
+        "wins": 12,
+        "ties": 0,
+        "losses": 0
+      },
+      {
+        "a": "legacy",
+        "b": "win",
+        "wins": 9,
+        "ties": 0,
+        "losses": 3
+      },
+      {
+        "a": "legacy",
+        "b": "score",
+        "wins": 8,
+        "ties": 0,
+        "losses": 4
+      },
+      {
+        "a": "legacy",
+        "b": "balanced",
+        "wins": 8,
+        "ties": 0,
+        "losses": 4
+      },
+      {
+        "a": "legacy",
+        "b": "downside_averse",
+        "wins": 9,
+        "ties": 0,
+        "losses": 3
+      },
+      {
+        "a": "heuristic",
+        "b": "conservative",
+        "wins": 10,
+        "ties": 0,
+        "losses": 2
+      },
+      {
+        "a": "heuristic",
+        "b": "aggressive",
+        "wins": 6,
+        "ties": 0,
+        "losses": 6
+      },
+      {
+        "a": "heuristic",
+        "b": "random",
+        "wins": 12,
+        "ties": 0,
+        "losses": 0
+      },
+      {
+        "a": "heuristic",
+        "b": "win",
+        "wins": 5,
+        "ties": 0,
+        "losses": 7
+      },
+      {
+        "a": "heuristic",
+        "b": "score",
+        "wins": 5,
+        "ties": 0,
+        "losses": 7
+      },
+      {
+        "a": "heuristic",
+        "b": "balanced",
+        "wins": 6,
+        "ties": 1,
+        "losses": 5
+      },
+      {
+        "a": "heuristic",
+        "b": "downside_averse",
+        "wins": 5,
+        "ties": 0,
+        "losses": 7
+      },
+      {
+        "a": "conservative",
+        "b": "aggressive",
+        "wins": 4,
+        "ties": 0,
+        "losses": 8
+      },
+      {
+        "a": "conservative",
+        "b": "random",
+        "wins": 12,
+        "ties": 0,
+        "losses": 0
+      },
+      {
+        "a": "conservative",
+        "b": "win",
+        "wins": 2,
+        "ties": 0,
+        "losses": 10
+      },
+      {
+        "a": "conservative",
+        "b": "score",
+        "wins": 2,
+        "ties": 0,
+        "losses": 10
+      },
+      {
+        "a": "conservative",
+        "b": "balanced",
+        "wins": 2,
+        "ties": 0,
+        "losses": 10
+      },
+      {
+        "a": "conservative",
+        "b": "downside_averse",
+        "wins": 3,
+        "ties": 0,
+        "losses": 9
+      },
+      {
+        "a": "aggressive",
+        "b": "random",
+        "wins": 12,
+        "ties": 0,
+        "losses": 0
+      },
+      {
+        "a": "aggressive",
+        "b": "win",
+        "wins": 5,
+        "ties": 0,
+        "losses": 7
+      },
+      {
+        "a": "aggressive",
+        "b": "score",
+        "wins": 5,
+        "ties": 0,
+        "losses": 7
+      },
+      {
+        "a": "aggressive",
+        "b": "balanced",
+        "wins": 5,
+        "ties": 0,
+        "losses": 7
+      },
+      {
+        "a": "aggressive",
+        "b": "downside_averse",
+        "wins": 5,
+        "ties": 0,
+        "losses": 7
+      },
+      {
+        "a": "random",
+        "b": "win",
+        "wins": 0,
+        "ties": 0,
+        "losses": 12
+      },
+      {
+        "a": "random",
+        "b": "score",
+        "wins": 0,
+        "ties": 0,
+        "losses": 12
+      },
+      {
+        "a": "random",
+        "b": "balanced",
+        "wins": 0,
+        "ties": 0,
+        "losses": 12
+      },
+      {
+        "a": "random",
+        "b": "downside_averse",
+        "wins": 0,
+        "ties": 0,
+        "losses": 12
+      },
+      {
+        "a": "win",
+        "b": "score",
+        "wins": 5,
+        "ties": 1,
+        "losses": 6
+      },
+      {
+        "a": "win",
+        "b": "balanced",
+        "wins": 8,
+        "ties": 0,
+        "losses": 4
+      },
+      {
+        "a": "win",
+        "b": "downside_averse",
+        "wins": 4,
+        "ties": 0,
+        "losses": 8
+      },
+      {
+        "a": "score",
+        "b": "balanced",
+        "wins": 5,
+        "ties": 1,
+        "losses": 6
+      },
+      {
+        "a": "score",
+        "b": "downside_averse",
+        "wins": 7,
+        "ties": 0,
+        "losses": 5
+      },
+      {
+        "a": "balanced",
+        "b": "downside_averse",
+        "wins": 6,
+        "ties": 0,
+        "losses": 6
+      }
+    ]
+  }
+}

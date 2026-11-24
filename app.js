@@ -334,7 +334,10 @@ function publish() {
   snapshot = authority.view(authority.hostSeat);
   draw();
   if (authority.botTurn) {
-    const pause = snapshot.game.phase === 'play' && snapshot.game.lastTrick && !snapshot.game.trick.length ? 1050 : 560;
+    const game = snapshot.game;
+    let pause = 560;
+    if (game.phase === 'bid') pause = game.bidHistory.length ? 1350 : 1800;
+    else if (game.phase === 'play' && game.lastTrick && !game.trick.length) pause = 1050;
     botTimer = setTimeout(takeBotTurn,pause);
   }
 }

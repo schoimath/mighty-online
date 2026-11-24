@@ -5,6 +5,7 @@ import {pathToFileURL} from 'node:url';
 import {Worker, isMainThread, parentPort, workerData} from 'node:worker_threads';
 import {playEpisode, rngFor} from './game.js';
 import {ruleAction} from './rules-agents.js';
+import {searchAction, SEARCH_POLICY_VERSION} from './search-policy.js';
 import {rulesHash, scoringHash, observationVersion, actionVersion, rngVersion} from './version.mjs';
 
 const ruleIds = new Set(['legacy','heuristic','conservative','aggressive','random']);
@@ -13,17 +14,23 @@ const source = rel => readFileSync(new URL(rel, import.meta.url), 'utf8').replac
 const readJson = file => JSON.parse(readFileSync(file, 'utf8').replace(/^\uFEFF/,''));
 const ruleFiles = ['./rules-agents.js','../engine.js','../bot-sampling.js','../bot-weights.js','../bot-exchange.js'];
 
-export async function freezeRoster(ids) {
+export async function freezeRoster(ids, searchVersion = SEARCH_POLICY_VERSION) {
+  if (!['v1',SEARCH_POLICY_VERSION].includes(searchVersion)) throw new Error('Unknown search policy: '+searchVersion);
   const needsNeural = ids.some(id => !ruleIds.has(id));
   const weightFile = new URL('./champions.js',import.meta.url);
   if (needsNeural) weightFile.searchParams.set('version',digest(source('./champions.js')));
   const champions = needsNeural ? (await import(weightFile.href)).champions : {};
   const neural = needsNeural ? (await import('./policy.js')).neuralAction : null;
-  const act = (id,view,rng) => ruleIds.has(id) ? ruleAction(id,view,rng) : neural(champions[id],view,rng);
+  const liveSearch = searchVersion === SEARCH_POLICY_VERSION;
+  const act = (id,view,rng) => {
+    if (liveSearch && id === 'legacy') return searchAction(view);
+    return ruleIds.has(id) ? ruleAction(id,view,rng) : neural(champions[id],view,rng);
+  };
   const base = ruleFiles.map(source).join('\n');
+  const searchSource = liveSearch ? base+'\n'+source('./search-policy.js') : base;
   const hashes = Object.fromEntries(ids.map(id => {
     if (!ruleIds.has(id) && !champions[id]) throw new Error('Missing selected checkpoint for '+id);
-    return [id, digest(ruleIds.has(id) ? id+'\n'+base : JSON.stringify(champions[id]))];
+    return [id, digest(ruleIds.has(id) ? id+'\n'+(id === 'legacy' ? searchSource : base) : JSON.stringify(champions[id]))];
   }));
   return {hashes,act};
 }
@@ -75,7 +82,7 @@ export function playScenario(index, meta, act) {
 
 async function runWorker() {
   const {meta,indices} = workerData;
-  const {hashes,act} = await freezeRoster(Object.keys(meta.hashes));
+  const {hashes,act} = await freezeRoster(Object.keys(meta.hashes),meta.config.searchPolicy ?? 'v1');
   if (JSON.stringify(hashes)!==JSON.stringify(meta.hashes)) throw new Error('Checkpoint changed after freeze');
   for (const index of indices) parentPort.postMessage({index, rows:playScenario(index,meta,act)});
 }
@@ -112,7 +119,9 @@ export function parseOptions(argv) {
 
 export async function evaluate(options) {
   const split = options.split ?? 'validation';
-  const config = readJson(resolve(options.manifest ?? 'configs/benchmark.json'));
+  const manifest = readJson(resolve(options.manifest ?? 'configs/benchmark.json'));
+  const config = manifest.config ?? manifest;
+  const searchVersion = config.searchPolicy ?? 'v1';
   if (split === 'smoke') {
     config.splits.smoke={startSeed:832000,scenarios:4};
     config.agents=config.agents.filter(id=>ruleIds.has(id));
@@ -125,7 +134,7 @@ export async function evaluate(options) {
   const jobs = Number(options.workers ?? 3);
   if (!Number.isInteger(jobs) || jobs<1 || jobs>64) throw new Error('Invalid CPU worker count');
   const ids = [...new Set([...config.agents,...Object.values(config.backgrounds).flat()])];
-  const {hashes} = await freezeRoster(ids);
+  const {hashes} = await freezeRoster(ids,searchVersion);
   const selected = config.agents.filter(id=>!ruleIds.has(id));
   const selection = {};
   if (selected.length) {
@@ -142,7 +151,7 @@ export async function evaluate(options) {
   const benchmark_version = config.name+'-'+digest(JSON.stringify({config,hashes,codeHash,rulesHash,scoringHash,observationVersion,actionVersion,rngVersion,selection,jobs})).slice(0,16);
   const meta = {benchmark_version,split,hashes,selection,rulesHash,scoringHash,codeHash,observationVersion,actionVersion,rngVersion,
     node:process.version, platform:process.platform+'/'+process.arch, workers:jobs, config};
-  const prefix = resolve(options.out ?? 'lab/results',split);
+  const prefix = resolve(options.out ?? (searchVersion === 'v1' ? 'lab/results' : 'lab/results-v2'),split);
   mkdirSync(dirname(prefix),{recursive:true});
   if (existsSync(prefix+'.manifest.json') && readJson(prefix+'.manifest.json').benchmark_version!==benchmark_version) {
     throw new Error('Results for another benchmark version exist; select a separate --out directory.');
@@ -151,7 +160,7 @@ export async function evaluate(options) {
   let rows;
   try {
     rows = await gather(meta,jobs);
-    const verified = await freezeRoster(ids);
+    const verified = await freezeRoster(ids,searchVersion);
     if (JSON.stringify(hashes)!==JSON.stringify(verified.hashes)) throw new Error('Checkpoint hashes changed during evaluation');
   } catch(error) {
     writeFileSync(prefix+'.incomplete.json',JSON.stringify({...meta,error:error.message},null,2));

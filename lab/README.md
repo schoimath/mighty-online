@@ -1,6 +1,6 @@
 # 마이티 AI 대국실
 
-게임에서 **혼자 연습하기 → 전체 AI 모델**을 열거나, **자리별 AI 선택**에서 네 모델을 따로 고른다. 온라인 방의 방장도 같은 방식으로 설정한다. 게임과 대국 평가기는 같은 자바스크립트 모델과 합법수 엔진을 사용한다. 게임에는 학습용 프로그램을 설치할 필요가 없다. [게임 열기](https://schoimath.github.io/mighty-online/) · [독립 대국 성적표](results/final_test.md)
+게임에서 **혼자 연습하기 → 전체 AI 모델**을 열거나, **자리별 AI 선택**에서 네 모델을 따로 고른다. 온라인 방의 방장도 같은 방식으로 설정한다. 게임과 대국 평가기는 같은 자바스크립트 모델과 합법수 엔진을 사용한다. 게임에는 학습용 프로그램을 설치할 필요가 없다. [게임 열기](https://schoimath.github.io/mighty-online/) · [현재 탐색형을 포함한 독립 대국 성적표](results-v2/final_test.md)
 
 ## 실제 선발 과정
 
@@ -31,7 +31,7 @@ node lab/league.mjs fork lab/artifacts/run-731/win-step004.pt lab/local-runs/con
 node lab/cli.mjs train --resume lab/local-runs/continue-win/win-step004.pt --budget-minutes 60
 node lab/cli.mjs evaluate --manifest configs/benchmark.json --split validation --out lab/local-runs/evaluation
 node lab/cli.mjs evaluate --manifest configs/benchmark.json --split final_test --out lab/local-runs/evaluation
-node lab/cli.mjs rate --results lab/results/final_test.jsonl
+node lab/cli.mjs rate --results lab/results-v2/final_test.jsonl
 node lab/cli.mjs diagnose --suite configs/endgames.json --agent win --objective win
 node lab/cli.mjs diagnose --suite configs/endgames.json --agent lab/artifacts/run-2731/score-step001.json --objective score
 ```
@@ -42,7 +42,7 @@ node lab/cli.mjs diagnose --suite configs/endgames.json --agent lab/artifacts/ru
 
 별도 검증 패 16개와 최종 패 48개를 사용했다. 각 패와 첫 자리, 재배분 난수열, 나머지 네 정책의 배치와 좌석별 난수를 고정하고 관심 있는 한 자리의 모델만 교체했다. 이를 다섯 자리 모두에서 반복했다. 최종 2,160판의 독립 표본 단위는 **패 48개**다. 각 패의 다섯 자리와 모든 모델을 함께 복원추출해 95% 구간을 구했다. 새로운 상대 구성으로 탐색형이 들어간 패 12개를 따로 포함했다.
 
-두 Elo는 독립 패 4개를 한 묶음으로 놓고 모델 간 승수 차이·개인 정산 합계 차이의 부호를 각각 집계한다. 동률을 0.5승으로 두고, 기준 탐색형을 1500에 고정해 정규화된 Bradley–Terry 등급을 일괄 적합했다. 원시 승률은 내가 이긴 편이 된 비율이고 정산은 실제 개인 순정산이다. 둘은 카드 획득 수와도 단위가 다르다. 대국 시간은 측정 장비의 실행 속도에 따라 변한다. [원시 최종 대국](results/final_test.jsonl) · [배경별·역할별·상대별 통계](results/final_test.summary.json) · [평가 설정](../configs/benchmark.json)
+두 Elo는 독립 패 4개를 한 묶음으로 놓고 모델 간 승수 차이·개인 정산 합계 차이의 부호를 각각 집계한다. 동률을 0.5승으로 두고, 기준 탐색형을 1500에 고정해 정규화된 Bradley–Terry 등급을 일괄 적합했다. 원시 승률은 내가 이긴 편이 된 비율이고 정산은 실제 개인 순정산이다. 둘은 카드 획득 수와도 단위가 다르다. 대국 시간은 측정 장비의 실행 속도에 따라 변한다. [원시 최종 대국](results-v2/final_test.jsonl) · [배경별·역할별·상대별 통계](results-v2/final_test.summary.json) · [평가 설정](../configs/benchmark.json)
 
 ## 후반 한 수 진단
 
@@ -50,7 +50,7 @@ node lab/cli.mjs diagnose --suite configs/endgames.json --agent lab/artifacts/ru
 
 예를 들어 가능성이 70대 30인 두 세계에서 각각 다른 수가 이기면, 70% 쪽을 택한 판단 손실은 0이다. 그 판의 숨은 패가 30% 쪽으로 밝혀져도 사전 판단은 그대로다. 평가기는 확률 예제와 실제 후반 수의 후보별 효용을 모두 출력한다. [규칙 명세](../RULES.md) · [진단 국면](../configs/endgames.json)
 
-## 개발·실행 기록
+## 첫 배포 모델의 개발·실행 기록
 
 Windows x64, Intel Core i7-8700, Node 24.15.0, Python 3.12.9, CPU PyTorch 2.8.0에서 실행했다. 별도 CUDA 휠을 사용하는 학습 경로도 제공한다. 이번 배포 가중치는 모두 CPU에서 만들었다. 첫 시드 학습은 51초, 병렬 실행한 추가 두 시드는 각각 65초, 66초였다. 첫 시드의 실행시간을 확인하고 독립 시드를 세 개로 늘렸으며, 이 결정을 내릴 때 이전 최종 후보 패의 집계 결과는 보지 않았다. 최종 보고에는 새로 예약한 2675000~2675047번 패만 사용했다.
 

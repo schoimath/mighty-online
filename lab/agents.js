@@ -1,5 +1,6 @@
 import {neuralAction} from './policy.js';
 import {ruleAction} from './rules-agents.js';
+import {searchAction} from './search-policy.js';
 
 export const DEFAULT_MODEL = 'legacy';
 export const MODEL_CATALOG = [
@@ -16,5 +17,6 @@ export const MODEL_CATALOG = [
 const learned = new Set(['win','score','balanced','downside_averse']);
 export const isModelId = id => MODEL_CATALOG.some(model => model.id === id);
 export function chooseModelAction(id, observation, rng = Math.random) {
+  if (id === 'legacy') return searchAction(observation);
   return learned.has(id) ? neuralAction(id, observation, rng) : ruleAction(id, observation, rng);
 }

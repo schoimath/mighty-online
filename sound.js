@@ -41,6 +41,21 @@ function paperSound(cue) {
 }
 
 function makeSound(kind) {
+  if (kind === "bid") {
+    // A struck bell at C4. The contract sets the pitch at playback.
+    const rate = context.sampleRate;
+    const buffer = context.createBuffer(1, Math.ceil(rate * .40), rate);
+    const samples = buffer.getChannelData(0);
+    for (let i = 0; i < samples.length; i++) {
+      const t = i / rate;
+      const phase = 2 * Math.PI * 261.63 * t;
+      const envelope = Math.min(1, t / .006, (.40 - t) / .035);
+      samples[i] = envelope * (.62 * Math.sin(phase) * Math.exp(-t / .115)
+        + .23 * Math.sin(2 * phase) * Math.exp(-t / .073)
+        + .10 * Math.sin(3 * phase) * Math.exp(-t / .042));
+    }
+    return buffer;
+  }
   const buffer = paperSound(cues[kind]);
   if (kind !== "ruff") return buffer;
   // A short paper flick lands on a lower, resonant table knock.
@@ -94,13 +109,13 @@ export function toggleSound(button) {
   soundControl(button);
 }
 
-export function playTableSound(kind) {
+export function playTableSound(kind, bid) {
   if (!enabled || document.hidden || !context || !output) return;
   if (context.state !== "running") {
     // Starting practice can mount the table in the same click that unlocks audio.
     const requestedAt = performance.now();
     resuming?.then(() => {
-      if (context.state === "running" && performance.now() - requestedAt < 180) playTableSound(kind);
+      if (context.state === "running" && performance.now() - requestedAt < 180) playTableSound(kind, bid);
     });
     return;
   }
@@ -112,6 +127,10 @@ export function playTableSound(kind) {
   if (!buffers.has(kind)) buffers.set(kind, makeSound(kind));
   const source = context.createBufferSource();
   source.buffer = buffers.get(kind);
+  if (kind === "bid") {
+    const semitones = 2 * (bid.points - 13) + Number(bid.suit === "N");
+    source.playbackRate.value = 2 ** (semitones / 12);
+  }
   source.connect(output);
   source.onended = () => source.disconnect();
   source.start();

@@ -1,5 +1,6 @@
 {
-  "name": "mighty-club-duplicate-v1",
+  "name": "mighty-club-duplicate-v2",
+  "searchPolicy": "reserve-joker-v2",
   "reference": "legacy",
   "agents": [
     "legacy",
@@ -14,11 +15,11 @@
   ],
   "splits": {
     "validation": {
-      "startSeed": 1665000,
+      "startSeed": 1709000,
       "scenarios": 16
     },
     "final_test": {
-      "startSeed": 2675000,
+      "startSeed": 2806000,
       "scenarios": 48
     }
   },

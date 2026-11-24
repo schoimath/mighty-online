@@ -58,11 +58,22 @@ function cardFace(card) {
 }
 function callName(call, trump) {
   if (!call) return "미지정";
-  if (call.kind === "card") return call.card === mighty(trump) ? "마이티 프렌드" : cardName(call.card);
+  if (call.kind === "card") {
+    if (call.card === mighty(trump)) return "마이티 프렌드";
+    return call.card === "JK" ? "조커 프렌드" : cardName(call.card);
+  }
   return call.kind === "first" ? "초구 프렌드" : "노프렌드";
 }
 function select(label, control, options, current) {
   return `<label class="g-field"><span>${label}</span><select data-field="${control}">${options.map(([value, text]) => `<option value="${escapeHtml(value)}"${String(value) === String(current) ? " selected" : ""}>${escapeHtml(text)}</option>`).join("")}</select></label>`;
+}
+function suitPicker(label, field, suits, current) {
+  const options = { ...suitInfo, JK: ["★", "조커"] };
+  const radios = suits.map(suit => {
+    const [symbol, name] = options[suit];
+    return `<label class="g-suit-option" title="${name}"><input type="radio" name="${field}" data-field="${field}" value="${suit}" aria-label="${name}"${suit === current ? " checked" : ""}><span aria-hidden="true" class="g-suit g-suit-${suit}">${symbol}</span></label>`;
+  }).join("");
+  return `<fieldset class="g-suit-picker"><legend>${label} <strong>${options[current][1]}</strong></legend><div class="g-suit-options">${radios}</div></fieldset>`;
 }
 function button(label, name, enabled = true, style = "primary") {
   return `<button type="button" class="g-btn g-${style}" data-do="${name}"${enabled ? "" : " disabled"}>${label}</button>`;
@@ -80,17 +91,21 @@ function updateDefaults(ui, view) {
   ui.bidPoints = bids.find(bid => bid.suit === ui.bidSuit)?.points;
   ui.contractIndex = Math.max(0, (view.choices.contracts || []).findIndex(c => c.points === view.bid?.points && c.suit === view.bid?.suit));
   const friends = view.choices.friends || [];
-  const preferredCard = friends.find(f => f.card === mighty(view.bid?.suit)) || friends.find(f => f.kind === "card");
+  const master = mighty(view.bid?.suit);
+  const defaultFriend = view.hand.includes(master) || view.discarded?.includes(master) ? "JK" : master;
+  const preferredCard = friends.find(f => f.card === defaultFriend) || friends.find(f => f.kind === "card");
   ui.friendKind = preferredCard?.kind ?? friends[0]?.kind;
   ui.friendCard = preferredCard?.card;
 }
+function visibleRole(view, seat) {
+  if (view.declarer === seat) return "declarer";
+  if ((view.friendKnown && view.friend === seat) || (view.seat === seat && view.selfRole === "friend")) return "friend";
+  return view.phase === "result" ? "opposition" : "";
+}
 function roleAt(view, seat) {
-  if (view.declarer === seat) return "주공";
-  if (view.friend === seat || (view.seat === seat && view.selfRole === "friend")) {
-    return view.call?.kind === "card" && view.call.card === mighty(view.bid.suit) ? "마이티 프렌드" : "프렌드";
-  }
-  if (view.phase === "result") return "수비";
-  return "";
+  const role = visibleRole(view, seat);
+  if (role === "friend" && view.call?.kind === "card" && view.call.card === mighty(view.bid.suit)) return "마이티 프렌드";
+  return roleLabels[role] || "";
 }
 function seatMarkup(view, nameAt, winner, modelLabels) {
   return Array.from({ length: 5 }, (_, offset) => {
@@ -101,13 +116,13 @@ function seatMarkup(view, nameAt, winner, modelLabels) {
     const playing = view.phase === "play" || view.phase === "result";
     const inAuction = view.phase === "bid";
     const lastBid = inAuction && view.bidHistory.findLast(entry => entry.seat === seat);
-    const bidLabel = lastBid ? (lastBid.pass ? "패스" : suitInfo[lastBid.suit][0] + " " + lastBid.points + "점") : "";
-    const details = role || bidLabel || (playing ? "" : view.counts[seat] + "장");
+    const bidLabel = lastBid ? (lastBid.pass ? "패스" : suitMark(lastBid.suit) + " " + escapeHtml(lastBid.points) + "점") : "";
+    const details = role || bidLabel || (playing ? "" : escapeHtml(view.counts[seat]) + "장");
     const status = [isTurn ? "차례" : "", details].filter(Boolean).join(" · ");
     const leader = inAuction && view.bid?.seat === seat;
     const avatar = inAuction ? seat + 1 : Array.from(name.trim())[0] || "♠";
-    const header = `<span class="g-avatar g-avatar-${seat}" aria-label="${seat + 1}번 자리">${escapeHtml(avatar)}</span><span class="g-seat-tag"><span class="g-seat-name">${escapeHtml(name)}${offset === 0 ? '<small>나</small>' : ""}</span><span class="g-seat-detail">${isTurn ? '<i></i>' : ""}${escapeHtml(status)}</span></span>`;
-    return `<div class="g-seat g-seat-${offset} ${isTurn ? "g-seat-active" : ""} ${leader ? "g-seat-bidder" : ""} ${winner === seat ? "g-trick-winner" : ""}" data-seat="${seat}" role="group" aria-label="${escapeHtml(name)} 자리${model ? ' · ' + escapeHtml(model) : ''}"${model ? ' title="' + escapeHtml(model) + '"' : ""}>${playing ? '<div class="g-seat-head">' + header + '</div>' + seatPile(view, seat) : header}</div>`;
+    const header = `<span class="g-avatar g-avatar-${seat}" aria-label="${seat + 1}번 자리">${escapeHtml(avatar)}</span><span class="g-seat-tag"><span class="g-seat-name">${escapeHtml(name)}${offset === 0 ? '<small>나</small>' : ""}</span><span class="g-seat-detail">${isTurn ? '<i></i>' : ""}${status}</span></span>`;
+    return `<div class="g-seat g-seat-${offset} ${isTurn ? "g-seat-active" : ""} ${leader ? "g-seat-bidder" : ""} ${winner === seat ? "g-trick-winner" : ""}" data-seat="${seat}" data-seat-role="${visibleRole(view, seat)}" role="group" aria-label="${escapeHtml(name)} 자리${model ? ' · ' + escapeHtml(model) : ''}"${model ? ' title="' + escapeHtml(model) + '"' : ""}>${playing ? '<div class="g-seat-head">' + header + '</div>' + seatPile(view, seat) : header}</div>`;
   }).join("");
 }
 function setFlightOffset(element, prefix, from, to) {
@@ -170,7 +185,7 @@ function renderTable(ui, nameAt) {
     const isMighty = move.card === mighty(view.bid.suit);
     const ruff = move.card[0] === view.bid.suit && lead !== view.bid.suit;
     const label = escapeHtml(nameAt(move.seat)) + " · " + cardName(move.card) + (isMighty ? " · 마이티" : "");
-    const caption = move.jokerCall ? "조커콜" : move.suit ? suitInfo[move.suit][0] + " 요구" : escapeHtml(nameAt(move.seat));
+    const caption = move.jokerCall ? "조커콜" : move.suit ? suitMark(move.suit) + " 요구" : escapeHtml(nameAt(move.seat));
     trick.insertAdjacentHTML("beforeend", `<div class="g-played g-played-${offset}" data-play-seat="${move.seat}"><div class="g-on-table${isMighty ? " g-mighty-play" : ""}" role="img" aria-label="${label}">${cardFace(move.card)}${isMighty ? '<b class="g-mighty-tag" aria-hidden="true">마이티</b>' : ""}</div><span class="g-play-label">${caption}</span></div>`);
     const face = trick.lastElementChild.firstElementChild;
     if (ruff) face.dataset.ruff = "";
@@ -199,6 +214,7 @@ function renderHand(ui, newDeal) {
   }
   hand.querySelector("h2 span").textContent = view.hand.length + "장";
   const role = hand.querySelector(".g-role");
+  hand.dataset.seatRole = visibleRole(view, view.seat);
   role.textContent = roleAt(view, view.seat) || roleLabels[view.selfRole] || "";
   role.hidden = !role.textContent;
   if (newDeal) row.replaceChildren();
@@ -253,7 +269,7 @@ function renderHand(ui, newDeal) {
 }
 function bidControls(view, ui) {
   const bids = view.choices.bids;
-  const suits = [...new Set(bids.map(b => b.suit))].map(s => [s, suitInfo[s].join(" ")]);
+  const suits = [...new Set(bids.map(b => b.suit))];
   const points = bids.filter(b => b.suit === ui.bidSuit).map(b => [b.points, b.points + "점"]);
   const pass = button("패스", "pass", view.choices.canPass, "secondary");
   if (!bids.length) return `<h2>패스할 차례예요</h2><p>20점 노기루다가 최고 공약입니다.</p>${pass}`;
@@ -263,34 +279,51 @@ function bidControls(view, ui) {
       ? `노기루다는 현재 공약과 같은 ${escapeHtml(view.bid.points)}점부터 부를 수 있어요.`
       : `${suitInfo[ui.bidSuit][1]}는 ${escapeHtml(points[0][0])}점부터 부를 수 있어요.`;
   }
-  return `<h2>공약을 정하세요</h2><p>${hint}</p><div class="g-input-row">${select("기루다", "bidSuit", suits, ui.bidSuit)}${select("공약 점수", "bidPoints", points, ui.bidPoints)}</div>${button(suitInfo[ui.bidSuit][0] + " " + escapeHtml(ui.bidPoints) + "점 입찰", "bid")}${pass}`;
+  return `<h2>공약을 정하세요</h2><p>${hint}</p>${suitPicker("기루다","bidSuit",suits,ui.bidSuit)}${select("공약 점수", "bidPoints", points, ui.bidPoints)}${button(suitMark(ui.bidSuit) + " " + escapeHtml(ui.bidPoints) + "점 입찰", "bid")}${pass}`;
 }
 function discardControls(view, ui) {
   const contracts = view.choices.contracts || [];
-  const opts = contracts.map((c, i) => [i, suitInfo[c.suit].join(" ") + " · " + c.points + "점"]);
-  return `<h2>묻을 카드 3장을 고르세요</h2><p>바닥패를 합친 13장 중 3장을 고르세요. 묻은 점수는 주공 팀이 가져갑니다.</p>${contracts.length > 1 ? select("최종 공약", "contractIndex", opts, ui.contractIndex) : ""}${button(`3장 묻기 · ${ui.selected.length}/3`, "discard", ui.selected.length === 3)}`;
+  let revise = "";
+  if (contracts.length > 1) {
+    const current = contracts[ui.contractIndex];
+    const suits = [...new Set(contracts.map(c => c.suit))];
+    const points = contracts.flatMap((c,i) => c.suit === current.suit ? [[i,c.points + "점"]] : []);
+    revise = suitPicker("최종 기루다","contractSuit",suits,current.suit) + select("최종 공약 점수","contractIndex",points,ui.contractIndex);
+  }
+  return `<h2>묻을 카드 3장을 고르세요</h2><p>바닥패를 합친 13장 중 3장을 고르세요. 묻은 점수는 주공 팀이 가져갑니다.</p>${revise}${button(`3장 묻기 · ${ui.selected.length}/3`, "discard", ui.selected.length === 3)}`;
 }
+const friendSuit = card => card === "JK" ? "JK" : card[0];
 function friendControls(view, ui) {
   const options = view.choices.friends || [];
   const labelsByKind = { card: "카드로 지정", first: "초구 프렌드", none: "노프렌드" };
   const kinds = [...new Set(options.map(f => f.kind))].map(kind => [kind, labelsByKind[kind]]);
-  const cards = options.filter(f => f.kind === "card").map(f => [f.card, callName(f, view.bid.suit)]);
+  let cardControls = "";
+  if (ui.friendKind === "card") {
+    const current = friendSuit(ui.friendCard);
+    const cards = options.filter(f => f.kind === "card");
+    const suits = [...new Set(cards.map(f => friendSuit(f.card)))];
+    const ranks = cards.filter(f => friendSuit(f.card) === current).map(f => {
+      const rank = f.card.slice(1);
+      const name = f.card === "JK" || f.card === mighty(view.bid.suit) ? callName(f, view.bid.suit) : (rankNames[rank] || rank);
+      return [f.card,name];
+    });
+    cardControls = suitPicker("프렌드 무늬","friendSuit",suits,current) + select("프렌드 카드","friendCard",ranks,ui.friendCard);
+  }
   const hint = options.some(choice => choice.kind === "first")
     ? "카드를 부르거나 첫 트릭의 승자를 프렌드로 정할 수 있어요."
     : "함께할 사람이 가진 카드를 부르세요.";
   const solo = ui.friendKind === "card" && (view.hand.includes(ui.friendCard) || view.discarded.includes(ui.friendCard));
-  return `<h2>프렌드를 정하세요</h2><p>${solo ? "내 손에 있거나 묻은 카드를 부르면 노프렌드로 진행해요." : hint}</p>${select("지정 방식", "friendKind", kinds, ui.friendKind)}${ui.friendKind === "card" ? select("프렌드 카드", "friendCard", cards, ui.friendCard) : ""}${button("프렌드 확정", "friend")}`;
+  return `<h2>프렌드를 정하세요</h2><p>${solo ? "내 손에 있거나 묻은 카드를 부르면 노프렌드로 진행해요." : hint}</p>${select("지정 방식", "friendKind", kinds, ui.friendKind)}${cardControls}${button("프렌드 확정", "friend")}`;
 }
 function playControls() {
   return "<h2>카드를 내세요</h2><p>낼 수 있는 손패를 한 번 누르면 테이블에 놓입니다.</p>";
 }
 function specialPlaySettings(view, ui) {
   const options = view.choices.plays;
-  const suits = options.filter(move => move.card === "JK" && move.suit)
-    .map(move => [move.suit, suitInfo[move.suit].join(" ")]);
+  const suits = options.filter(move => move.card === "JK" && move.suit).map(move => move.suit);
   const caller = options.find(move => move.jokerCall);
-  const demand = suits.length ? select("조커로 선을 잡을 때 부를 무늬", "jokerSuit", suits, ui.jokerSuit) : "";
-  const call = caller ? `<label class="g-call-option"><input type="checkbox" data-field="jokerCall"${ui.jokerCall ? " checked" : ""}> ${escapeHtml(suitInfo[caller.card[0]][0])}3을 낼 때 조커콜</label>` : "";
+  const demand = suits.length ? suitPicker("조커로 선을 잡을 때 부를 무늬","jokerSuit",suits,ui.jokerSuit) : "";
+  const call = caller ? `<label class="g-call-option"><input type="checkbox" data-field="jokerCall"${ui.jokerCall ? " checked" : ""}> <span>${suitMark(caller.card[0])}3을 낼 때 조커콜</span></label>` : "";
   return demand + call;
 }
 function playCard(ui, card) {
@@ -399,7 +432,8 @@ function redraw(ui, newDeal = false) {
   if (openBids && panel.querySelector("details.g-bid-history")) panel.querySelector("details.g-bid-history").open = true;
   if (oldFocus) {
     const [attr, value] = oldFocus;
-    root.querySelector(`[data-${attr}="${value}"]`)?.focus({ preventScroll: true });
+    const radio = focused.type === "radio" ? `[value="${focused.value}"]` : "";
+    root.querySelector(`[data-${attr}="${value}"]${radio}`)?.focus({ preventScroll: true });
   }
 }
 function submit(ui, kind) {
@@ -452,9 +486,18 @@ function bind(ui) {
   });
   ui.root.addEventListener("change", event => {
     const el = event.target;
-    if (!el.matches(".g-field select, .g-call-option input")) return;
+    if (!el.matches(".g-field select, .g-call-option input, .g-suit-option input")) return;
     const field = el.dataset.field;
-    if (field === "jokerCall") ui.jokerCall = el.checked;
+    if (field === "contractSuit") {
+      const contracts = ui.view.choices.contracts;
+      const points = contracts[ui.contractIndex].points;
+      const exact = contracts.findIndex(c => c.suit === el.value && c.points === points);
+      ui.contractIndex = exact >= 0 ? exact : contracts.findIndex(c => c.suit === el.value);
+    } else if (field === "friendSuit") {
+      const available = ui.view.choices.friends.filter(f => f.kind === "card" && friendSuit(f.card) === el.value);
+      const rank = ui.friendCard === "JK" ? "A" : ui.friendCard.slice(1);
+      ui.friendCard = (available.find(f => f.card === el.value + rank) || available[0]).card;
+    } else if (field === "jokerCall") ui.jokerCall = el.checked;
     else ui[field] = ["bidPoints", "contractIndex"].includes(field) ? Number(el.value) : el.value;
     if (field === "bidSuit") {
       const bids = ui.view.choices.bids.filter(b => b.suit === ui.bidSuit);
@@ -468,6 +511,10 @@ function displayLatest(ui) {
   const view = ui.latest;
   const previous = ui.view;
   const newDeal = view.phase === "bid" && (previous?.phase !== "bid" || previous.dealNo !== view.dealNo);
+  if (previous?.phase === "bid" && previous.dealNo === view.dealNo && view.bidHistory.length > previous.bidHistory.length) {
+    const announcement = view.bidHistory.slice(previous.bidHistory.length).findLast(entry => !entry.pass);
+    if (announcement) playTableSound("bid", announcement);
+  }
   ui.view = view;
   updateDefaults(ui, view);
   redraw(ui, newDeal);
@@ -558,7 +605,7 @@ export function rulesContent(rules = DEFAULT_RULES) {
     <p>다섯 명이 열 번의 트릭을 플레이합니다. 주공과 프렌드는 공약한 점수를 모으고, 나머지 플레이어는 이를 막습니다.</p>
     <h3>경매와 바닥패</h3><p>조커 한 장을 포함한 53장 중 각자 10장씩 받고 3장은 바닥에 둡니다. 첫 판은 1번 자리부터, 다음 판은 직전 판 프렌드부터 입찰합니다. 노프렌드였다면 직전 주공부터 시작합니다. ${bidRange} 기루다(으뜸 무늬)나 노기루다로 입찰하거나 패스하세요. 같은 점수에서는 노기루다가 무늬 공약보다 높습니다. 모두 패스하면 다시 나눕니다.</p>
     <p>경매의 승자인 주공은 바닥패를 가져와 3장을 묻습니다. 이때 기루다를 바꾸려면 공약을 2점 이상 올려야 합니다. 묻은 점수는 주공 팀의 점수입니다.</p>
-    <h3>프렌드</h3><p>주공이 부른 카드를 가진 사람이 프렌드입니다. 그 카드가 나오면 모두에게 정체가 공개됩니다.${firstFriend} 노프렌드를 선택하거나 주공이 가진 카드나 묻은 카드를 부르면 혼자 플레이합니다.</p>
+    <h3>프렌드</h3><p>주공이 부른 카드를 가진 사람이 프렌드입니다. 기본 선택은 마이티 프렌드이며, 주공이 마이티를 들고 있거나 묻었으면 조커 프렌드입니다. 부른 카드가 나오면 모두에게 정체가 공개됩니다.${firstFriend} 노프렌드를 선택하거나 주공이 가진 카드나 묻은 카드를 부르면 혼자 플레이합니다.</p>
     <h3>카드 내기</h3><p>주공부터 한 장씩 냅니다. 선이 낸 무늬가 손에 있으면 따라야 합니다. 마이티와 조커는 무늬에 관계없이 낼 수 있습니다. 첫 트릭에서는 다른 무늬를 낼 수 있으면 기루다로 시작할 수 없습니다. 트릭을 이긴 사람이 다음 선입니다.</p>
     <h3>마이티와 조커</h3><p>가장 센 카드는 스페이드 A입니다. 스페이드가 기루다일 때는 다이아몬드 A가 마이티입니다. 그다음은 조커, 기루다, 선의 무늬 순입니다. 같은 무늬 안에서는 A가 가장 높고 2가 가장 낮습니다.</p>
     <p>${jokerTiming}</p>

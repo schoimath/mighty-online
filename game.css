@@ -138,6 +138,14 @@
 .g-seat.g-trick-winner {
   border-color: #f3cf83; background: #394a32; box-shadow: 0 0 0 2px #dcb86f73, 0 4px 9px #0a221e66;
 }
+[data-seat-role="declarer"] { --role-bg: #65471f; --role-edge: #c6a161; --role-detail: #ffdf9d; }
+[data-seat-role="friend"] { --role-bg: #254966; --role-edge: #80abc8; --role-detail: #caeaff; }
+.g-seat[data-seat-role="declarer"], .g-seat[data-seat-role="friend"] {
+  background: var(--role-bg); border-color: var(--role-edge);
+}
+.g-seat[data-seat-role="declarer"] .g-seat-detail, .g-seat[data-seat-role="friend"] .g-seat-detail,
+.g-seat[data-seat-role="declarer"] .g-seat-name small, .g-seat[data-seat-role="friend"] .g-seat-name small { color: var(--role-detail); }
+.g-seat.g-seat-active, .g-seat.g-trick-winner { outline: 2px solid #f2d589; outline-offset: 1px; }
 .g-card-face {
   color: #22362d; display: block; position: absolute; inset: 0; overflow: hidden;
   background: linear-gradient(145deg, #fffef8, #f1ecdf); border: 1px solid #d1cbba;
@@ -160,6 +168,12 @@
 .g-section-heading h2 { margin: 0; color: var(--g-cream); font-size: 1rem; font-weight: 650; }
 .g-section-heading h2 > span { margin-left: 4px; color: #bdd1bb; font-size: .85rem; font-weight: 400; }
 .g-role { font-size: .78rem; color: #f5da9d; border: 1px solid #82764e; border-radius: 4px; padding-inline: 6px; }
+.g-hand[data-seat-role="declarer"], .g-hand[data-seat-role="friend"] {
+  border-color: var(--role-edge); background: linear-gradient(115deg, var(--role-bg) -100%, #1b392c 75%);
+}
+.g-hand[data-seat-role="declarer"] .g-role, .g-hand[data-seat-role="friend"] .g-role {
+  background: var(--role-bg); border-color: var(--role-edge); color: var(--role-detail);
+}
 .g-cards { display: flex; flex-wrap: wrap; gap: 4px; }
 .g-hand-card {
   position: relative; appearance: none; background: none; border: none; padding: 0; flex: 0 0 clamp(40px, calc((100% - 9 * 4px) / 10), 70px);
@@ -185,7 +199,20 @@
 .g-action h2 { margin: 0; color: var(--g-cream); font-size: 1.32rem; line-height: 1.3; letter-spacing: -.04em; overflow-wrap: anywhere; }
 .g-action p { margin: 8px 0 15px; color: #c4d5c5; font-size: .92rem; line-height: 1.65; word-break: keep-all; overflow-wrap: break-word; }
 .g-action > :last-child { margin-bottom: 0; }
-.g-input-row { display: grid; grid-template-columns: 1.25fr 1fr; gap: 7px; }
+.g-suit-picker { margin: 0 0 10px; padding: 0; border: 0; min-width: 0; }
+.g-suit-picker legend { padding: 0; color: #d5decd; font-size: .8rem; }
+.g-suit-picker legend strong { color: #f4e1ae; font-weight: 650; margin-left: .35em; }
+.g-suit-options { display: flex; gap: 5px; margin-top: 5px; }
+.g-suit-option { position: relative; flex: 1; cursor: pointer; }
+.g-suit-option input { position: absolute; inset: 0; margin: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+.g-suit-option .g-suit {
+  width: 100%; min-width: 28px; min-height: 40px; border: 1px solid #c9c9b7;
+  background: #f5f2e7; border-radius: 6px; font-size: 1.22rem;
+}
+.g-suit-option .g-suit-N { font: 700 .82rem/1 system-ui, sans-serif; }
+.g-suit-option input:checked + span { background: #f6d998; border-color: #f1c96f; box-shadow: inset 0 -4px #855d22; }
+.g-suit-option input:focus-visible + span { outline: 2px solid #fff; outline-offset: 2px; }
+.g-play-settings .g-suit-picker { margin: 0; }
 .g-field { display: grid; gap: 5px; margin: 0 0 10px; }
 .g-field > span { color: #d5decd; font-size: .8rem; }
 .g-field select {
@@ -210,8 +237,16 @@
 .g-log p { color: #bfd1bd; font-size: .83rem; margin-block: 10px; }
 .g-log ul { list-style: none; margin: 0; padding: 0; }
 .g-log li { border-top: 1px solid #3e5846; padding-block: 5px; color: #e0e9da; font-size: .85rem; }
-.g-suit { color: #dce3cd; font-family: Georgia, serif; }
-.g-suit-H, .g-suit-D { color: #f2ada6; }
+.g-suit {
+  display: inline-grid; place-items: center; min-width: 1.18em; border-radius: .18em; line-height: 1.12;
+  background: #f5f2e7; color: #151719; font-family: Georgia, serif;
+}
+.g-suit-H, .g-suit-D { color: #b02536; }
+.g-suit-JK { color: #765025; }
+.g-btn.g-primary .g-suit { background: transparent; }
+@media (forced-colors: active) {
+  .g-suit-option input:checked + span { outline: 2px solid Highlight; outline-offset: -3px; }
+}
 .g-result-score { display: flex; align-items: baseline; gap: 6px; margin-block: 10px; }
 .g-result-score strong { color: #efd18d; font: 3.25rem Georgia, serif; }
 .g-result-score span { color: #bdcdb7; }
