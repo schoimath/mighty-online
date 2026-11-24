@@ -49,6 +49,36 @@
 .chat-heading button:hover { background: #ffffff19; }
 #chat-move { color: #cadac8; cursor: grab; touch-action: none; }
 .chat-heading.chat-dragging, .chat-heading.chat-dragging #chat-move { cursor: grabbing; }
+#chat-resize {
+  position: absolute;
+  z-index: 1;
+  top: 0;
+  left: 0;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  color: #d8e6d6;
+  background: transparent;
+  cursor: nwse-resize;
+  touch-action: none;
+}
+#chat-resize:hover, #chat-resize:focus-visible { background: #7d947d38; }
+#chat-resize:focus-visible { outline-offset: -4px; }
+.chat-panel[data-grip-right] #chat-resize { left: auto; right: 0; cursor: nesw-resize; }
+.chat-panel[data-grip-bottom] #chat-resize { top: auto; bottom: 0; color: #345a40; cursor: nesw-resize; }
+.chat-panel[data-grip-bottom][data-grip-right] #chat-resize { cursor: nwse-resize; }
+.chat-panel[data-grip-right] #chat-resize svg { transform: scaleX(-1); }
+.chat-panel[data-grip-bottom] #chat-resize svg { transform: scaleY(-1); }
+.chat-panel[data-grip-bottom][data-grip-right] #chat-resize svg { transform: scale(-1); }
+.chat-panel:not([data-grip-bottom]):not([data-grip-right]) .chat-heading,
+.chat-panel[data-grip-bottom]:not([data-grip-right]) .chat-compose { padding-left: 34px; }
+.chat-panel:not([data-grip-bottom])[data-grip-right] .chat-heading,
+.chat-panel[data-grip-bottom][data-grip-right] .chat-compose { padding-right: 34px; }
+.chat-panel[data-grip-bottom] .chat-feedback { margin-inline: 34px; }
 .chat-scroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 14px; }
 .chat-empty { margin: 18px 0; font-size: .88rem; text-align: center; color: #5d6e60; }
 #chat-list { display: flex; flex-direction: column; gap: 11px; margin: 0; padding: 0; list-style: none; }
@@ -67,7 +97,7 @@
 @media (max-width:729px) {
   .chat-panel { right: 8px; bottom: 8px; width: min(314px, calc(100vw - 24px)); height: clamp(180px, 36dvh, 260px); }
   body:has(.chat-panel[data-bottom]:not([hidden])) .g-main,
-  body:has(.chat-panel[data-bottom]:not([hidden])) .room-panel { padding-bottom: calc(clamp(180px, 36dvh, 260px) + 20px); }
+  body:has(.chat-panel[data-bottom]:not([hidden])) .room-panel { padding-bottom: calc(var(--chat-height, 260px) + 20px); }
 }
 @media (max-width:479px) {
   .g-nav-actions .chat-toggle { padding: 6px 8px; font-size: .82rem; }

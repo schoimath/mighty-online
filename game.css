@@ -101,13 +101,21 @@
 .g-seat-detail { display: flex; align-items: center; gap: 4px; color: #b6c8b6; font-size: .75rem; }
 .g-seat-active .g-seat-detail { color: #f7d88e; }
 .g-seat-detail i { width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
-.g-trick { display: contents; }
-.g-played { position: relative; width: min(100%, var(--table-card)); text-align: center; pointer-events: none; }
-.g-played-0 { grid-area: 4 / 3; --tilt: -2deg; }
-.g-played-1 { grid-area: 3 / 2; --tilt: -5deg; }
-.g-played-2 { grid-area: 2 / 1 / 3 / 3; --tilt: -4deg; }
-.g-played-3 { grid-area: 2 / 4 / 3 / 6; --tilt: 4deg; }
-.g-played-4 { grid-area: 3 / 4; --tilt: 5deg; }
+.g-trick {
+  grid-area: 2 / 2 / 3 / 4; position: relative;
+  width: min(320px, calc(100% - var(--table-card) - 12px));
+  height: calc(100% - var(--play-slot) - 8px);
+}
+.g-played {
+  position: absolute; width: var(--table-card); translate: -50% -50%;
+  text-align: center; pointer-events: none;
+}
+/* Five equal angles around the trick, starting at the viewer and going clockwise. */
+.g-played-0 { left: 50%; top: 100%; --tilt: -3deg; }
+.g-played-1 { left: 0; top: 61.8%; --tilt: -13deg; }
+.g-played-2 { left: 19.1%; top: 0; --tilt: -6deg; }
+.g-played-3 { left: 80.9%; top: 0; --tilt: 7deg; }
+.g-played-4 { left: 100%; top: 61.8%; --tilt: 12deg; }
 .g-on-table { position: relative; width: 100%; aspect-ratio: 65/90; transform: rotate(var(--tilt)); }
 .g-mighty-play {
   border-radius: 5px; outline: 2px solid #f7ce68;

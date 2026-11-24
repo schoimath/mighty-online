@@ -9,10 +9,10 @@ let resuming;
 let lastLanding = -Infinity;
 const buffers = new Map();
 
-// The three envelopes shape the same paper texture into a riffle, tap and sweep.
 const cues = {
   deal: {duration: .20, strokes: [0, .045, .093], decay: .019, tone: 125, tap: .10},
   play: {duration: .105, strokes: [0], decay: .014, tone: 150, tap: .46},
+  ruff: {duration: .24, strokes: [0, .032, .046], decay: .021, tone: 190, tap: .24},
   collect: {duration: .23, strokes: [0, .065], decay: .038, tone: 105, tap: .12}
 };
 
@@ -36,6 +36,21 @@ function paperSound(cue) {
     const tap = cue.tap * Math.sin(2 * Math.PI * cue.tone * t) * Math.exp(-t / .035);
     const endFade = Math.min(1, (samples.length - 1 - i) / (rate * .008));
     samples[i] = envelope * (fast - slow + tap) * endFade;
+  }
+  return buffer;
+}
+
+function makeSound(kind) {
+  const buffer = paperSound(cues[kind]);
+  if (kind !== "ruff") return buffer;
+  // A short paper flick lands on a lower, resonant table knock.
+  const samples = buffer.getChannelData(0);
+  const impact = Math.round(.032 * buffer.sampleRate);
+  for (let i = impact; i < samples.length; i++) {
+    const t = (i - impact) / buffer.sampleRate;
+    const phase = 2 * Math.PI * (119 * t + 3.6 * (1 - Math.exp(-t / .021)));
+    const envelope = Math.min(1, t / .002) * Math.exp(-t / .040);
+    samples[i] += envelope * (.75 * Math.sin(phase) + .19 * Math.sin(2.43 * phase));
   }
   return buffer;
 }
@@ -94,7 +109,7 @@ export function playTableSound(kind) {
     if (now - lastLanding < 45) return;
     lastLanding = now;
   }
-  if (!buffers.has(kind)) buffers.set(kind, paperSound(cues[kind]));
+  if (!buffers.has(kind)) buffers.set(kind, makeSound(kind));
   const source = context.createBufferSource();
   source.buffer = buffers.get(kind);
   source.connect(output);

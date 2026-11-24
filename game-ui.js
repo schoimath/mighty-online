@@ -1,5 +1,5 @@
 import {isCoveredSeat, seatPile} from "./score-ui.js";
-import {DEFAULT_RULES, mighty} from "./engine.js";
+import {DEFAULT_RULES, leadSuit, mighty} from "./engine.js";
 import {playTableSound, soundControl, toggleSound} from "./sound.js";
 
 const suitInfo = {
@@ -79,8 +79,9 @@ function updateDefaults(ui, view) {
   ui.bidPoints = bids.find(bid => bid.suit === ui.bidSuit)?.points;
   ui.contractIndex = Math.max(0, (view.choices.contracts || []).findIndex(c => c.points === view.bid?.points && c.suit === view.bid?.suit));
   const friends = view.choices.friends || [];
-  ui.friendKind = friends[0]?.kind;
-  ui.friendCard = friends.find(f => f.kind === "card")?.card;
+  const preferredCard = friends.find(f => f.card === mighty(view.bid?.suit)) || friends.find(f => f.kind === "card");
+  ui.friendKind = preferredCard?.kind ?? friends[0]?.kind;
+  ui.friendCard = preferredCard?.card;
 }
 function roleAt(view, seat) {
   if (view.declarer === seat) return "주공";
@@ -137,8 +138,10 @@ function renderTable(ui, nameAt) {
   felt.querySelector(".g-seats").innerHTML = seatMarkup(view, nameAt, resolving?.winner);
   const caption = felt.querySelector(".g-trick-result");
   caption.hidden = !resolving;
-  caption.textContent = resolving ? nameAt(resolving.winner) + " · " +
-    (isCoveredSeat(view, resolving.winner) ? "트릭 승리" : resolving.points + "점 획득") : "";
+  if (resolving) {
+    caption.firstElementChild.textContent = nameAt(resolving.winner);
+    caption.lastElementChild.textContent = isCoveredSeat(view, resolving.winner) ? "트릭 승리" : resolving.points + "점 획득";
+  }
   const trick = felt.querySelector(".g-trick");
   const center = felt.querySelector(".g-table-center");
   center.hidden = view.trick.length > 0;
@@ -159,14 +162,20 @@ function renderTable(ui, nameAt) {
     return;
   }
   // Keep cards already on the felt mounted when another player acts.
+  const lead = leadSuit(view.trick);
   for (const move of view.trick.slice(trick.children.length)) {
     const offset = (move.seat - view.seat + 5) % 5;
     const isMighty = move.card === mighty(view.bid.suit);
+    const ruff = move.card[0] === view.bid.suit && lead !== view.bid.suit;
     const label = escapeHtml(nameAt(move.seat)) + " · " + cardName(move.card) + (isMighty ? " · 마이티" : "");
     const caption = move.jokerCall ? "조커콜" : move.suit ? suitInfo[move.suit][0] + " 요구" : escapeHtml(nameAt(move.seat));
     trick.insertAdjacentHTML("beforeend", `<div class="g-played g-played-${offset}" data-play-seat="${move.seat}"><div class="g-on-table${isMighty ? " g-mighty-play" : ""}" role="img" aria-label="${label}">${cardFace(move.card)}${isMighty ? '<b class="g-mighty-tag" aria-hidden="true">마이티</b>' : ""}</div><span class="g-play-label">${caption}</span></div>`);
-    if (!motionEnabled()) continue;
     const face = trick.lastElementChild.firstElementChild;
+    if (ruff) face.dataset.ruff = "";
+    if (!motionEnabled()) {
+      if (ruff) playTableSound("ruff");
+      continue;
+    }
     const ownCard = move.seat === view.seat && root.querySelector(`.g-hand-card[data-card="${move.card}"]`);
     const source = ownCard || felt.querySelector(`[data-seat="${move.seat}"]`);
     setFlightOffset(face, "play", source.getBoundingClientRect(), face.getBoundingClientRect());
@@ -267,7 +276,8 @@ function friendControls(view, ui) {
   const hint = options.some(choice => choice.kind === "first")
     ? "카드를 부르거나 첫 트릭의 승자를 프렌드로 정할 수 있어요."
     : "함께할 사람이 가진 카드를 부르세요.";
-  return `<h2>프렌드를 정하세요</h2><p>${hint} 노프렌드로 혼자 플레이할 수도 있어요.</p>${select("지정 방식", "friendKind", kinds, ui.friendKind)}${ui.friendKind === "card" ? select("프렌드 카드", "friendCard", cards, ui.friendCard) : ""}${button("프렌드 확정", "friend")}`;
+  const solo = ui.friendKind === "card" && (view.hand.includes(ui.friendCard) || view.discarded.includes(ui.friendCard));
+  return `<h2>프렌드를 정하세요</h2><p>${solo ? "내 손에 있거나 묻은 카드를 부르면 노프렌드로 진행해요." : hint}</p>${select("지정 방식", "friendKind", kinds, ui.friendKind)}${ui.friendKind === "card" ? select("프렌드 카드", "friendCard", cards, ui.friendCard) : ""}${button("프렌드 확정", "friend")}`;
 }
 function playControls() {
   return "<h2>카드를 내세요</h2><p>낼 수 있는 손패를 한 번 누르면 테이블에 놓입니다.</p>";
@@ -357,7 +367,7 @@ function mountTable(root) {
       <div class="g-layout">
         <section class="g-board" aria-label="게임 테이블"><div class="g-felt"><div class="g-felt-line"></div>
           <div class="g-table-center"></div><div class="g-trick" hidden></div><div class="g-seats"></div>
-          <p class="g-trick-result" hidden></p></div></section>
+          <p class="g-trick-result" hidden><span></span><b></b></p></div></section>
         <section class="g-hand"></section><aside class="g-panel"></aside>
       </div>
     </div></div>`;
@@ -410,7 +420,7 @@ function bind(ui) {
     if (event.animationName === "g-deal-card") event.target.closest(".g-hand-card")?.classList.remove("g-deal");
     if (event.animationName === "g-play-card") {
       event.target.classList.remove("g-play-enter");
-      if (motionEnabled()) playTableSound("play");
+      if (motionEnabled()) playTableSound(event.target.hasAttribute("data-ruff") ? "ruff" : "play");
     }
   });
   ui.root.addEventListener("click", event => {
@@ -542,7 +552,7 @@ export function rulesContent(rules = DEFAULT_RULES) {
     : "첫 트릭과 마지막 트릭에서 조커는 가장 약합니다. 이때 조커로 시작하면 두 번째 카드가 따를 무늬를 정합니다. 2~9번째 트릭에서 조커로 시작하면 원하는 무늬를 부릅니다.";
   return `<div class="g-rules">
     <p>다섯 명이 열 번의 트릭을 플레이합니다. 주공과 프렌드는 공약한 점수를 모으고, 나머지 플레이어는 이를 막습니다.</p>
-    <h3>경매와 바닥패</h3><p>조커 한 장을 포함한 53장 중 각자 10장씩 받고 3장은 바닥에 둡니다. ${bidRange} 기루다(으뜸 무늬)나 노기루다로 입찰하거나 패스하세요. 같은 점수에서는 노기루다가 무늬 공약보다 높습니다. 모두 패스하면 다시 나눕니다.</p>
+    <h3>경매와 바닥패</h3><p>조커 한 장을 포함한 53장 중 각자 10장씩 받고 3장은 바닥에 둡니다. 첫 판은 1번 자리부터, 다음 판은 직전 판 프렌드부터 입찰합니다. 노프렌드였다면 직전 주공부터 시작합니다. ${bidRange} 기루다(으뜸 무늬)나 노기루다로 입찰하거나 패스하세요. 같은 점수에서는 노기루다가 무늬 공약보다 높습니다. 모두 패스하면 다시 나눕니다.</p>
     <p>경매의 승자인 주공은 바닥패를 가져와 3장을 묻습니다. 이때 기루다를 바꾸려면 공약을 2점 이상 올려야 합니다. 묻은 점수는 주공 팀의 점수입니다.</p>
     <h3>프렌드</h3><p>주공이 부른 카드를 가진 사람이 프렌드입니다. 그 카드가 나오면 모두에게 정체가 공개됩니다.${firstFriend} 노프렌드를 선택하거나 주공이 가진 카드나 묻은 카드를 부르면 혼자 플레이합니다.</p>
     <h3>카드 내기</h3><p>주공부터 한 장씩 냅니다. 선이 낸 무늬가 손에 있으면 따라야 합니다. 마이티와 조커는 무늬에 관계없이 낼 수 있습니다. 첫 트릭에서는 다른 무늬를 낼 수 있으면 기루다로 시작할 수 없습니다. 트릭을 이긴 사람이 다음 선입니다.</p>

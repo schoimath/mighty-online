@@ -90,7 +90,7 @@ function advanceAuction(state) {
   do { state.turn = nextSeat(state.turn); } while (state.passed[state.turn]);
 }
 
-function leadSuit(trick) {
+export function leadSuit(trick) {
   if (trick[0]?.card === 'JK') return trick[0].suit || trick[1]?.card[0];
   return trick[0]?.card[0];
 }

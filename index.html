@@ -70,6 +70,10 @@
       <button id="chat-send" type="submit" disabled>보내기</button>
     </form>
     <p id="chat-feedback" class="chat-feedback" role="status" hidden></p>
+    <button type="button" id="chat-resize" aria-label="채팅창 크기 조절" aria-describedby="chat-resize-help" title="끌어서 크기 조절 · 누르면 크게 또는 기본 크기로">
+      <svg aria-hidden="true" width="17" height="17" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M3 13 13 3M3 8l5-5"/></svg>
+    </button>
+    <span id="chat-resize-help" hidden>모서리를 끌어 크기를 조절하세요. 누르면 크게 열거나 기본 크기로 돌아갑니다. 오른쪽·아래 방향키로 넓이·높이를 늘리고 왼쪽·위 방향키로 줄입니다. Home 키로 기본 크기를 복원합니다.</span>
   </section>
   <footer class="site-footer" id="site-footer"><div><span class="footer-name">♠ &nbsp; Mighty Club</span><span class="footer-suits" aria-hidden="true">♠ <b>♥</b> ♣ <b>♦</b></span></div></footer>
   <dialog class="modal" id="modal" aria-labelledby="modal-title"><div class="modal-inner"><button class="close-icon" id="close-modal" aria-label="닫기">×</button><div id="modal-content"></div></div></dialog>

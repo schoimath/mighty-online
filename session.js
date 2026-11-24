@@ -5,6 +5,7 @@ const validSeat = seat => Number.isInteger(seat) && seat >= 0 && seat < BOT_NAME
 
 export class HostSession {
   #swaps = [];
+  #nextBidder = {seat: 0, player: null};
 
   constructor(hostName, rules = DEFAULT_RULES) {
     this.players = [{name: hostName, bot: false}, null, null, null, null];
@@ -12,7 +13,6 @@ export class HostSession {
     this.rules = validateRules(rules);
     this.connections = new Map();
     this.revision = 0;
-    this.roundNumber = 0;
     this.round = null;
   }
 
@@ -36,6 +36,7 @@ export class HostSession {
   removeGuest(id) {
     const seat = this.seatFor(id);
     if (seat < 0) return;
+    if (this.players[seat] === this.#nextBidder.player) this.#nextBidder.seat = seat;
     this.connections.delete(id);
     this.#clearSwapsAt(seat);
     this.players[seat] = this.round ? this.botPlayer(seat) : null;
@@ -123,9 +124,10 @@ export class HostSession {
   start() {
     if (this.round && this.round.phase !== 'result') throw new Error('이미 게임이 진행 중입니다.');
     this.players = this.players.map((p, i) => p ?? this.botPlayer(i));
-    this.round = createGame({firstSeat: this.roundNumber % 5, rules: this.rules});
+    const bidderSeat = this.players.indexOf(this.#nextBidder.player);
+    const firstSeat = bidderSeat < 0 ? this.#nextBidder.seat : bidderSeat;
+    this.round = createGame({firstSeat, rules: this.rules});
     this.#swaps = [];
-    this.roundNumber++;
     this.revision++;
   }
 
@@ -154,6 +156,10 @@ export class HostSession {
 
   #applyTurn(seat, action) {
     applyAction(this.round, seat, action);
+    if (this.round.result) {
+      const opener = this.round.result.friend ?? this.round.result.declarer;
+      this.#nextBidder = {seat: opener, player: this.players[opener]};
+    }
     if (action.type === 'bid' || action.type === 'pass') {
       const entry = this.round.bidHistory.at(-1);
       if (entry) entry.name = this.players[seat].name;

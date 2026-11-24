@@ -14,6 +14,20 @@ function fullRoom() {
   return session;
 }
 
+function finishWithFriend(session, friendSeat) {
+  const submit = action => session.act(session.round.turn, session.revision, action);
+  submit({type: 'bid', points: session.rules.minBid, suit: 'H'});
+  for (let i = 0; i < 4; i++) submit({type: 'pass'});
+  submit({type: 'discard', cards: session.view(session.round.turn).game.hand.slice(0, 3)});
+  submit(friendSeat == null ? {type: 'friend', kind: 'none'} :
+    {type: 'friend', kind: 'card', card: session.view(friendSeat).game.hand[0]});
+  while (session.round.phase === 'play') {
+    const [move] = session.view(session.round.turn).game.choices.plays;
+    submit({type: 'play', ...move});
+  }
+  assert.equal(session.round.result.friend, friendSeat);
+}
+
 test('host and guests choose open seats without changing connection identity', () => {
   const room = new HostSession('방장');
   room.addGuest('a', '가');
@@ -73,13 +87,14 @@ test('chosen seats determine hands, turns, disconnect replacements and rematches
     if (room.botTurn) room.runBot();
     else room.act(room.hostSeat, room.revision, botAction(room.round));
   }
+  const nextBidder = room.round.result.friend ?? room.round.result.declarer;
   assert.throws(() => room.moveSeat(null, 1, room.revision), /대기실/);
   room.returnToRoom();
   assert.deepEqual(room.players.map(p => p?.name ?? null), [null, null, null, '방장', null]);
   assert.equal(room.addGuest('new', '다음 손님'), null);
   room.moveSeat('new', 1, room.revision);
   room.start();
-  assert.equal(room.view(1).game.turn, 1);
+  assert.equal(room.view(1).game.turn, nextBidder);
   assert.equal(room.view(1).hostSeat, 3);
 });
 
@@ -228,24 +243,54 @@ test('a direct rematch deals to the same connected seats and opens a fresh aucti
   const session = fullRoom();
   session.setRules({minBid: 15, allowLastJoker: true});
   session.start();
-  while (session.round.phase !== 'result') {
-    const turn = session.round.turn;
-    session.act(turn, session.revision, botAction(session.round, turn));
-  }
+  finishWithFriend(session, 3);
   const oldRevision = session.revision;
   const before = session.view(2);
   session.start();
   const after = session.view(2);
   assert.equal(after.game.phase, 'bid');
-  assert.equal(after.game.turn, 1);
+  assert.equal(after.game.turn, 3);
   assert.equal(after.game.lastTrick, null);
   assert.deepEqual(after.game.bidHistory, []);
   assert.deepEqual(after.game.counts, [10, 10, 10, 10, 10]);
   assert.deepEqual(after.rules, before.rules);
   assert.deepEqual(after.players, before.players);
   assert.equal(session.seatFor(guests[1]), 2);
-  assert.throws(() => session.act(1, oldRevision, {type:'pass'}));
-  session.act(1, after.revision, {type:'pass'});
+  assert.throws(() => session.act(3, oldRevision, {type:'pass'}));
+  session.act(3, after.revision, {type:'pass'});
+});
+
+test('the previous friend opens after a lobby swap, and a solo declarer opens the next round', () => {
+  const room = fullRoom();
+  room.start();
+  finishWithFriend(room, 2);
+  room.returnToRoom();
+  room.requestSeatSwap(guests[1], 4, room.revision);
+  room.answerSeatSwap(guests[3], true, room.revision);
+  room.start();
+  assert.equal(room.view(0).game.turn, 4);
+  finishWithFriend(room, null);
+  room.start();
+  assert.equal(room.view(0).game.turn, 4);
+  finishWithFriend(room, 0);
+  room.returnToRoom();
+  room.requestSeatSwap(null, 4, room.revision);
+  room.answerSeatSwap(guests[1], true, room.revision);
+  room.start();
+  assert.equal(room.view(room.hostSeat).game.turn, 4);
+});
+
+test('a departed friend leaves the opening bid at their latest seat', () => {
+  const room = fullRoom();
+  room.start();
+  finishWithFriend(room, 1);
+  room.returnToRoom();
+  room.removeGuest(guests[3]);
+  room.moveSeat(guests[0], 4, room.revision);
+  room.removeGuest(guests[0]);
+  room.start();
+  assert.equal(room.view(0).game.turn, 4);
+  assert.equal(room.botTurn, true);
 });
 
 test('auction entries keep the bidder name after a bot takes the seat', () => {
