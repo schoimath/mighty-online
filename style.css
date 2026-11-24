@@ -38,6 +38,14 @@ svg.icon{width:1.25em;height:1.25em;display:block;fill:none;stroke:currentColor;
 .hero-art{position:absolute;right:2.8%;top:50%;width:44%;height:290px;transform:translateY(-50%);pointer-events:none;isolation:isolate}
 .art-card{position:absolute;top:50%;left:50%;width:143px;height:208px;border-radius:11px;background:#f7f0d9;box-shadow:0 12px 18px #082f2c6e,0 1px 2px #293d2d69;transform-origin:50% 80%;border:1px solid #e2d8bd}
 .card-back{transform:translate(-96%,-47%) rotate(-25deg);background:#ede7cf;padding:6px}
+@media(prefers-reduced-motion:no-preference){
+  .hero-art .art-card{animation:lobby-deal-in 580ms cubic-bezier(.2,.7,.25,1) backwards}
+  .hero-art .card-hearts{animation-delay:65ms}
+  .hero-art .card-ace{animation-delay:125ms}
+}
+@keyframes lobby-deal-in{
+  from{transform:translate(-50%,-32%) rotate(-5deg) scale(.92);opacity:.2}
+}
 .back-field{height:100%;display:grid;place-items:center;border:2px solid #346659;border-radius:6px;color:#e3d1a1;background-color:#235645;background-image:repeating-linear-gradient(45deg,transparent 0 4px,#d5c59382 4.5px 5px,transparent 5.5px 9px),repeating-linear-gradient(-45deg,transparent 0 4px,#d5c59382 4.5px 5px,transparent 5.5px 9px);box-shadow:inset 0 0 0 2px #d3c699}
 .back-diamond{padding:12px;border:3px double #cfbe83;background:#235545;transform:rotate(45deg)}.back-diamond span{font:32px Georgia;display:block;transform:rotate(-45deg)}
 .card-hearts{transform:translate(-59%,-53%) rotate(-8deg);color:#a54438}.heart-pip{position:absolute;inset:30% 0;text-align:center;font:83px/1 Georgia}

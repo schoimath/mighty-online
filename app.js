@@ -1,4 +1,4 @@
-import {renderGame, rulesContent} from './game-ui.js';
+import {clearGame, renderGame, rulesContent} from './game-ui.js';
 import {hostRoom, joinRoom, normalizeRoomCode} from './network.js';
 import {HostSession} from './session.js';
 
@@ -78,7 +78,7 @@ function stopSession(message) {
   mode = 'lobby';
   if ($('modal').open) closeModal();
   $('room').replaceChildren();
-  $('game').replaceChildren();
+  clearGame($('game'));
   const url = new URL(location.href);
   if (url.searchParams.has('room')) {
     url.searchParams.delete('room');
@@ -136,7 +136,7 @@ function drawRoom() {
 
 function draw() {
   if (!snapshot) return;
-  if (!snapshot.game) { showScreen('room'); drawRoom(); return; }
+  if (!snapshot.game) { clearGame($('game')); showScreen('room'); drawRoom(); return; }
   showScreen('game');
   renderGame($('game'),snapshot.game,{
     names:snapshot.players.map(p => p?.name), isHost: Boolean(authority),
