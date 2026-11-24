@@ -57,7 +57,7 @@
 .g-table-center small, .g-table-center > span:last-child:not(.g-table-symbol) { font-size: .8rem; color: #c0d1b6; }
 .g-table-center strong { font-size: 1.05rem; font-weight: 650; color: #f1ebd5; }
 .g-seat {
-  position: absolute; display: flex; align-items: center; gap: 6px; max-width: 34%;
+  position: absolute; display: flex; align-items: center; gap: 6px; width: max-content; max-width: 34%;
   transform: translate(-50%, -50%); padding: 4px 8px 4px 4px; border-radius: 9px;
   border: 1px solid #65816c; color: #f3f4e9; background: #203d30; box-shadow: 0 3px 9px #0a221e66;
 }
@@ -196,7 +196,9 @@
   .g-board { padding: 17px 6px 20px; }
   .g-felt-line { inset: 9px; }
   .g-seat { padding: 3px 5px; gap: 4px; font-size: .75rem; }
-  .g-seat-1 { top: 72%; } .g-seat-4 { top: 72%; }
+  .g-seat-1, .g-seat-4 { top: 72%; max-width: 32%; transform: translateY(-50%); }
+  .g-seat-1 { left: 0; }
+  .g-seat-4 { left: auto; right: 0; }
   .g-seat-name { max-width: 65px; font-size: .75rem; }
   .g-avatar { flex-basis: 24px; height: 24px; font-size: .78rem; border-radius: 5px; }
   .g-seat-detail { font-size: .7rem; }
