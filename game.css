@@ -30,6 +30,7 @@
 .g-nav-divider { width: 1px; height: 19px; background: #416050; }
 .g-nav-phase { color: #bfd1c6; font-size: .875rem; }
 .g-nav-actions { display: flex; gap: 8px; margin-left: auto; }
+.g-nav-actions > button, .g-brand { white-space: nowrap; }
 .g-nav-actions .g-sound { display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
 .g-sound svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linejoin: round; stroke-linecap: round; }
 .g-sound[aria-pressed="true"] .g-sound-off, .g-sound[aria-pressed="false"] .g-sound-on { display: none; }

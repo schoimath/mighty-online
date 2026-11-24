@@ -66,6 +66,6 @@
   .g-nav-actions .chat-toggle { padding: 6px 8px; font-size: .82rem; }
   .chat-panel { top: 61px; right: 8px; width: min(350px, calc(100% - 16px)); height: min(360px, calc(100dvh - 72px)); }
 }
-@media (max-width:359px) {
+@media (max-width:419px) {
   .g-nav-inner:has(.chat-toggle) .g-brand > span { display: none; }
 }
