@@ -63,6 +63,7 @@
   .g-with-piles .g-seat-0 { max-width: 46%; }
   .g-with-piles .g-seat-1, .g-with-piles .g-seat-4 { top: 65%; }
   .g-with-piles .g-trick { top: 46%; }
+  .g-with-piles .g-table-center { transform: translateY(-26px); }
   .g-seat-1 .g-score-anchor { left: 0; transform: none; }
   .g-seat-4 .g-score-anchor { left: auto; right: 0; transform: none; }
   .g-score-strip { min-height: 24px; gap: 2px; padding-inline: 3px; }
