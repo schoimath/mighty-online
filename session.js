@@ -1,4 +1,6 @@
-import {applyAction, botObservation, createGame, DEFAULT_RULES, getView, validateRules} from './engine.js';
+import {botObservation, DEFAULT_RULES, validateRules} from './engine.js';
+import {applyAction, createGame, getView} from './table-deal.js';
+import {settlements} from './table-scoring.js';
 import {chooseModelAction, DEFAULT_MODEL, isModelId} from './lab/agents.js';
 import {rngFor} from './lab/game.js';
 
@@ -15,9 +17,14 @@ function validateBotModels(models) {
 export class HostSession {
   #swaps = [];
   #nextBidder = {seat: 0, player: null};
+  #nextGuest = 1;
+  #members = new Map();
+  #roundMembers = null;
+  #completedRounds = 0;
+  #lastSettlement = new Map();
 
   constructor(hostName, rules = DEFAULT_RULES, botModels = BOT_NAMES.map(() => DEFAULT_MODEL)) {
-    this.players = [{name: hostName, bot: false}, null, null, null, null];
+    this.players = [this.#player('host', hostName, false), null, null, null, null];
     this.hostSeat = 0;
     this.rules = validateRules(rules);
     this.botModels = validateBotModels(botModels);
@@ -30,6 +37,13 @@ export class HostSession {
     return this.connections.get(id) ?? -1;
   }
 
+  #player(memberId, name, bot) {
+    if (!this.#members.has(memberId)) {
+      this.#members.set(memberId, {id: memberId, name, bot, total: 0, rounds: 0});
+    }
+    return {memberId, name, bot};
+  }
+
   addGuest(id, name) {
     if (this.round) return '진행 중인 게임입니다. 다음 판에 참가해 주세요.';
     if (id == null) return '참가자 연결을 확인해 주세요.';
@@ -38,7 +52,7 @@ export class HostSession {
     const seat = this.players.indexOf(null);
     if (seat < 0) return '다섯 자리가 모두 찼습니다.';
     this.connections.set(id, seat);
-    this.players[seat] = {name: name.trim(), bot: false};
+    this.players[seat] = this.#player('guest-' + this.#nextGuest++, name.trim(), false);
     this.revision++;
     return null;
   }
@@ -47,6 +61,8 @@ export class HostSession {
     const seat = this.seatFor(id);
     if (seat < 0) return;
     if (this.players[seat] === this.#nextBidder.player) this.#nextBidder.seat = seat;
+    const memberId = this.players[seat].memberId;
+    if (!this.round && !this.#members.get(memberId).rounds) this.#members.delete(memberId);
     this.connections.delete(id);
     this.#clearSwapsAt(seat);
     this.players[seat] = this.round ? this.botPlayer(seat) : null;
@@ -122,7 +138,8 @@ export class HostSession {
   }
 
   botPlayer(seat) {
-    return {name: 'AI ' + BOT_NAMES[seat], bot: true, modelId: this.botModels[seat]};
+    const player = this.#player('bot-' + seat, 'AI ' + BOT_NAMES[seat], true);
+    return {...player, modelId: this.botModels[seat]};
   }
 
   setBotModels(models) {
@@ -139,10 +156,13 @@ export class HostSession {
 
   start() {
     if (this.round && this.round.phase !== 'result') throw new Error('이미 게임이 진행 중입니다.');
-    this.players = this.players.map((p, i) => p ?? this.botPlayer(i));
-    const bidderSeat = this.players.indexOf(this.#nextBidder.player);
+    const players = this.players.map((p, i) => p ?? this.botPlayer(i));
+    const bidderSeat = players.indexOf(this.#nextBidder.player);
     const firstSeat = bidderSeat < 0 ? this.#nextBidder.seat : bidderSeat;
     this.round = createGame({firstSeat, rules: this.rules});
+    this.players = players;
+    // A substitute finishes on behalf of the member who received the original hand.
+    this.#roundMembers = this.players.map(player => player.memberId);
     this.#swaps = [];
     this.revision++;
   }
@@ -176,7 +196,17 @@ export class HostSession {
 
   #applyTurn(seat, action) {
     applyAction(this.round, seat, action);
-    if (this.round.result) {
+    if (this.round.result && this.#roundMembers) {
+      const changes = settlements(this.round.result, this.round.bid.suit);
+      this.#lastSettlement.clear();
+      this.#roundMembers.forEach((id, seat) => {
+        const member = this.#members.get(id);
+        member.total += changes[seat];
+        member.rounds++;
+        this.#lastSettlement.set(id, {lastSeat: seat, lastDelta: changes[seat]});
+      });
+      this.#completedRounds++;
+      this.#roundMembers = null;
       const opener = this.round.result.friend ?? this.round.result.declarer;
       this.#nextBidder = {seat: opener, player: this.players[opener]};
     }
@@ -187,11 +217,24 @@ export class HostSession {
     this.revision++;
   }
 
+  #scoreboard() {
+    const members = [];
+    for (const member of this.#members.values()) {
+      const current = this.players.findIndex(p => p?.memberId === member.id);
+      if (current < 0 && !member.rounds && !this.#roundMembers?.includes(member.id)) continue;
+      const latest = this.#lastSettlement.get(member.id);
+      members.push({...member, seat: current < 0 ? null : current,
+        lastSeat: latest?.lastSeat ?? null, lastDelta: latest?.lastDelta ?? null});
+    }
+    members.sort((a, b) => (a.seat ?? BOT_NAMES.length) - (b.seat ?? BOT_NAMES.length));
+    return {rounds: this.#completedRounds, members};
+  }
+
   view(seat) {
     if (!validSeat(seat)) throw new Error('유효하지 않은 자리입니다.');
     const swap = this.#swapAt(seat);
     return {revision: this.revision, seat, hostSeat: this.hostSeat, swap: swap ? {...swap} : null,
       rules: {...this.rules}, botModels: [...this.botModels], players: this.players.map(p => p && {...p}),
-      game: this.round ? getView(this.round, seat) : null};
+      scoreboard: this.#scoreboard(), game: this.round ? getView(this.round, seat) : null};
   }
 }

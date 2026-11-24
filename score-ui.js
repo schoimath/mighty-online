@@ -29,3 +29,23 @@ export function seatPile(view, seat) {
   const master = view.bid && mighty(view.bid.suit);
   return `${anchor}<strong class="g-score-total" aria-label="획득 점수 ${total}점">${total}점</strong>${cards.map(card => pointCard(card, master)).join('')}</div>`;
 }
+
+export function signedScore(points) {
+  return Number.isSafeInteger(points) ? (points > 0 ? '+' : '') + points : '—';
+}
+
+export function scoreTable(board, mySeat, {collapsed = false, title = '누적 점수'} = {}) {
+  if (!Number.isSafeInteger(board?.rounds) || !Array.isArray(board.members)) return '';
+  const rows = board.members.map(member => {
+    const name = String(member.name).replace(/[&<>]/g, c => ({'&':'&amp;', '<':'&lt;', '>':'&gt;'}[c]));
+    const seat = Number.isInteger(member.seat) ? member.seat + 1 + '번' : '이전';
+    const mine = Number.isInteger(mySeat) && member.seat === mySeat;
+    return `<tr${mine ? ' class="standing-mine"' : ''}><th scope="row"><small>${seat}</small> ${name}${mine ? ' <small>나</small>' : ''}</th>
+      <td>${signedScore(member.lastDelta)}</td><td><strong>${signedScore(member.total)}</strong></td></tr>`;
+  }).join('');
+  const heading = `${title} <small>${board.rounds}판 완료</small>`;
+  const table = `<table aria-label="${title}"><thead><tr><th scope="col">참가자</th><th scope="col">직전 판</th><th scope="col">누적</th></tr></thead><tbody>${rows}</tbody></table>`;
+  return collapsed
+    ? `<details class="match-standings"><summary>${heading}</summary>${table}</details>`
+    : `<section class="match-standings"><h3>${heading}</h3>${table}</section>`;
+}

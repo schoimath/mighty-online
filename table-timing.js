@@ -1,0 +1,2 @@
+export const AUCTION_BEAT_MS = 1350;
+export const FRIEND_ANNOUNCEMENT_MS = 2200;

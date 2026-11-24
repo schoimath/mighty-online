@@ -6,6 +6,7 @@ import {botAction, botObservation} from '../engine.js';
 import {chooseModelAction} from '../lab/agents.js';
 import {rngFor} from '../lab/game.js';
 import { HostSession } from '../session.js';
+import {settlements} from '../table-scoring.js';
 
 const guests = ['conn-amber', 'conn-blue', 'conn-coral', 'conn-denim'];
 
@@ -19,7 +20,7 @@ function fullRoom() {
 }
 
 function finishWithFriend(session, friendSeat) {
-  const submit = action => session.act(session.round.turn, session.revision, action);
+  const submit = action => session.botTurn ? session.runBot(action) : session.act(session.round.turn, session.revision, action);
   submit({type: 'bid', points: session.rules.minBid, suit: 'H'});
   for (let i = 0; i < 4; i++) submit({type: 'pass'});
   submit({type: 'discard', cards: session.view(session.round.turn).game.hand.slice(0, 3)});
@@ -31,6 +32,84 @@ function finishWithFriend(session, friendSeat) {
   }
   assert.equal(session.round.result.friend, friendSeat);
 }
+
+test('members start at zero and keep their own cumulative scores after a lobby seat swap and rematches', () => {
+  const room = fullRoom();
+  const board = () => room.view(0).scoreboard;
+  const opening = board();
+  assert.equal(opening.rounds, 0);
+  assert.deepEqual(opening.members.map(m => [m.seat,m.total,m.rounds,m.lastDelta]), [0,1,2,3,4].map(seat => [seat,0,0,null]));
+  const ids = opening.members.map(m => m.id);
+  room.start();
+  assert.deepEqual(board(), opening);
+  finishWithFriend(room, 2);
+  const first = settlements(room.round.result, room.round.bid.suit);
+  const expected = new Map(ids.map((id, seat) => [id, first[seat]]));
+  const firstBoard = board();
+  assert.equal(firstBoard.rounds, 1);
+  assert.deepEqual(firstBoard.members.map(m => m.total), first);
+  assert.deepEqual(firstBoard.members.map(m => m.lastDelta), first);
+  assert.deepEqual(firstBoard.members.map(m => m.lastSeat), [0,1,2,3,4]);
+  for (let seat = 0; seat < 5; seat++) assert.deepEqual(room.view(seat).scoreboard, firstBoard);
+  assert.throws(() => room.act(1,room.revision-1,{type:'play',card:'H2'}));
+  assert.throws(() => room.act(1,room.revision,{type:'play',card:'H2'}));
+  assert.deepEqual(board(), firstBoard);
+  board().members[0].total = 9999;
+  assert.deepEqual(board(), firstBoard);
+  room.returnToRoom();
+  room.requestSeatSwap(null, 2, room.revision);
+  room.answerSeatSwap(guests[1], true, room.revision);
+  assert.deepEqual(board().members.map(m => m.id), [ids[2],ids[1],ids[0],ids[3],ids[4]]);
+  room.start();
+  const secondSeats = board().members;
+  assert.ok(secondSeats.every(m => m.total === expected.get(m.id)));
+  finishWithFriend(room, null);
+  const second = settlements(room.round.result, room.round.bid.suit);
+  for (const row of secondSeats) expected.set(row.id,expected.get(row.id)+second[row.seat]);
+  assert.equal(board().rounds, 2);
+  for (const row of board().members) {
+    assert.equal(row.total,expected.get(row.id));
+    assert.equal(row.rounds,2);
+    assert.equal(row.lastDelta,second[row.seat]);
+  }
+  const finished = board();
+  room.start();
+  assert.deepEqual(board(),finished);
+});
+
+test('a replacement finishes for the original member, then keeps a separate score as a returning AI', () => {
+  const room = fullRoom();
+  const board = () => room.view(0).scoreboard;
+  const absentId = board().members[1].id;
+  const byId = id => board().members.find(m => m.id === id);
+  room.start();
+  room.removeGuest(guests[0]);
+  const botId = room.players[1].memberId;
+  assert.notEqual(absentId, botId);
+  finishWithFriend(room, 1);
+  const originalPay = settlements(room.round.result,room.round.bid.suit)[1];
+  assert.deepEqual([byId(absentId).seat,byId(absentId).lastSeat,byId(absentId).rounds,byId(absentId).total],[null,1,1,originalPay]);
+  assert.deepEqual([byId(botId).seat,byId(botId).lastSeat,byId(botId).rounds,byId(botId).total],[1,null,0,0]);
+  room.start();
+  finishWithFriend(room, null);
+  const botPay = settlements(room.round.result,room.round.bid.suit)[1];
+  assert.deepEqual([byId(absentId).total,byId(absentId).lastDelta],[originalPay,null]);
+  assert.deepEqual([byId(botId).total,byId(botId).lastDelta],[botPay,botPay]);
+  room.returnToRoom();
+  assert.equal(byId(botId).seat,null);
+  room.setBotModels(Array(5).fill('random'));
+  room.start();
+  assert.equal(room.players[1].memberId,botId);
+  assert.equal(byId(botId).total,botPay);
+  finishWithFriend(room, 0);
+  room.returnToRoom();
+  assert.equal(room.addGuest('new-connection','친구 1'),null);
+  const newId = room.players[1].memberId;
+  assert.notEqual(newId,absentId);
+  assert.deepEqual([byId(newId).total,byId(newId).rounds,byId(newId).lastDelta],[0,0,null]);
+  assert.equal(byId(absentId).total,originalPay);
+  assert.equal(board().members.reduce((sum,m) => sum + m.total,0),0);
+});
 
 test('AI models follow their configured seats through replacements and rematches', () => {
   const room = fullRoom();

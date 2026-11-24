@@ -18,6 +18,20 @@
   background: #faf5e4; color: #263a2c; font: 700 .78rem/1 Georgia, serif; white-space: nowrap;
 }
 .g-score-red { color: #99383a; }
+.match-standings { margin: 16px 0; color: inherit; font-size: .88rem; }
+.match-standings h3, .match-standings summary { margin: 0; font-size: .95rem; font-weight: 700; }
+.match-standings summary { cursor: pointer; }
+.match-standings small { font-size: .74rem; font-weight: 500; opacity: .8; }
+.match-standings h3 small, .match-standings summary small { margin-left: .35rem; }
+.match-standings table { width: 100%; margin-top: 8px; border-collapse: collapse; table-layout: fixed; font-variant-numeric: tabular-nums; }
+.match-standings th, .match-standings td { padding: 5px 4px; border-bottom: 1px solid #85978155; text-align: right; }
+.match-standings th:first-child { width: 51%; text-align: left; overflow-wrap: anywhere; }
+.match-standings thead th { font-size: .75rem; font-weight: 500; }
+.match-standings tbody th { font-weight: 550; }
+.standing-mine { background: #a9b97922; }
+.g-panel .match-standings { color: #e1eadb; }
+.g-action .match-standings strong { color: #f3dea6; }
+.g-misdeal { color: #efd79b; font-size: .85rem; }
 .g-score-mighty { background: #f7e4a7; border-color: #e1bb62; }
 .g-score-mighty sup { color: #725017; font-size: .55rem; align-self: flex-start; }
 .g-score-covered {

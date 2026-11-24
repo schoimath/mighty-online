@@ -1,8 +1,10 @@
 import {clearGame, renderGame, rulesContent} from './game-ui.js';
+import {AUCTION_BEAT_MS, FRIEND_ANNOUNCEMENT_MS} from './table-timing.js';
 import {hostRoom, joinRoom, normalizeRoomCode} from './network.js';
 import {HostSession} from './session.js';
 import {chatText, setupChat} from './chat.js';
 import {botObservation, DEFAULT_RULES} from './engine.js';
+import {scoreTable} from './score-ui.js';
 import {bindModelSettings, modelLabel, modelSettings, modelSummary, readModelSettings} from './model-picker.js';
 
 const $ = id => document.getElementById(id);
@@ -42,6 +44,24 @@ let botWorker = null;
 let workerUnavailable = false;
 let pendingConnect = null;
 let roomCode = '';
+let lastRecordedRound = 0;
+const recentScoreKey = 'mighty-recent-score-v1';
+function showRecentScore(record) {
+  if (!record?.board?.rounds || !Array.isArray(record.board.members)) return;
+  const area = $('recent-match');
+  area.innerHTML = scoreTable(record.board, record.seat, {title:'최근 테이블 점수표', collapsed:true});
+  area.hidden = false;
+}
+try { showRecentScore(JSON.parse(localStorage.getItem(recentScoreKey))); } catch {}
+
+function recordFinishedRound(view) {
+  const board = view.scoreboard;
+  if (view.game?.phase !== 'result' || !board || board.rounds <= lastRecordedRound) return;
+  lastRecordedRound = board.rounds;
+  const record = {board, seat:view.seat};
+  showRecentScore(record);
+  try { localStorage.setItem(recentScoreKey, JSON.stringify(record)); } catch {}
+}
 const chat = setupChat(sendChat);
 
 function broadcastChat(seat, text) {
@@ -127,7 +147,7 @@ function readRules(container) {
 
 function showRules() {
   const rules = activeRules();
-  modal('게임 규칙', '<div class="rules-wrap">' + rulesSummary(rules) + modelSummary(snapshot) + rulesContent(rules) + '</div>');
+  modal('게임 규칙', '<div class="rules-wrap">' + rulesSummary(rules) + modelSummary(snapshot) + rulesContent(rules, !snapshot || Boolean(snapshot.scoreboard)) + '</div>');
 }
 $('nav-rules').onclick = showRules;
 
@@ -141,6 +161,7 @@ function stopSession(message) {
   transport = null;
   oldTransport?.close();
   authority = snapshot = null;
+  lastRecordedRound = 0;
   roomCode = '';
   mode = 'lobby';
   chat.reset();
@@ -222,6 +243,7 @@ function drawRoom() {
   const room = $('room');
   const focus = room.contains(document.activeElement) ? document.activeElement : null;
   const modelDetailsOpen = room.querySelector('.model-details')?.open;
+  const standingsOpen = room.querySelector('details.match-standings')?.open;
   const focusSeat = focus?.closest('[data-room-seat]')?.dataset.roomSeat;
   const canChoose = Number.isInteger(snapshot.hostSeat);
   const hostSeat = snapshot.hostSeat ?? 0;
@@ -261,7 +283,9 @@ function drawRoom() {
     (host ? ruleEditor(activeRules()) : '<h2 class="room-heading">테이블 규칙</h2>' + rulesSummary(activeRules())) +
     '<p>' + (host ? (occupied < 5 ? '지금 시작하면 빈자리 ' + (5-occupied) + '곳은 AI가 맡습니다.' : '다섯 명이 모였습니다. 게임을 시작하세요.') : '방장이 게임을 시작하면 카드를 받습니다.') +
     '</p><div class="room-actions">' + (host ? '<button class="primary-button" id="start-round">게임 시작</button>' : '') +
-    '<button class="plain-button" id="room-leave">나가기</button></div></section>';
+    '<button class="plain-button" id="room-leave">나가기</button></div>' +
+    scoreTable(snapshot.scoreboard, snapshot.seat, {collapsed:!snapshot.scoreboard?.rounds}) + '</section>';
+  if (standingsOpen && room.querySelector('details.match-standings')) room.querySelector('details.match-standings').open = true;
   $('copy-invite').onclick = copyInvite;
   $('room-leave').onclick = requestLeave;
   room.querySelectorAll('[data-choose-seat]').forEach(button => {
@@ -298,10 +322,11 @@ function drawRoom() {
 
 function draw() {
   if (!snapshot) return;
+  recordFinishedRound(snapshot);
   if (!snapshot.game) { clearGame($('game')); showScreen('room'); drawRoom(); return; }
   showScreen('game');
   renderGame($('game'),snapshot.game,{
-    names:snapshot.players.map(p => p?.name), isHost: Boolean(authority),
+    names:snapshot.players.map(p => p?.name), isHost: Boolean(authority), scoreboard:snapshot.scoreboard,
     modelLabels:snapshot.players.map(p => p?.bot && p.modelId ? modelLabel(p.modelId) : ''),
     replaySetupLabel: mode === 'practice' ? '규칙·AI 바꿔서 시작' : '대기실로 돌아가기',
     onRules:showRules, onLeave:requestLeave, onReplay() {
@@ -336,7 +361,9 @@ function publish() {
   if (authority.botTurn) {
     const game = snapshot.game;
     let pause = 560;
-    if (game.phase === 'bid') pause = game.bidHistory.length ? 1350 : 1800;
+    if (game.phase === 'bid') pause = game.bidHistory.length ? AUCTION_BEAT_MS : 1800 + (game.dealNo > 1 ? AUCTION_BEAT_MS : 0);
+    else if (game.phase === 'discard') pause += AUCTION_BEAT_MS;
+    else if (game.phase === 'play' && game.trickNo === 1 && !game.trick.length) pause = FRIEND_ANNOUNCEMENT_MS;
     else if (game.phase === 'play' && game.lastTrick && !game.trick.length) pause = 1050;
     botTimer = setTimeout(takeBotTurn,pause);
   }

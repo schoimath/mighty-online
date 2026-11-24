@@ -1,7 +1,9 @@
-import {isCoveredSeat, seatPile} from "./score-ui.js";
+import {isCoveredSeat, scoreTable, seatPile, signedScore} from "./score-ui.js";
 import {DEFAULT_RULES, leadSuit, mighty} from "./engine.js";
 import {playTableSound, soundControl, toggleSound} from "./sound.js";
-import {settlements} from "./lab/scoring.js";
+import {AUCTION_BEAT_MS, FRIEND_ANNOUNCEMENT_MS} from "./table-timing.js";
+import {settlementDetails} from "./table-scoring.js";
+import {settlements as archivedSettlements} from "./lab/scoring.js";
 
 const suitInfo = {
   S: ["♠", "스페이드"], H: ["♥", "하트"], D: ["♦", "다이아몬드"],
@@ -40,12 +42,12 @@ function bidSeat(seat) {
   return `<span class="g-bid-seat g-avatar-${seat}" aria-label="${seat + 1}번 자리">${seat + 1}</span>`;
 }
 function leadingBidMarkup(view, nameAt) {
-  if (!view.bid) return '<span class="g-table-symbol" aria-hidden="true">♠</span><strong>첫 입찰 대기</strong>';
+  if (!view.bid) return '<span class="g-table-symbol" aria-hidden="true">♠</span><strong>' + (view.turn === null ? '전원 패스' : '첫 입찰 대기') + '</strong>';
   const bid = view.bid;
   const latestBid = view.bidHistory.findLast(entry => !entry.pass);
   const bidder = latestBid?.name ?? nameAt(bid.seat);
   return `<div class="g-leading-bid">
-    <small>${view.phase === "discard" ? "낙찰 공약" : "현재 최고 공약"}</small>
+    <small>${view.phase === "discard" || view.turn === null ? "낙찰 공약" : "현재 최고 공약"}</small>
     <strong aria-label="${suitInfo[bid.suit][1]} ${escapeHtml(bid.points)}점">${suitMark(bid.suit)} ${escapeHtml(bid.points)}<span>점</span></strong>
     <div class="g-bidder">${bidSeat(bid.seat)}<b title="${escapeHtml(bidder)}">${escapeHtml(bidder)}</b></div>
   </div>`;
@@ -86,6 +88,15 @@ function callName(call, trump) {
     return call.card === "JK" ? "조커 프렌드" : cardName(call.card);
   }
   return call.kind === "first" ? "초구 프렌드" : "노프렌드";
+}
+function announceFriend(ui, view) {
+  const banner = ui.root.querySelector(".g-friend-call");
+  const {call, bid} = view;
+  const name = callName(call, bid.suit);
+  const regularCard = call.kind === "card" && call.card !== "JK" && call.card !== mighty(bid.suit);
+  banner.lastElementChild.textContent = regularCard ? name + " 프렌드" : name;
+  banner.hidden = false;
+  ui.friendTimer = setTimeout(() => { banner.hidden = true; }, FRIEND_ANNOUNCEMENT_MS);
 }
 function select(label, control, options, current) {
   return `<label class="g-field"><span>${label}</span><select data-field="${control}">${options.map(([value, text]) => `<option value="${escapeHtml(value)}"${String(value) === String(current) ? " selected" : ""}>${escapeHtml(text)}</option>`).join("")}</select></label>`;
@@ -378,11 +389,15 @@ function playCard(ui, card) {
 }
 function resultControls(view, ui) {
   const result = view.result;
-  const net = settlements(result, view.bid.suit)[view.seat];
+  const board = ui.options.scoreboard;
+  const {base, bonuses, multiplier} = settlementDetails(result, view.bid.suit);
+  const net = board ? board.members.find(m => m.seat === view.seat)?.lastDelta : archivedSettlements(result, view.bid.suit)[view.seat];
+  const breakdown = board ? `<p>여당 한 몫 ${signedScore(base)}점${bonuses.length ? ' · ' + bonuses.map(name => name + ' ×2').join(' · ') + ' (총 ×' + multiplier + ')' : ''}</p>` : '';
   return `<h2>주공 팀 ${result.won ? "승리" : "패배"}</h2>
     <p>공약은 ${escapeHtml(result.target)}점, 주공 팀은 ${escapeHtml(result.points)}점을 획득했어요.</p>
     <div class="g-result-score"><strong>${escapeHtml(result.points)}</strong><span>/ 20점</span></div>
-    <p>내 정산 <strong>${net > 0 ? "+" : ""}${net}점</strong></p>
+    ${breakdown}${net == null ? '' : `<p>내 정산 <strong>${signedScore(net)}점</strong></p>`}
+    ${scoreTable(board, view.seat)}
     ${ui.options.isHost ? button("다시 한 판", "replay") : "<p>방장이 다시 한 판을 누르면 이 자리에서 다음 판이 시작됩니다.</p>"}
     ${ui.options.isHost && ui.options.onReplaySetup ? button(escapeHtml(ui.options.replaySetupLabel), "replay-setup", true, "secondary") : ""}`;
 }
@@ -406,7 +421,10 @@ function bidHistoryMarkup(view, nameAt) {
   return `<details class="g-bid-history"><summary>입찰 기록 · ${history.length}회</summary>${list}</details>`;
 }
 function infoMarkup(view, nameAt) {
-  if (view.phase === "bid") return bidHistoryMarkup(view, nameAt);
+  if (view.phase === "bid") {
+    const misdeal = view.misdealCount ? `<p class="g-misdeal" role="status">파토 · 첫 손패에 점수 카드가 없는 자리가 있어 다시 나눴습니다.${view.misdealCount > 1 ? ' (' + Number(view.misdealCount) + '회)' : ''}</p>` : "";
+    return misdeal + bidHistoryMarkup(view, nameAt);
+  }
   const rows = [];
   if (view.bid) rows.push(["공약", suitInfo[view.bid.suit].join(" ") + " · " + view.bid.points + "점"]);
   if (view.declarer != null) rows.push(["주공", nameAt(view.declarer)]);
@@ -415,6 +433,10 @@ function infoMarkup(view, nameAt) {
   return `<dl class="g-info">${rows.map(([a, b]) => `<div><dt>${a}</dt><dd>${escapeHtml(b)}</dd></div>`).join("")}</dl>` + bidHistoryMarkup(view, nameAt);
 }
 function panelMarkup(view, ui, nameAt) {
+  if (view.phase === "bid" && view.turn === null) {
+    const title = view.bid ? escapeHtml(nameAt(view.bid.seat)) + "님 낙찰" : "모두 패스했어요";
+    return `<div class="g-panel-body"><div class="g-panel-caption">경매 종료</div><div class="g-action" aria-live="polite"><h2>${title}</h2></div>${infoMarkup(view, nameAt)}</div>`;
+  }
   if (ui.resolving) {
     const last = ui.resolving;
     const message = isCoveredSeat(view, last.winner) ? "획득한 카드를 덮었어요."
@@ -425,7 +447,8 @@ function panelMarkup(view, ui, nameAt) {
   const controls = { bid: bidControls, discard: discardControls, friend: friendControls, play: playControls, result: resultControls };
   const waiting = view.phase !== "result" && !mine;
   const content = waiting ? `<h2>${escapeHtml(nameAt(view.turn))}님 차례</h2><p>${({ bid: "입찰을 기다리고 있어요.", discard: "주공이 바닥패를 교환하고 있어요.", friend: "주공이 프렌드를 정하고 있어요.", play: "카드를 고르고 있어요." })[view.phase]}</p>` : controls[view.phase](view, ui);
-  return `<div class="g-panel-body"><div class="g-panel-caption"><i class="${waiting ? "g-wait-dot" : ""}"></i>${view.phase === "result" ? "최종 결과" : mine ? "내 차례" : "상대 차례"}</div><div class="g-action" aria-live="polite">${content}</div>${infoMarkup(view, nameAt)}</div>${previousTrick(view, nameAt)}`;
+  const standings = view.phase === "result" ? "" : scoreTable(ui.options.scoreboard, view.seat, {collapsed:true});
+  return `<div class="g-panel-body"><div class="g-panel-caption"><i class="${waiting ? "g-wait-dot" : ""}"></i>${view.phase === "result" ? "최종 결과" : mine ? "내 차례" : "상대 차례"}</div><div class="g-action" aria-live="polite">${content}</div>${standings}${infoMarkup(view, nameAt)}</div>${previousTrick(view, nameAt)}`;
 }
 function mountTable(root) {
   root.innerHTML = `<div class="g-screen">
@@ -441,6 +464,7 @@ function mountTable(root) {
       <div class="g-layout">
         <section class="g-board" aria-label="게임 테이블"><div class="g-felt"><div class="g-felt-line"></div>
           <div class="g-table-center"></div><div class="g-auction-calls" hidden></div><div class="g-trick" hidden></div><div class="g-seats"></div>
+          <div class="g-friend-call" role="status" aria-atomic="true" hidden><small>프렌드 선언</small><strong></strong></div>
           <p class="g-trick-result" hidden><span></span><b></b></p></div></section>
         <section class="g-hand"></section><aside class="g-panel"></aside>
       </div>
@@ -454,6 +478,8 @@ function redraw(ui, newDeal = false) {
   const oldFocus = focused && ["card", "field", "do"].map(attr => [attr, focused.dataset[attr]]).find(([, value]) => value != null);
   const openLog = root.querySelector(".g-log")?.open;
   const openBids = root.querySelector("details.g-bid-history")?.open;
+  const scoreDisclosure = root.querySelector("details.match-standings");
+  if (scoreDisclosure) ui.scoresOpen = scoreDisclosure.open;
   root.querySelector("h1").textContent = view.phase === "play" ? `${view.trickNo}번째 트릭` : labels[view.phase];
   root.querySelector(".g-round-tag").textContent = view.phase === "result" ? "10트릭 완료"
     : view.phase === "bid" ? "경매 " + view.bidHistory.length + "회"
@@ -467,6 +493,7 @@ function redraw(ui, newDeal = false) {
   panel.classList.toggle("g-result-arrive", view.phase === "result");
   if (openLog && panel.querySelector(".g-log")) panel.querySelector(".g-log").open = true;
   if (openBids && panel.querySelector("details.g-bid-history")) panel.querySelector("details.g-bid-history").open = true;
+  if (ui.scoresOpen && panel.querySelector("details.match-standings")) panel.querySelector("details.match-standings").open = true;
   if (oldFocus) {
     const [attr, value] = oldFocus;
     const radio = focused.type === "radio" ? `[value="${focused.value}"]` : "";
@@ -550,14 +577,36 @@ function displayLatest(ui) {
   const view = ui.latest;
   const previous = ui.view;
   const newDeal = view.phase === "bid" && (previous?.phase !== "bid" || previous.dealNo !== view.dealNo);
-  if (previous?.phase === "bid") {
+  if (previous?.phase === "bid" && previous.turn !== null) {
+    const allPassed = view.phase === "bid" && view.dealNo === previous.dealNo + 1 &&
+      !previous.bid && previous.bidHistory.length === 4 && previous.bidHistory.every(entry => entry.pass);
+    let announcement;
     if (previous.dealNo === view.dealNo && view.bidHistory.length > previous.bidHistory.length) {
-      const announcement = view.bidHistory.at(-1);
-      playTableSound(announcement.pass ? "pass" : "bid", announcement);
-    } else if (view.phase === "bid" && view.dealNo === previous.dealNo + 1) {
-      // The fifth pass deals a new hand and clears the old auction history.
-      playTableSound("pass");
+      announcement = view.bidHistory.at(-1);
+    } else if (allPassed) {
+      // The engine replaces the history as soon as the fifth player passes.
+      announcement = {seat: previous.turn, pass: true};
     }
+    if (announcement) {
+      playTableSound(announcement.pass ? "pass" : "bid", announcement);
+      if (!document.hidden && (view.phase === "discard" || allPassed)) {
+        // Finish showing the auction before displaying the kitty or the next deal.
+        ui.view = {...previous, turn: null, bid: allPassed ? null : view.bid,
+          bidHistory: allPassed ? [...previous.bidHistory, announcement] : view.bidHistory};
+        redraw(ui);
+        ui.auctionTimer = setTimeout(() => {
+          ui.auctionTimer = null;
+          displayLatest(ui);
+        }, AUCTION_BEAT_MS);
+        return;
+      }
+    }
+  }
+  if (view.phase === "play" && view.trickNo === 1 && view.call && previous?.phase !== "play") {
+    announceFriend(ui, view);
+  } else if (view.phase !== "play") {
+    clearTimeout(ui.friendTimer);
+    ui.root.querySelector(".g-friend-call").hidden = true;
   }
   ui.view = view;
   updateDefaults(ui, view);
@@ -594,6 +643,9 @@ export function clearGame(container) {
   const ui = cache.get(container);
   if (!ui) return;
   clearTimeout(ui.timer);
+  clearTimeout(ui.auctionTimer);
+  clearTimeout(ui.friendTimer);
+  ui.auctionTimer = null;
   ui.view = ui.latest = ui.resolving = ui.signature = null;
   container.replaceChildren();
 }
@@ -612,6 +664,10 @@ export function renderGame(container, publicView, options = {}) {
   ui.latest = publicView;
   ui.playPending = false;
   ui.options = options;
+  if (ui.auctionTimer) {
+    redraw(ui);
+    return;
+  }
   if (ui.resolving) {
     // Peers can send the next lead while this client is gathering the trick.
     // Keep the newest snapshot and never dispatch actions from the held frame.
@@ -638,23 +694,27 @@ export function renderGame(container, publicView, options = {}) {
   displayLatest(ui);
 }
 
-export function rulesContent(rules = DEFAULT_RULES) {
+export function rulesContent(rules = DEFAULT_RULES, currentTable = true) {
   const bidRange = rules.minBid === 20 ? "20점을 걸고" : `${escapeHtml(rules.minBid)}~20점 사이에서`;
   const firstFriend = rules.allowFirstFriend ? " 첫 트릭의 승자를 초구 프렌드로 지정할 수도 있습니다." : "";
   const jokerCallFrom = rules.allowFirstJokerCall ? "첫 트릭부터" : "두 번째 트릭부터";
+  const opening = currentTable ? " 처음 받은 10장에 점수 카드(10·J·Q·K·A)가 한 장도 없는 사람이 있으면 파토입니다. 공약 전에 모두 다시 받고 같은 자리부터 시작합니다." : "";
+  const scoring = currentTable
+    ? "여당 한 몫의 기본점은 최종 공약에서 10을 뺀 값입니다. 성공하면 더하고 실패하면 뺍니다. 런(여당 20점), 백런(야당 10점 이상), 노기루다, 노프렌드는 각각 2배이며 겹치면 곱합니다. 새 테이블에서는 모두 0점으로 시작하며 개인 점수는 판마다 누적됩니다."
+    : "여당이 성공하면 획득 점수에서 10을 뺀 값, 실패하면 공약에 모자란 값으로 정산합니다. 런(여당 20점), 백런(공약보다 10점 이상 부족), 노기루다, 노프렌드는 각각 2배입니다.";
   const jokerTiming = rules.allowLastJoker
     ? "첫 트릭에서는 조커가 가장 약하고, 조커로 시작하면 두 번째 카드가 따를 무늬를 정합니다. 2~10번째 트릭에서는 조커가 기루다를 이기며, 조커로 시작하는 사람이 따를 무늬를 부릅니다."
     : "첫 트릭과 마지막 트릭에서 조커는 가장 약합니다. 이때 조커로 시작하면 두 번째 카드가 따를 무늬를 정합니다. 2~9번째 트릭에서 조커로 시작하면 원하는 무늬를 부릅니다.";
   return `<div class="g-rules">
     <p>다섯 명이 열 번의 트릭을 플레이합니다. 주공과 프렌드는 공약한 점수를 모으고, 나머지 플레이어는 이를 막습니다.</p>
     <h3>경매와 바닥패</h3><p>조커 한 장을 포함한 53장 중 각자 10장씩 받고 3장은 바닥에 둡니다. 첫 판은 1번 자리부터, 다음 판은 직전 판 프렌드부터 입찰합니다. 노프렌드였다면 직전 주공부터 시작합니다. ${bidRange} 기루다(으뜸 무늬)나 노기루다로 입찰하거나 패스하세요. 같은 점수에서는 노기루다가 무늬 공약보다 높습니다. 모두 패스하면 다시 나눕니다.</p>
-    <p>경매의 승자인 주공은 바닥패를 가져와 3장을 묻습니다. 이때 기루다를 바꾸려면 공약을 2점 이상 올려야 합니다. 묻은 점수는 주공 팀의 점수입니다.</p>
+    <p>${opening} 경매의 승자인 주공은 바닥패를 가져와 3장을 묻습니다. 이때 기루다를 바꾸려면 공약을 2점 이상 올려야 합니다. 묻은 점수는 주공 팀의 점수입니다.</p>
     <h3>프렌드</h3><p>주공이 부른 카드를 가진 사람이 프렌드입니다. 기본 선택은 마이티, 조커, 기루다 A 순서이며 주공이 들고 있거나 묻은 카드는 건너뜁니다. 셋 다 주공에게 있으면 노프렌드가 기본입니다. 노기루다에서는 마이티와 조커가 모두 주공에게 있으면 노프렌드입니다. 부른 카드가 나오면 모두에게 정체가 공개됩니다.${firstFriend} 노프렌드를 선택하거나 주공이 가진 카드나 묻은 카드를 부르면 혼자 플레이합니다.</p>
     <h3>카드 내기</h3><p>주공부터 한 장씩 냅니다. 선이 낸 무늬가 손에 있으면 따라야 합니다. 마이티와 조커는 무늬에 관계없이 낼 수 있습니다. 첫 트릭에서는 다른 무늬를 낼 수 있으면 기루다로 시작할 수 없습니다. 트릭을 이긴 사람이 다음 선입니다.</p>
     <h3>마이티와 조커</h3><p>가장 센 카드는 스페이드 A입니다. 스페이드가 기루다일 때는 다이아몬드 A가 마이티입니다. 그다음은 조커, 기루다, 선의 무늬 순입니다. 같은 무늬 안에서는 A가 가장 높고 2가 가장 낮습니다.</p>
     <p>${jokerTiming}</p>
     <p>${jokerCallFrom} 선이 클로버 3으로 조커콜을 선언할 수 있습니다. 조커를 가진 사람은 조커 또는 마이티를 내야 하며, 조커는 그 트릭에서 가장 약합니다. 클로버가 기루다일 때의 조커콜 카드는 스페이드 3입니다.</p>
     <h3>점수 카드와 승패</h3><p>10, J, Q, K, A는 각각 1점으로, 한 판에는 총 20점이 있습니다. 가져간 점수 카드는 보드의 각자 자리 옆에 모읍니다. 주공은 처음부터 카드를 덮고, 프렌드는 정체가 밝혀지는 즉시 앞서 가져간 카드까지 모두 덮습니다. 열 번째 트릭이 끝났을 때 주공 팀의 점수가 공약 이상이면 주공 팀이 승리합니다.</p>
-    <p>개인 정산은 성공하면 주공 팀 점수에서 10을 뺀 값, 실패하면 공약에 모자란 값으로 계산합니다. 주공은 두 몫, 프렌드는 한 몫, 야당은 각각 반대 부호 한 몫입니다. 노프렌드 주공은 네 몫입니다. 런(20점) 또는 백런(공약보다 10점 이상 부족), 노기루다, 노프렌드의 배율은 각각 2배씩 곱합니다.</p>
+    <p>${scoring} 주공은 두 몫, 프렌드는 한 몫, 야당은 각각 반대 부호 한 몫입니다. 노프렌드 주공은 네 몫입니다.</p>
   </div>`;
 }
