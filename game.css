@@ -30,6 +30,13 @@
 .g-nav-divider { width: 1px; height: 19px; background: #416050; }
 .g-nav-phase { color: #bfd1c6; font-size: .875rem; }
 .g-nav-actions { display: flex; gap: 8px; margin-left: auto; }
+.g-nav-actions .g-sound { display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+.g-sound svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linejoin: round; stroke-linecap: round; }
+.g-sound[aria-pressed="true"] .g-sound-off, .g-sound[aria-pressed="false"] .g-sound-on { display: none; }
+@media (max-width: 650px) {
+  .g-nav-actions .g-sound { padding-inline: 8px; min-width: 32px; }
+  .g-sound > span { display: none; }
+}
 .g-btn { border-radius: 7px; border: 1px solid transparent; transition: background-color .15s, border-color .15s; }
 .g-btn.g-top { background: transparent; color: #e3e8dc; border-color: #476253; padding: 7px 14px; font-size: .875rem; }
 .g-btn.g-top:hover { background: #274837; border-color: #a2b99e; }

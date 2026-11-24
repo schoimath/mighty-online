@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {botAction} from '../engine.js';
 import { HostSession } from '../session.js';
 
 const guests = ['conn-amber', 'conn-blue', 'conn-coral', 'conn-denim'];
@@ -12,6 +13,40 @@ function fullRoom() {
   });
   return session;
 }
+
+test('host room rules are shared before play, frozen for a round and reusable on replay', () => {
+  const session = new HostSession('방장');
+  session.addGuest('guest', '친구');
+  const original = session.view(1);
+  original.rules.minBid = 13;
+  assert.equal(session.view(0).rules.minBid, 14);
+  const rules = {minBid: 20, allowFirstFriend: false, allowFirstJokerCall: true};
+  session.setRules(rules);
+  session.setRules({minBid: 19});
+  assert.equal(rules.minBid, 20);
+  const expected = {...rules, minBid: 19};
+  const lobby = session.view(1);
+  assert.equal(lobby.revision, original.revision + 2);
+  assert.deepEqual(lobby.rules, expected);
+  assert.throws(() => session.setRules({minBid: 21}));
+  assert.deepEqual(session.view(1), lobby);
+  session.start();
+  assert.deepEqual(session.view(1).game.rules, expected);
+  const live = session.view(1);
+  assert.throws(() => session.setRules({minBid: 13}));
+  assert.deepEqual(session.view(1), live);
+  session.act(0, session.revision, {type: 'bid', points: 19, suit: 'H'});
+  session.act(1, session.revision, {type: 'pass'});
+  session.removeGuest('guest');
+  while (session.round.phase !== 'result') {
+    if (session.botTurn) session.runBot();
+    else session.act(0, session.revision, botAction(session.round, 0));
+  }
+  session.returnToRoom();
+  assert.deepEqual(session.view(0).rules, expected);
+  session.start();
+  assert.deepEqual(session.view(0).game.rules, expected);
+});
 
 test('each connection has one seat, one private hand, and a revision-checked turn', () => {
   const session = fullRoom();
@@ -41,7 +76,7 @@ test('each connection has one seat, one private hand, and a revision-checked tur
   assert.throws(() => session.act(session.seatFor(other), initial.revision, forgedAction));
   assert.deepEqual(session.view(0), initial);
 
-  session.act(actingSeat, initial.revision, {type: 'bid', points: 13, suit: 'H'});
+  session.act(actingSeat, initial.revision, {type: 'bid', points: 14, suit: 'H'});
   const next = session.view(0);
   assert.ok(next.revision > initial.revision);
   assert.throws(() => session.act(next.game.turn, initial.revision, {type: 'pass'}));
@@ -70,7 +105,7 @@ test('a full room completes ten tricks when a guest disconnects during play', ()
     const {game, revision} = session.view(0);
     session.act(game.turn, revision, action);
   }
-  submit({type: 'bid', points: 13, suit: 'H'});
+  submit({type: 'bid', points: 14, suit: 'H'});
   for (let i = 0; i < 4; i++) submit({type: 'pass'});
 
   const declarer = session.view(0).game.turn;

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { applyAction, botAction, createGame, getView } from '../engine.js';
+import { applyAction, botAction, createGame, DEFAULT_RULES, getView, validateRules } from '../engine.js';
 
 function act(game, action) {
   applyAction(game, game.turn, action);
@@ -13,7 +13,7 @@ function reject(game, action, seat = game.turn) {
 function playFixture(hands, trump = 'H', trickNo = 2) {
   return {
     ...createGame(), phase: 'play', hands, declarer: 0, turn: 0,
-    bid: { seat: 0, points: 13, suit: trump }, call: { kind: 'none' }, friendKnown: true,
+    bid: { seat: 0, points: 14, suit: trump }, call: { kind: 'none' }, friendKnown: true,
     trickNo, kitty: []
   };
 }
@@ -36,8 +36,43 @@ test('53 unique cards, ten per player, with private isolated views', () => {
   assert.throws(() => getView(game, -1));
 });
 
-test('contracts rise, no trump wins ties, passers are skipped, all-pass redeals', () => {
+test('new deals enforce a configurable 13–20 minimum and retain all rules on a redeal', () => {
+  assert.deepEqual(DEFAULT_RULES, {minBid: 14, allowFirstFriend: true, allowFirstJokerCall: false});
+  assert.deepEqual(validateRules(), DEFAULT_RULES);
+  assert.ok(Object.isFrozen(DEFAULT_RULES));
+  for (const invalid of [null, [], {minBid: 12}, {minBid: 21}, {minBid: 14.5}, {minBid: '14'},
+    {allowFirstFriend: 0}, {allowFirstJokerCall: 'false'}]) {
+    assert.throws(() => createGame({rules: invalid}));
+  }
+  reject(createGame(), {type: 'bid', suit: 'N', points: 13});
+  for (let minBid = 13; minBid <= 20; minBid++) {
+    const rules = {minBid, allowFirstFriend: false, allowFirstJokerCall: true};
+    const game = createGame({rules});
+    for (let i = 0; i < 5; i++) act(game, {type: 'pass'});
+    const view = getView(game, game.turn);
+    assert.deepEqual(view.rules, rules);
+    assert.equal(view.choices.bids.length, (21 - minBid) * 5);
+    assert.ok(view.choices.bids.every(b => b.points >= minBid));
+    view.rules.minBid = 10;
+    assert.equal(game.rules.minBid, minBid);
+    reject(game, {type: 'bid', suit: 'H', points: minBid - 1});
+    act(game, {type: 'bid', suit: 'H', points: minBid});
+    assert.ok(getView(game, game.turn).choices.bids.every(b => b.points > minBid || b.suit === 'N'));
+    act(game, {type: 'bid', suit: 'N', points: minBid});
+    assert.ok(getView(game, game.turn).choices.bids.every(b => b.points > minBid));
+  }
+});
+
+test('rounds created by the old engine keep their original 13-point floor', () => {
   const game = createGame();
+  delete game.rules;
+  assert.equal(getView(game, game.turn).rules.minBid, 13);
+  for (let i = 0; i < 5; i++) act(game, {type: 'pass'});
+  act(game, {type: 'bid', suit: 'C', points: 13});
+});
+
+test('contracts rise, no trump wins ties, passers are skipped, all-pass redeals', () => {
+  const game = createGame({rules: {minBid: 13}});
   reject(game, { type: 'bid', suit: 'C', points: 14 }, 1);
   reject(game, { type: 'bid', suit: 'C', points: 12 });
   act(game, { type: 'bid', suit: 'C', points: 13 });
@@ -57,7 +92,7 @@ test('contracts rise, no trump wins ties, passers are skipped, all-pass redeals'
 });
 
 test('valid exchange, contract switch and delayed called-card friend reveal', () => {
-  const game = createGame();
+  const game = createGame({rules: {minBid: 13}});
   act(game, { type: 'bid', points: 13, suit: 'H' });
   for (let i = 0; i < 4; i++) act(game, { type: 'pass' });
   const cards = game.hands[0].slice(0, 3);
@@ -117,6 +152,47 @@ test('the Joker is forced and powerless when called; first trick disallows calls
   reject(first, { type: 'play', card: 'C3', jokerCall: true });
 });
 
+test('optional opening Joker call forces the Joker or Mighty while ordinary play remains legal', () => {
+  for (const trump of ['H', 'C']) {
+    const call = trump === 'C' ? 'S3' : 'C3';
+    const follow = call[0] + 'K';
+    const hands = [[call], ['JK', follow, 'SA'], [call[0] + '2'], [call[0] + 'Q'], [call[0] + '8']];
+    const game = playFixture(hands, trump, 1);
+    game.rules = validateRules({allowFirstJokerCall: true});
+    assert.deepEqual(legal(game), [{card: call}, {card: call, jokerCall: true}]);
+    const ordinary = structuredClone(game);
+    play(ordinary, call);
+    assert.ok(legal(ordinary).some(p => p.card === follow));
+    play(game, call, {jokerCall: true});
+    assert.deepEqual(legal(game), [{card: 'JK'}, {card: 'SA'}]);
+    reject(game, {type: 'play', card: follow});
+    for (const card of ['JK', hands[2][0], hands[3][0], hands[4][0]]) play(game, card);
+    assert.equal(game.lastTrick.winner, 3);
+  }
+});
+
+test('first-trick friend setting filters the choices and all declarer actions including the bot', () => {
+  for (const allowFirstFriend of [false, true]) {
+    const game = createGame({rules: {allowFirstFriend}});
+    act(game, {type: 'bid', points: 14, suit: 'H'});
+    for (let i = 0; i < 4; i++) act(game, {type: 'pass'});
+    act(game, {type: 'discard', cards: game.hands[0].slice(0, 3)});
+    const kinds = new Set(getView(game, 0).choices.friends.map(f => f.kind));
+    assert.equal(kinds.has('first'), allowFirstFriend);
+    assert.ok(kinds.has('card') && kinds.has('none'));
+    if (allowFirstFriend) act(game, {type: 'friend', kind: 'first'});
+    else {
+      reject(game, {type: 'friend', kind: 'first'});
+      // All first-choice friend cards are already held; exercise the bot's fallback.
+      game.hands[0] = ['SA', 'JK', 'HA', 'DA', 'CA', 'SK', 'HK', 'DK', 'CK', 'HQ'];
+      const action = botAction(game);
+      assert.notEqual(action.kind, 'first');
+      act(game, action);
+    }
+    assert.equal(game.phase, 'play');
+  }
+});
+
 test('Joker leads call a suit in middle tricks; first and last trick Joker loses', () => {
   const middle = playFixture([['JK'], ['C2', 'H5'], ['HA'], ['S7'], ['H4']]);
   reject(middle, { type: 'play', card: 'JK' });
@@ -169,7 +245,8 @@ test('point-card piles appear on completed tricks and buried points stay private
 
 test('60 complete bot games always make 50 legal plays and account for all 20 points', () => {
   for (let run = 0; run < 60; run++) {
-    const game = createGame({ firstSeat: run % 5 });
+    const rules = {minBid: 13 + run % 8, allowFirstFriend: Boolean(run % 3), allowFirstJokerCall: Boolean(run % 2)};
+    const game = createGame({ firstSeat: run % 5, rules });
     let turns = 0;
     let plays = 0;
     while (game.phase !== 'result') {
@@ -179,6 +256,8 @@ test('60 complete bot games always make 50 legal plays and account for all 20 po
       act(game, action);
     }
     assert.equal(plays, 50);
+    assert.ok(game.bid.points >= rules.minBid);
+    if (!rules.allowFirstFriend) assert.notEqual(game.call.kind, 'first');
     assert.equal(game.trickNo, 10);
     assert.equal(game.scores.reduce((a, b) => a + b), 20);
     const buriedPoints = game.discarded.filter(card => /^(S|H|D|C)(10|J|Q|K|A)$/.test(card));

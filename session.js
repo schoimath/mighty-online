@@ -1,10 +1,11 @@
-import {applyAction, botAction, createGame, getView} from './engine.js';
+import {applyAction, botAction, createGame, DEFAULT_RULES, getView, validateRules} from './engine.js';
 
 const BOT_NAMES = ['솔', '달', '별', '구름', '바다'];
 
 export class HostSession {
-  constructor(hostName) {
+  constructor(hostName, rules = DEFAULT_RULES) {
     this.players = [{name: hostName, bot: false}, null, null, null, null];
+    this.rules = validateRules(rules);
     this.connections = new Map();
     this.revision = 0;
     this.roundNumber = 0;
@@ -39,10 +40,16 @@ export class HostSession {
     return {name: 'AI ' + BOT_NAMES[seat], bot: true};
   }
 
+  setRules(rules) {
+    if (this.round) throw new Error('규칙은 대기실에서 변경할 수 있습니다.');
+    this.rules = validateRules(rules, this.rules);
+    this.revision++;
+  }
+
   start() {
     if (this.round && this.round.phase !== 'result') throw new Error('이미 게임이 진행 중입니다.');
     this.players = this.players.map((p, i) => p ?? this.botPlayer(i));
-    this.round = createGame({firstSeat: this.roundNumber % 5});
+    this.round = createGame({firstSeat: this.roundNumber % 5, rules: this.rules});
     this.roundNumber++;
     this.revision++;
   }
@@ -81,7 +88,7 @@ export class HostSession {
 
   view(seat) {
     if (!Number.isInteger(seat) || seat < 0 || seat > 4) throw new Error('유효하지 않은 자리입니다.');
-    return {revision: this.revision, seat, players: this.players.map(p => p && {...p}),
+    return {revision: this.revision, seat, rules: {...this.rules}, players: this.players.map(p => p && {...p}),
       game: this.round ? getView(this.round, seat) : null};
   }
 }

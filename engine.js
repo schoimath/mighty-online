@@ -6,6 +6,20 @@ const CONTRACTS = Array.from({ length: 8 }, (_, index) =>
   [...SUITS, 'N'].map(suit => ({ points: 13 + index, suit }))
 ).flat();
 const SEATS = 5;
+export const DEFAULT_RULES = Object.freeze({minBid: 14, allowFirstFriend: true, allowFirstJokerCall: false});
+const LEGACY_RULES = Object.freeze({...DEFAULT_RULES, minBid: 13});
+const gameRules = state => state.rules ?? LEGACY_RULES;
+
+export function validateRules(rules = {}, defaults = DEFAULT_RULES) {
+  if (!rules || typeof rules !== 'object' || Array.isArray(rules)) throw new Error('게임 규칙을 확인해 주세요.');
+  const {minBid = defaults.minBid, allowFirstFriend = defaults.allowFirstFriend,
+    allowFirstJokerCall = defaults.allowFirstJokerCall} = rules;
+  if (!Number.isInteger(minBid) || minBid < 13 || minBid > 20) throw new Error('최저 공약은 13~20점에서 선택해 주세요.');
+  if (typeof allowFirstFriend !== 'boolean' || typeof allowFirstJokerCall !== 'boolean') {
+    throw new Error('초구 규칙의 허용 여부를 선택해 주세요.');
+  }
+  return {minBid, allowFirstFriend, allowFirstJokerCall};
+}
 const nextSeat = seat => (seat + 1) % SEATS;
 const validSeat = seat => Number.isInteger(seat) && seat >= 0 && seat < SEATS;
 const mighty = trump => trump === 'S' ? 'DA' : 'SA';
@@ -35,11 +49,12 @@ function shuffledDeck() {
   return cards;
 }
 
-export function createGame({ firstSeat = 0 } = {}) {
+export function createGame({ firstSeat = 0, rules = DEFAULT_RULES } = {}) {
   if (!validSeat(firstSeat)) throw new Error('첫 좌석이 올바르지 않습니다.');
+  const roundRules = validateRules(rules);
   const deck = shuffledDeck();
   return {
-    phase: 'bid', firstSeat, turn: firstSeat, dealNo: 1,
+    phase: 'bid', firstSeat, turn: firstSeat, dealNo: 1, rules: roundRules,
     hands: Array.from({ length: SEATS }, (_, s) => sortHand(deck.slice(10 * s, 10 * s + 10))),
     kitty: deck.slice(50), discarded: [], bid: null, bidHistory: [],
     passed: Array(SEATS).fill(false), declarer: null, call: null, friend: null, friendKnown: false,
@@ -56,7 +71,7 @@ function higherBid(bid, previous) {
 function advanceAuction(state) {
   if (state.passed.every(Boolean)) {
     const dealNo = state.dealNo + 1;
-    Object.assign(state, createGame({ firstSeat: nextSeat(state.firstSeat) }), { dealNo });
+    Object.assign(state, createGame({ firstSeat: nextSeat(state.firstSeat), rules: gameRules(state) }), { dealNo });
     return;
   }
   if (state.bid && state.passed.filter(Boolean).length === SEATS - 1) {
@@ -105,7 +120,9 @@ function legalPlays(state, hand) {
       if (card === 'JK' && jokerActive(trickNo, trick)) {
         return SUITS.map(suit => ({ card, suit }));
       }
-      if (card === caller(trump) && trickNo > 1) return [{ card }, { card, jokerCall: true }];
+      if (card === caller(trump) && (trickNo > 1 || gameRules(state).allowFirstJokerCall)) {
+        return [{ card }, { card, jokerCall: true }];
+      }
       return [{ card }];
     });
   }
@@ -126,7 +143,7 @@ function choicesFor(state, seat) {
   switch (state.phase) {
     case 'bid':
       choices.canPass = true;
-      choices.bids = CONTRACTS.filter(b => higherBid(b, state.bid));
+      choices.bids = CONTRACTS.filter(b => b.points >= gameRules(state).minBid && higherBid(b, state.bid));
       break;
     case 'discard':
       choices.discard = true;
@@ -134,7 +151,8 @@ function choicesFor(state, seat) {
         b.points >= state.bid.points + (b.suit === state.bid.suit ? 0 : 2));
       break;
     case 'friend':
-      choices.friends = [{ kind: 'first' }, { kind: 'none' }, ...DECK.map(card => ({ kind: 'card', card }))];
+      choices.friends = [...DECK.map(card => ({ kind: 'card', card })), { kind: 'none' }];
+      if (gameRules(state).allowFirstFriend) choices.friends.unshift({ kind: 'first' });
       break;
     case 'play':
       choices.plays = legalPlays(state, state.hands[seat]);
@@ -154,7 +172,7 @@ export function getView(state, seat) {
   const { phase, turn, dealNo, passed, bid, bidHistory, declarer, friendKnown, call,
     trick, trickNo, lastTrick, scores, captured, result } = state;
   const visible = {
-    seat, phase, turn, dealNo, hand: state.hands[seat], counts: state.hands.map(h => h.length),
+    seat, phase, turn, dealNo, rules: gameRules(state), hand: state.hands[seat], counts: state.hands.map(h => h.length),
     passed, bid, bidHistory, declarer, friendKnown, friend: friendKnown ? state.friend : null,
     call, selfRole: selfRole(state, seat), trick, trickNo, lastTrick, scores, captured, result,
     discarded: seat === declarer || phase === 'result' ? state.discarded : [],
@@ -296,8 +314,10 @@ export function botAction(state, seat = state.turn) {
     const suit = preferredSuit(view.hand);
     const strong = view.hand.filter(card => card === mighty(suit) || card === 'JK' || rank(card) >= 11).length;
     const length = view.hand.filter(card => card[0] === suit).length;
-    const ceiling = Math.min(19, 10 + strong + Math.max(0, length - 2));
-    const bid = view.choices.bids.find(b => b.suit === suit && b.points <= ceiling);
+    const ceiling = Math.min(20, 10 + strong + Math.max(0, length - 2));
+    // After an all-pass redeal a strong opener can accept the room's floor.
+    const openAtFloor = !view.bid && view.dealNo > 1 && ceiling >= 15;
+    const bid = view.choices.bids.find(b => b.suit === suit && (b.points <= ceiling || openAtFloor));
     return bid ? { type: 'bid', ...bid } : { type: 'pass' };
   }
   if (view.phase === 'discard') {
@@ -308,8 +328,10 @@ export function botAction(state, seat = state.turn) {
   }
   if (view.phase === 'friend') {
     const candidates = [mighty(view.bid.suit), 'JK', view.bid.suit + 'A', ...SUITS.map(s => s + 'A')];
+    if (!view.rules.allowFirstFriend) candidates.push(...SUITS.map(s => s + 'K'));
     const card = candidates.find(c => DECK.includes(c) && !view.hand.includes(c) && !view.discarded.includes(c));
-    return card ? { type: 'friend', kind: 'card', card } : { type: 'friend', kind: 'first' };
+    return card ? { type: 'friend', kind: 'card', card } :
+      { type: 'friend', kind: view.rules.allowFirstFriend ? 'first' : 'none' };
   }
   if (view.phase === 'play') return { type: 'play', ...botPlay(view) };
   throw new Error('이번 판이 끝났습니다.');

@@ -1,4 +1,6 @@
 import {renderScoreboard} from "./score-ui.js";
+import {DEFAULT_RULES} from "./engine.js";
+import {playTableSound, soundControl, toggleSound} from "./sound.js";
 
 const suitInfo = {
   S: ["♠", "스페이드"], H: ["♥", "하트"], D: ["♦", "다이아몬드"],
@@ -222,6 +224,7 @@ function renderHand(ui, newDeal) {
     if (row.children[i] !== el) row.insertBefore(el, row.children[i] || null);
   }
   if (arrivals.length && motionEnabled()) {
+    playTableSound("deal");
     const deck = root.querySelector(".g-felt").getBoundingClientRect();
     arrivals.forEach((el, i) => {
       setFlightOffset(el, "deal", deck, el.getBoundingClientRect());
@@ -254,7 +257,10 @@ function friendControls(view, ui) {
   const labelsByKind = { card: "카드로 지정", first: "초구 프렌드", none: "노프렌드" };
   const kinds = [...new Set(options.map(f => f.kind))].map(kind => [kind, labelsByKind[kind]]);
   const cards = options.filter(f => f.kind === "card").map(f => [f.card, cardName(f.card)]);
-  return `<h2>프렌드를 정하세요</h2><p>카드를 부르거나 첫 트릭의 승자를 프렌드로 정할 수 있어요. 노프렌드로 혼자 플레이할 수도 있어요.</p>${select("지정 방식", "friendKind", kinds, ui.friendKind)}${ui.friendKind === "card" ? select("프렌드 카드", "friendCard", cards, ui.friendCard) : ""}${button("프렌드 확정", "friend")}`;
+  const hint = options.some(choice => choice.kind === "first")
+    ? "카드를 부르거나 첫 트릭의 승자를 프렌드로 정할 수 있어요."
+    : "함께할 사람이 가진 카드를 부르세요.";
+  return `<h2>프렌드를 정하세요</h2><p>${hint} 노프렌드로 혼자 플레이할 수도 있어요.</p>${select("지정 방식", "friendKind", kinds, ui.friendKind)}${ui.friendKind === "card" ? select("프렌드 카드", "friendCard", cards, ui.friendCard) : ""}${button("프렌드 확정", "friend")}`;
 }
 function playControls() {
   return "<h2>카드를 내세요</h2><p>낼 수 있는 손패를 한 번 누르면 테이블에 놓입니다.</p>";
@@ -332,7 +338,9 @@ function mountTable(root) {
     <header class="g-nav"><div class="g-nav-inner">
       <div class="g-brand"><i aria-hidden="true">♠</i><span>Mighty Club</span></div>
       <span class="g-nav-divider"></span><span class="g-nav-phase">게임 테이블</span>
-      <div class="g-nav-actions">${button("게임 규칙", "rules", true, "top")}${button("나가기", "leave", true, "top")}</div>
+      <div class="g-nav-actions"><button type="button" class="g-btn g-top g-sound" data-do="sound" aria-label="효과음">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9h4l5-4v14l-5-4H3z"/><path class="g-sound-on" d="M16 8a6 6 0 0 1 0 8m3-11a10 10 0 0 1 0 14"/><path class="g-sound-off" d="m16 9 5 6m0-6-5 6"/></svg><span>효과음</span>
+      </button>${button("게임 규칙", "rules", true, "top")}${button("나가기", "leave", true, "top")}</div>
     </div></header>
     <div class="g-main">
       <div class="g-heading"><div><div class="g-eyebrow"><i aria-hidden="true">♠</i> 마이티 · 5인전</div><h1></h1></div><span class="g-round-tag"></span></div>
@@ -343,6 +351,7 @@ function mountTable(root) {
         <section class="g-hand"></section><section class="g-scoreboard" aria-label="획득 점수" hidden></section><aside class="g-panel"></aside>
       </div>
     </div></div>`;
+  soundControl(root.querySelector('[data-do="sound"]'));
 }
 function redraw(ui, newDeal = false) {
   const { view, options, root } = ui;
@@ -387,7 +396,10 @@ function bind(ui) {
   ui.root.addEventListener("animationend", event => {
     if (event.animationName === "g-send-card-back") event.target.remove();
     if (event.animationName === "g-deal-card") event.target.closest(".g-hand-card")?.classList.remove("g-deal");
-    if (event.animationName === "g-play-card") event.target.classList.remove("g-play-enter");
+    if (event.animationName === "g-play-card") {
+      event.target.classList.remove("g-play-enter");
+      if (motionEnabled()) playTableSound("play");
+    }
   });
   ui.root.addEventListener("click", event => {
     if (!ui.root.querySelector(".g-screen")) return;
@@ -402,6 +414,7 @@ function bind(ui) {
       return;
     }
     const kind = el.dataset.do;
+    if (kind === "sound") return toggleSound(el);
     if (kind === "rules") return ui.options.onRules?.();
     if (kind === "leave") return ui.options.onLeave?.();
     if (kind === "replay") return ui.options.onReplay?.();
@@ -447,6 +460,7 @@ function collectTrick(ui) {
     el.style.setProperty("--collect-rotate", ((2 - i) * 7) + "deg");
   }
   trick.classList.add("g-collecting");
+  playTableSound("collect");
   ui.timer = setTimeout(() => finishCollection(ui), COLLECT_MS);
 }
 
@@ -491,16 +505,19 @@ export function renderGame(container, publicView, options = {}) {
   displayLatest(ui);
 }
 
-export function rulesContent() {
+export function rulesContent(rules = DEFAULT_RULES) {
+  const bidRange = rules.minBid === 20 ? "20점을 걸고" : `${escapeHtml(rules.minBid)}~20점 사이에서`;
+  const firstFriend = rules.allowFirstFriend ? " 첫 트릭의 승자를 초구 프렌드로 지정할 수도 있습니다." : "";
+  const jokerCallFrom = rules.allowFirstJokerCall ? "첫 트릭부터" : "두 번째 트릭부터";
   return `<div class="g-rules">
     <p>다섯 명이 열 번의 트릭을 플레이합니다. 주공과 프렌드는 공약한 점수를 모으고, 나머지 플레이어는 이를 막습니다.</p>
-    <h3>경매와 바닥패</h3><p>조커 한 장을 포함한 53장 중 각자 10장씩 받고 3장은 바닥에 둡니다. 13~20점 사이에서 점수와 기루다(으뜸 무늬)를 제시하거나 패스하세요. 같은 점수에서는 노기루다가 무늬 공약보다 높습니다. 모두 패스하면 다시 나눕니다.</p>
+    <h3>경매와 바닥패</h3><p>조커 한 장을 포함한 53장 중 각자 10장씩 받고 3장은 바닥에 둡니다. ${bidRange} 기루다(으뜸 무늬)나 노기루다로 입찰하거나 패스하세요. 같은 점수에서는 노기루다가 무늬 공약보다 높습니다. 모두 패스하면 다시 나눕니다.</p>
     <p>경매의 승자인 주공은 바닥패를 가져와 3장을 묻습니다. 이때 기루다를 바꾸려면 공약을 2점 이상 올려야 합니다. 묻은 점수는 주공 팀의 점수입니다.</p>
-    <h3>프렌드</h3><p>주공이 부른 카드를 가진 사람이 프렌드입니다. 그 카드가 나오면 모두에게 정체가 공개됩니다. 첫 트릭을 이긴 사람을 부르는 초구 프렌드나, 혼자 하는 노프렌드도 선택할 수 있습니다. 주공 자신이 가진 카드나 묻은 카드를 부르면 혼자 플레이합니다.</p>
+    <h3>프렌드</h3><p>주공이 부른 카드를 가진 사람이 프렌드입니다. 그 카드가 나오면 모두에게 정체가 공개됩니다.${firstFriend} 노프렌드를 선택하거나 주공이 가진 카드나 묻은 카드를 부르면 혼자 플레이합니다.</p>
     <h3>카드 내기</h3><p>주공부터 한 장씩 냅니다. 선이 낸 무늬가 손에 있으면 따라야 합니다. 마이티와 조커는 무늬에 관계없이 낼 수 있습니다. 첫 트릭에서는 다른 무늬를 낼 수 있으면 기루다로 시작할 수 없습니다. 트릭을 이긴 사람이 다음 선입니다.</p>
     <h3>마이티와 조커</h3><p>가장 센 카드는 스페이드 A입니다. 스페이드가 기루다일 때는 다이아몬드 A가 마이티입니다. 그다음은 조커, 기루다, 선의 무늬 순입니다. 같은 무늬 안에서는 A가 가장 높고 2가 가장 낮습니다.</p>
     <p>첫 트릭과 마지막 트릭에서 조커는 가장 약합니다. 이때 조커로 시작하면 두 번째 카드가 따를 무늬를 정합니다. 2~9번째 트릭에서 조커로 시작하면 원하는 무늬를 부릅니다.</p>
-    <p>첫 트릭 이후 선이 클로버 3으로 조커콜을 선언하면 조커를 가진 사람은 조커 또는 마이티를 내야 합니다. 이 트릭에서 조커는 가장 약합니다. 클로버가 기루다일 때의 조커콜 카드는 스페이드 3입니다.</p>
+    <p>${jokerCallFrom} 선이 클로버 3으로 조커콜을 선언할 수 있습니다. 조커를 가진 사람은 조커 또는 마이티를 내야 하며, 조커는 그 트릭에서 가장 약합니다. 클로버가 기루다일 때의 조커콜 카드는 스페이드 3입니다.</p>
     <h3>승패</h3><p>10, J, Q, K, A는 각각 1점으로, 한 판에는 총 20점이 있습니다. 열 번째 트릭이 끝났을 때 주공 팀의 점수가 공약 이상이면 주공 팀이 승리합니다.</p>
   </div>`;
 }

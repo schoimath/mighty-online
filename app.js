@@ -2,6 +2,7 @@ import {clearGame, renderGame, rulesContent} from './game-ui.js';
 import {hostRoom, joinRoom, normalizeRoomCode} from './network.js';
 import {HostSession} from './session.js';
 import {chatText, setupChat} from './chat.js';
+import {DEFAULT_RULES} from './engine.js';
 
 const $ = id => document.getElementById(id);
 const escape = text => String(text ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -81,7 +82,47 @@ function closeModal() {
 $('close-modal').onclick = closeModal;
 $('modal').addEventListener('cancel', event => { event.preventDefault(); closeModal(); });
 $('modal').addEventListener('click', event => { if (event.target === $('modal')) closeModal(); });
-function showRules() { modal('게임 규칙','<div class="rules-wrap">' + rulesContent() + '</div>'); }
+function activeRules() {
+  if (!snapshot) return DEFAULT_RULES;
+  // Rooms hosted by the earlier version always start the auction at 13.
+  return snapshot.game?.rules ?? snapshot.rules ?? {...DEFAULT_RULES, minBid:13};
+}
+
+function rulesSummary(rules) {
+  return `<dl class="rules-summary">
+    <div><dt>최저 공약</dt><dd data-rule-value="minBid">${escape(rules.minBid)}점</dd></div>
+    <div><dt>초구 프렌드</dt><dd data-rule-value="allowFirstFriend">${rules.allowFirstFriend ? '허용' : '미허용'}</dd></div>
+    <div><dt>초구 조커콜</dt><dd data-rule-value="allowFirstJokerCall">${rules.allowFirstJokerCall ? '허용' : '미허용'}</dd></div>
+  </dl>`;
+}
+
+function ruleEditor(rules) {
+  const options = Array.from({length:8}, (_, i) => i + 13).map(points =>
+    `<option value="${points}"${points === rules.minBid ? ' selected' : ''}>${points}점</option>`).join('');
+  const toggle = (key, title, detail) => `<label class="rule-row">
+    <span><strong>${title}</strong><small>${detail}</small></span>
+    <input type="checkbox" role="switch" name="${key}" aria-label="${title} 허용"${rules[key] ? ' checked' : ''}>
+  </label>`;
+  return `<fieldset class="rule-settings"><legend>테이블 규칙</legend>
+    <label class="rule-row"><span><strong>최저 공약</strong><small>경매에서 처음 부를 수 있는 점수</small></span>
+      <select name="minBid" aria-label="최저 공약">${options}</select></label>
+    ${toggle('allowFirstFriend','초구 프렌드','첫 트릭의 승자를 프렌드로 지정')}
+    ${toggle('allowFirstJokerCall','초구 조커콜','첫 트릭부터 조커콜 선언')}
+  </fieldset>`;
+}
+
+function readRules(container) {
+  return {
+    minBid: Number(container.querySelector('[name="minBid"]').value),
+    allowFirstFriend: container.querySelector('[name="allowFirstFriend"]').checked,
+    allowFirstJokerCall: container.querySelector('[name="allowFirstJokerCall"]').checked
+  };
+}
+
+function showRules() {
+  const rules = activeRules();
+  modal('게임 규칙', '<div class="rules-wrap">' + rulesSummary(rules) + rulesContent(rules) + '</div>');
+}
 $('nav-rules').onclick = showRules;
 
 function stopSession(message) {
@@ -139,18 +180,29 @@ async function copyInvite() {
 function drawRoom() {
   const host = mode === 'host';
   const occupied = snapshot.players.filter(Boolean).length;
+  const focusedRule = $('room').contains(document.activeElement) && document.activeElement.name;
   $('room').innerHTML = '<section class="room-panel"><h1>게임 대기실</h1><p>친구에게 방 코드나 초대 링크를 보내 주세요.</p>' +
     '<div class="room-code-section"><span>방 코드</span><strong class="room-code">' + escape(roomCode) + '</strong><button id="copy-invite" class="plain-button">초대 링크 복사</button></div>' +
     '<h2 class="room-heading">참가자 ' + occupied + ' / 5</h2><ol class="seat-list">' +
     snapshot.players.map((p,i) => '<li><span class="seat-icon" aria-hidden="true">' + ['♠','♥','♣','♦','♠'][i] + '</span><strong>' + escape(p?.name ?? '빈자리') + '</strong><span class="seat-tag">' +
       [p && i === 0 ? '방장' : '',p && i === snapshot.seat ? '나' : '',!p ? '참가 대기' : ''].filter(Boolean).join(' · ') + '</span></li>').join('') +
-    '</ol><p>' + (host ? (occupied < 5 ? '지금 시작하면 빈자리 ' + (5-occupied) + '곳은 AI가 맡습니다.' : '다섯 명이 모였습니다. 게임을 시작하세요.') : '방장이 게임을 시작하면 카드를 받습니다.') +
+    '</ol>' + (host ? ruleEditor(activeRules()) : '<h2 class="room-heading">테이블 규칙</h2>' + rulesSummary(activeRules())) +
+    '<p>' + (host ? (occupied < 5 ? '지금 시작하면 빈자리 ' + (5-occupied) + '곳은 AI가 맡습니다.' : '다섯 명이 모였습니다. 게임을 시작하세요.') : '방장이 게임을 시작하면 카드를 받습니다.') +
     '</p><div class="room-actions">' + (host ? '<button class="primary-button" id="start-round">게임 시작</button>' : '') +
     '<button class="plain-button" id="room-leave">나가기</button></div></section>';
   $('copy-invite').onclick = copyInvite;
   $('room-leave').onclick = requestLeave;
-  if (host) $('start-round').onclick = startRound;
+  if (host) {
+    $('start-round').onclick = startRound;
+    const settings = $('room').querySelector('.rule-settings');
+    settings.onchange = () => {
+      authority.setRules(readRules(settings));
+      publish();
+    };
+    if (focusedRule) settings.elements.namedItem(focusedRule)?.focus({preventScroll:true});
+  }
   chat.attach($('room').querySelector('.room-actions'));
+  if ($('modal').open && $('modal-content').querySelector('.rules-wrap')) showRules();
 }
 
 function draw() {
@@ -161,7 +213,7 @@ function draw() {
     names:snapshot.players.map(p => p?.name), isHost: Boolean(authority),
     replayLabel: mode === 'practice' ? '다시 한 판' : '대기실로 돌아가기',
     onRules:showRules, onLeave:requestLeave, onReplay() {
-      if (mode === 'practice') startRound();
+      if (mode === 'practice') openPracticeSetup();
       else if (mode === 'host') { authority.returnToRoom(); publish(); }
       window.scrollTo(0,0);
     },
@@ -196,18 +248,31 @@ function startRound() {
   window.scrollTo(0,0);
 }
 
-function startPractice() {
-  mode = 'practice';
-  authority = new HostSession(nickname);
-  startRound();
+function openPracticeSetup() {
+  const replay = mode === 'practice' && authority?.round?.phase === 'result';
+  modal('연습 게임 설정', '<form id="practice-setup">' + ruleEditor(replay ? activeRules() : DEFAULT_RULES) +
+    '<button type="submit" class="primary-button form-submit" id="start-practice">연습 시작</button></form>');
+  $('practice-setup').onsubmit = event => {
+    event.preventDefault();
+    const rules = readRules(event.currentTarget);
+    if (replay) {
+      authority.returnToRoom();
+      authority.setRules(rules);
+    } else {
+      mode = 'practice';
+      authority = new HostSession(nickname, rules);
+    }
+    closeModal();
+    startRound();
+  };
 }
 
-async function connectRoom(kind, name, code, signal) {
+async function connectRoom(kind, name, code, signal, rules) {
   const token = ++generation;
   const active = () => token === generation && !signal.aborted;
   let link;
   if (kind === 'create') {
-    const session = new HostSession(name);
+    const session = new HostSession(name, rules);
     link = await hostRoom({
       signal,
       onJoin(id, guestName) {
@@ -279,6 +344,7 @@ function openForm(kind, code = '') {
   const intro = profile ? '' : '<p>' + (joining ? '친구에게 받은 6자리 방 코드를 입력하세요.' : '테이블을 열면 친구를 초대할 방 코드가 생깁니다. 게임 중에는 방장 탭을 열어 두세요.') + '</p>';
   modal(title, intro + '<form id="setup-form"><label class="field">닉네임<input id="name-field" name="nickname" maxlength="16" required autocomplete="nickname"></label>' +
     (joining ? '<label class="field">방 코드<input class="code-field" id="code-field" name="code" maxlength="12" placeholder="6자리 코드" required autocomplete="off" spellcheck="false"></label>' : '') +
+    (kind === 'create' ? ruleEditor(DEFAULT_RULES) : '') +
     '<div class="form-error" role="alert" id="form-error"></div><button class="primary-button form-submit" id="submit-form">' + (profile ? '저장' : title) + '</button></form>');
   $('name-field').value = nickname;
   if (joining) { $('code-field').value = code; (code ? $('name-field') : $('code-field')).focus(); }
@@ -295,16 +361,20 @@ function openForm(kind, code = '') {
     const controller = new AbortController();
     pendingConnect = controller;
     const submit = $('submit-form');
+    const settings = event.currentTarget.querySelector('.rule-settings');
+    const rules = settings ? readRules(settings) : undefined;
+    if (settings) settings.disabled = true;
     submit.disabled = true;
     submit.textContent = '연결 중…';
     $('form-error').textContent = '';
-    try { await connectRoom(kind,name,code,controller.signal); }
+    try { await connectRoom(kind,name,code,controller.signal,rules); }
     catch (error) {
       if (controller.signal.aborted) return;
       $('form-error').textContent = error.message;
     } finally {
       if (pendingConnect === controller) pendingConnect = null;
       if (mode === 'joining' && !transport) mode = 'lobby';
+      if (settings) settings.disabled = false;
       submit.disabled = false;
       submit.textContent = title;
     }
@@ -313,7 +383,7 @@ function openForm(kind, code = '') {
 
 $('create-btn').onclick = () => openForm('create');
 $('join-btn').onclick = () => openForm('join');
-$('practice-btn').onclick = startPractice;
+$('practice-btn').onclick = openPracticeSetup;
 $('profile-btn').onclick = () => openForm('profile');
 const tips = [
   ['마이티 카드','스페이드 A는 모든 카드를 이기는 마이티예요. 스페이드가 기루다일 때는 다이아몬드 A가 마이티가 됩니다.'],
