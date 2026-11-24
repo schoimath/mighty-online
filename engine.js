@@ -1,4 +1,7 @@
 // The room host owns the game state. Guests receive only their getView() projection.
+import {playWeights} from './bot-weights.js';
+import {selectDiscard} from './bot-exchange.js';
+import {sampler} from './bot-sampling.js';
 const SUITS = ['S', 'H', 'D', 'C'];
 const RANKS = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
 const DECK = [...SUITS.flatMap(suit => RANKS.map(rank => suit + rank)), 'JK'];
@@ -60,7 +63,7 @@ export function createGame({ firstSeat = 0, rules = DEFAULT_RULES } = {}) {
     hands: Array.from({ length: SEATS }, (_, s) => sortHand(deck.slice(10 * s, 10 * s + 10))),
     kitty: deck.slice(50), discarded: [], bid: null, bidHistory: [],
     passed: Array(SEATS).fill(false), declarer: null, call: null, friend: null, friendKnown: false,
-    trick: [], trickNo: 1, lastTrick: null, scores: Array(SEATS).fill(0),
+    trick: [], trickNo: 1, lastTrick: null, playedTricks: [], scores: Array(SEATS).fill(0),
     captured: Array.from({ length: SEATS }, () => []), result: null
   };
 }
@@ -202,6 +205,7 @@ function finishTrick(state) {
   state.captured[winner].push(...scoringCards);
   state.scores[winner] += points;
   state.lastTrick = { cards: state.trick, winner, points, number: state.trickNo };
+  state.playedTricks?.push(state.lastTrick);
   state.trick = [];
   if (state.call.kind === 'first' && state.trickNo === 1) {
     state.friend = winner === state.declarer ? null : winner;
@@ -221,6 +225,14 @@ function finishTrick(state) {
     won: attack >= state.bid.points, points: attack, target: state.bid.points,
     declarer: state.declarer, friend: state.friend
   };
+}
+
+function placeCard(state, seat, play) {
+  state.hands[seat] = state.hands[seat].filter(card => card !== play.card);
+  state.trick.push({ seat, ...play });
+  if (state.call.kind === 'card' && play.card === state.call.card) state.friendKnown = true;
+  if (state.trick.length === SEATS) finishTrick(state);
+  else state.turn = nextSeat(seat);
 }
 
 export function applyAction(state, seat, action) {
@@ -265,11 +277,7 @@ export function applyAction(state, seat, action) {
     const play = choices.plays.find(p => p.card === action.card && p.suit === action.suit &&
       (p.jokerCall ?? false) === (action.jokerCall ?? false));
     if (!play) throw new Error('이번 차례에 낼 수 있는 카드를 선택해 주세요.');
-    state.hands[seat] = state.hands[seat].filter(card => card !== play.card);
-    state.trick.push({ seat, ...play });
-    if (state.call.kind === 'card' && play.card === state.call.card) state.friendKnown = true;
-    if (state.trick.length === SEATS) finishTrick(state);
-    else state.turn = nextSeat(seat);
+    placeCard(state,seat,play);
   } else {
     throw new Error('현재 단계에서 할 수 없는 행동입니다.');
   }
@@ -288,7 +296,7 @@ function keepValue(card, trump) {
   return rank(card) + (card[0] === trump ? 22 : 0);
 }
 
-function botPlay(view) {
+export function baselinePlay(view) {
   const { hand, choices, bid, trick, trickNo, seat } = view;
   const trump = bid.suit;
   const options = choices.plays;
@@ -321,9 +329,144 @@ function botPlay(view) {
   return options.reduce((best, p) => followValue(p) > followValue(best) ? p : best);
 }
 
-export function botAction(state, seat = state.turn) {
-  if (!validSeat(seat) || seat !== state.turn) throw new Error('컴퓨터의 차례가 아닙니다.');
-  const view = getView(state, seat);
+function allyChance(view, seat) {
+  if (seat === view.seat) return 1;
+  if (view.selfRole === 'friend') return Number(seat === view.declarer);
+  if (view.selfRole === 'declarer') return view.friendKnown ? Number(seat === view.friend) : 0.25;
+  if (seat === view.declarer || seat === view.friend) return 0;
+  return view.friendKnown ? 1 : 2 / 3;
+}
+
+function ratedPlays(view, weights) {
+  const options = view.choices.plays;
+  const {trick, trickNo, hand} = view;
+  const trump = view.bid.suit, master = mighty(trump);
+  const known = new Set([...hand, ...view.discarded, ...trick.map(p => p.card), ...(view.captured || []).flat()]);
+  for (const previous of view.playedTricks || []) for (const play of previous.cards) known.add(play.card);
+  for (const play of view.lastTrick?.cards || []) known.add(play.card);
+  if (view.lastTrick?.finalPlay) known.add(view.lastTrick.finalPlay.card);
+  const unseen = DECK.filter(card => !known.has(card));
+  const handSize = 11 - trickNo;
+  const holding = handSize / Math.max(unseen.length, handSize);
+  const later = 4 - trick.length;
+  const attack = view.selfRole === 'declarer' || view.selfRole === 'friend';
+  const inTrick = pointsIn(trick.map(p => p.card));
+  const suitsInHand = Object.fromEntries(SUITS.map(s => [s, hand.filter(c => c[0] === s).length]));
+
+  function teamWinChance(move) {
+    const after = [...trick, {seat: view.seat, ...move}];
+    const winner = winningPlay(view, after);
+    let chance = allyChance(view, winner.seat);
+    if (!later || winner.card === master) return chance;
+    const active = jokerActive(view, after), lead = leadSuit(after);
+    const best = strength(winner.card, trump, after, active);
+    let specials = 0, higherSuit = 0, higherTrump = 0, inSuit = 0;
+    for (const card of unseen) {
+      if (card[0] === lead) inSuit++;
+      if (strength(card, trump, after, active) <= best) continue;
+      if (card === master || card === 'JK') specials++;
+      else if (card[0] === lead) higherSuit++;
+      else if (card[0] === trump) higherTrump++;
+    }
+    // Trumping requires a void. Hidden cards are sampled only through their
+    // aggregate counts; no opponent hand or undisclosed partnership is read.
+    const voidChance = Math.pow(1 - inSuit / Math.max(1, unseen.length), handSize);
+    const beaten = 1 - Math.pow(1 - holding, specials + higherSuit) *
+      (1 - voidChance * (1 - Math.pow(1 - holding, higherTrump)));
+    for (let offset = 1; offset <= later; offset++) {
+      const ally = allyChance(view, (view.seat + offset) % SEATS);
+      chance += (ally - chance) * beaten;
+    }
+    return chance;
+  }
+
+  const rated = [];
+  for (const move of options) {
+    const card = move.card, suit = card[0], honor = point(card);
+    const chance = teamWinChance(move);
+    const isTrump = suit === trump, isMighty = card === master, isJoker = card === 'JK';
+    const reserve = Math.max(0, rank(card)) / 12;
+    const length = suitsInHand[suit] || 0;
+    const active = jokerActive(view);
+    // The first two terms value the trick and its point cards. The others
+    // price resources spent now and the tactical consequences of the lead.
+    const features = [
+      (chance - 0.5) * (1 + inTrick + honor + 0.30 * later),
+      (chance - 0.5) * honor,
+      -reserve * handSize / 10,
+      -Number(isTrump) * handSize / 10,
+      -Number(isMighty) * handSize / 10,
+      -Number(isJoker && active) * Math.max(0, (view.rules.allowLastJoker ? 10 : 9) - trickNo) / 8,
+      Number(!trick.length && isTrump) * (attack ? 1 : -1),
+      Number(!trick.length && move.jokerCall && !hand.includes('JK') && view.call?.card !== 'JK'),
+      Number(suit !== trump && length === 1 && !isMighty && !isJoker),
+      move.suit ? suitsInHand[move.suit] / 5 : 0
+    ];
+    let value = 0;
+    for (let i = 0; i < features.length; i++) value += features[i] * weights[i];
+    rated.push({move, value});
+  }
+  return rated.sort((a,b) => b.value - a.value);
+}
+
+export function policyPlay(view, weights = playWeights) {
+  return view.choices.plays.length === 1 ? view.choices.plays[0] : ratedPlays(view,weights)[0].move;
+}
+
+function simulateEnd(view, sample, move) {
+  const round = {phase:'play', rules:view.rules, turn:view.seat, declarer:view.declarer, friend:sample.friend,
+    friendKnown:view.friendKnown, call:view.call, bid:view.bid, trickNo:view.trickNo, trick:view.trick.slice(),
+    scores:sample.scores.slice(), hands:sample.hands.slice(), discarded:sample.discarded,
+    captured:Array.from({length:5},()=>[])};
+  placeCard(round,round.turn,move);
+  while (round.phase === 'play') {
+    const seat = round.turn, hand = round.hands[seat];
+    const plays = legalPlays(round,hand);
+    const next = plays.length === 1 ? plays[0] : baselinePlay({
+      seat, hand, bid:round.bid, trick:round.trick, trickNo:round.trickNo, rules:round.rules,
+      call:round.call, declarer:round.declarer, friendKnown:round.friendKnown,
+      friend:round.friendKnown ? round.friend : null, selfRole:selfRole(round,seat), choices:{plays}
+    });
+    placeCard(round,seat,next);
+  }
+  const attack = view.seat === round.declarer || view.seat === round.friend;
+  return (attack ? round.result.points : 20 - round.result.points) + 3 * Number(attack === round.result.won);
+}
+
+export function searchPlay(view, weights = playWeights) {
+  if (view.choices.plays.length === 1) return view.choices.plays[0];
+  const ranked = ratedPlays(view, weights);
+  const draw = sampler(view, view.playedTricks || [], DECK, mighty(view.bid.suit), sortHand);
+  if (!draw) return ranked[0].move;
+  const candidates = ranked.slice(0,5);
+  const original = baselinePlay(view);
+  if (!candidates.some(c => c.move === original)) candidates.push(ranked.find(c => c.move === original));
+  for (const c of candidates) c.sum = 0;
+  let samples = 0;
+  for (let i = 0; i < 18; i++) {
+    const sample = draw();
+    if (!sample) continue;
+    samples++;
+    for (const c of candidates) c.sum += simulateEnd(view,sample,c.move);
+  }
+  return candidates.reduce((best,c) =>
+    c.sum + 0.12*samples*c.value > best.sum + 0.12*samples*best.value ? c : best).move;
+}
+
+// All recorded tricks were once face-up on the felt. The memory is host-local
+// and is never added to the player projection or sent with room updates.
+export function botObservation(state,seat) {
+  const view = getView(state,seat);
+  view.playedTricks = structuredClone(state.playedTricks || []);
+  return view;
+}
+
+export function baselineDiscard(hand, trump) {
+  const priority = card => keepValue(card, trump) - 8 * point(card);
+  return [...hand].sort((a, b) => priority(a) - priority(b)).slice(0, 3);
+}
+
+export function botDecision(view, playPolicy = searchPlay, discardPolicy = selectDiscard) {
   if (view.phase === 'bid') {
     const suit = preferredSuit(view.hand);
     const strong = view.hand.filter(card => card === mighty(suit) || card === 'JK' || rank(card) >= 11).length;
@@ -335,9 +478,7 @@ export function botAction(state, seat = state.turn) {
     return bid ? { type: 'bid', ...bid } : { type: 'pass' };
   }
   if (view.phase === 'discard') {
-    // Discarding an honor banks its point for the declarer.
-    const priority = card => keepValue(card, view.bid.suit) - 8 * point(card);
-    const cards = [...view.hand].sort((a, b) => priority(a) - priority(b)).slice(0, 3);
+    const cards = discardPolicy(view.hand, view.bid.suit, mighty(view.bid.suit));
     return { type: 'discard', cards };
   }
   if (view.phase === 'friend') {
@@ -347,6 +488,11 @@ export function botAction(state, seat = state.turn) {
     return card ? { type: 'friend', kind: 'card', card } :
       { type: 'friend', kind: view.rules.allowFirstFriend ? 'first' : 'none' };
   }
-  if (view.phase === 'play') return { type: 'play', ...botPlay(view) };
+  if (view.phase === 'play') return { type: 'play', ...playPolicy(view) };
   throw new Error('이번 판이 끝났습니다.');
+}
+
+export function botAction(state, seat = state.turn) {
+  if (!validSeat(seat) || seat !== state.turn) throw new Error('컴퓨터의 차례가 아닙니다.');
+  return botDecision(botObservation(state, seat));
 }

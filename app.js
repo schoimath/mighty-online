@@ -2,7 +2,7 @@ import {clearGame, renderGame, rulesContent} from './game-ui.js';
 import {hostRoom, joinRoom, normalizeRoomCode} from './network.js';
 import {HostSession} from './session.js';
 import {chatText, setupChat} from './chat.js';
-import {DEFAULT_RULES} from './engine.js';
+import {botObservation, DEFAULT_RULES} from './engine.js';
 
 const $ = id => document.getElementById(id);
 const escape = text => String(text ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -37,6 +37,8 @@ let snapshot = null;
 let mode = 'lobby';
 let generation = 0;
 let botTimer, toastTimer;
+let botWorker = null;
+let workerUnavailable = false;
 let pendingConnect = null;
 let roomCode = '';
 const chat = setupChat(sendChat);
@@ -131,6 +133,9 @@ $('nav-rules').onclick = showRules;
 function stopSession(message) {
   generation++;
   clearTimeout(botTimer);
+  botWorker?.terminate();
+  botWorker = null;
+  workerUnavailable = false;
   const oldTransport = transport;
   transport = null;
   oldTransport?.close();
@@ -246,7 +251,41 @@ function publish() {
   draw();
   if (authority.botTurn) {
     const pause = snapshot.game.phase === 'play' && snapshot.game.lastTrick && !snapshot.game.trick.length ? 1050 : 560;
-    botTimer = setTimeout(() => { authority.runBot(); publish(); },pause);
+    botTimer = setTimeout(takeBotTurn,pause);
+  }
+}
+function takeBotTurn() {
+  const session = authority;
+  if (!session?.botTurn) return;
+  const revision = session.revision;
+  function finish(action) {
+    // The room can change while the worker is thinking, for example when a guest leaves.
+    if (authority !== session || session.revision !== revision || !session.botTurn) return;
+    session.runBot(action);
+    publish();
+  }
+  if (session.round.phase !== 'play' || workerUnavailable) {
+    finish();
+    return;
+  }
+  function fallback(event) {
+    if (authority !== session || (event && event.currentTarget !== botWorker)) return;
+    event?.preventDefault();
+    botWorker?.terminate();
+    botWorker = null;
+    workerUnavailable = true;
+    finish();
+  }
+  try {
+    botWorker ??= new Worker(new URL('./bot-worker.js', import.meta.url), {type:'module'});
+    botWorker.onmessage = ({data}) => {
+      if (data.revision === revision) finish(data.action);
+    };
+    botWorker.onerror = fallback;
+    botWorker.onmessageerror = fallback;
+    botWorker.postMessage({revision, view:botObservation(session.round, session.round.turn)});
+  } catch {
+    fallback();
   }
 }
 function startRound() {

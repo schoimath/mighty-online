@@ -71,10 +71,10 @@ export class HostSession {
     return Boolean(this.round && this.round.phase !== 'result' && this.players[this.round.turn]?.bot);
   }
 
-  runBot() {
+  runBot(action) {
     if (!this.botTurn) return;
     const seat = this.round.turn;
-    this.#applyTurn(seat, botAction(this.round, seat));
+    this.#applyTurn(seat, action ?? botAction(this.round, seat));
   }
 
   #applyTurn(seat, action) {
