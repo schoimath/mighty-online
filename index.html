@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f7f6f1">
+  <meta name="description" content="친구와 방 코드를 나누고 즐기는 5인 마이티 카드 게임. AI와 함께 연습할 수도 있어요.">
+  <title>Mighty Club · 마이티 온라인</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 60 60'%3E%3Crect width='60' height='60' rx='12' fill='%23174639'/%3E%3Ctext x='30' y='48' text-anchor='middle' font-size='50' fill='%23f8f3de'%3E♠%3C/text%3E%3C/svg%3E">
+  <link rel="stylesheet" href="./style.css">
+  <link rel="stylesheet" href="./game.css">
+  <script type="module" src="./app.js"></script>
+</head>
+<body>
+  <header class="site-header" id="site-header">
+    <div class="header-inner">
+      <a class="brand" href="./" aria-label="마이티 클럽 로비"><span class="brand-mark" aria-hidden="true">♠</span><span>Mighty Club</span></a>
+      <nav class="main-nav" aria-label="메뉴"><button class="nav-current" id="nav-lobby">게임 로비</button><button id="nav-rules">게임 규칙</button></nav>
+      <button class="profile" id="profile-btn"><span class="avatar" data-icon="user"></span><span id="profile-name">플레이어</span><span class="profile-chevron" data-icon="chevron"></span></button>
+    </div>
+  </header>
+  <main id="lobby" class="page-wrap">
+    <section class="hero" aria-labelledby="hero-title">
+      <div class="hero-frame" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+      <div class="hero-copy">
+        <div class="hero-tag"><span aria-hidden="true">♠</span> 온라인 카드 테이블</div>
+        <h1 id="hero-title">Mighty <em>Online</em></h1>
+        <p>다섯 명의 플레이어, 한 명의 숨은 프렌드.<br>친구들과 마이티 한 판을 즐겨보세요.</p>
+        <div class="hero-specs"><span><i data-icon="users"></i>5인 플레이</span><b></b><span><i data-icon="cards"></i>53장의 카드</span><b></b><span><i data-icon="flag"></i>10트릭</span></div>
+      </div>
+      <div class="hero-art" role="img" aria-label="초록색 카드 뒷면과 하트, 스페이드 에이스가 펼쳐진 모습">
+        <span class="orbit orbit-one"></span><span class="orbit orbit-two"></span>
+        <span class="twinkle star-one">✦</span><span class="twinkle star-two">✧</span><span class="twinkle star-three">✦</span>
+        <div class="art-card card-back"><div class="back-field"><div class="back-diamond"><span>♠</span></div></div></div>
+        <div class="art-card card-hearts"><span class="rank upper">A<small>♥</small></span><span class="heart-pip">♥</span><span class="rank lower">A<small>♥</small></span></div>
+        <div class="art-card card-ace"><span class="rank upper">A<small>♠</small></span><div class="ace-crest"><span class="crest-top">✧</span><span class="ace-spade">♠</span><span class="crest-letter">M</span><span class="crest-line">✦</span></div><span class="rank lower">A<small>♠</small></span></div>
+      </div>
+    </section>
+    <section class="modes" aria-labelledby="mode-title">
+      <div class="section-heading"><span class="heading-ornament" aria-hidden="true">♣</span><h2 id="mode-title">플레이 모드</h2><span class="heading-line"></span></div>
+      <div class="mode-grid">
+        <button class="mode-card create" id="create-btn"><span class="mode-icon" data-icon="pluscards"></span><span class="mode-title">방 만들기</span><span class="mode-desc">새 테이블을 열고 친구들을 초대하세요.</span><span class="mode-action">새 방 만들기 <i data-icon="doorplus"></i></span></button>
+        <button class="mode-card join" id="join-btn"><span class="mode-icon" data-icon="door"></span><span class="mode-title">방 참가하기</span><span class="mode-desc">초대받은 코드로 친구의 방에 입장하세요.</span><span class="mode-action">코드로 참가 <i data-icon="key"></i></span></button>
+        <button class="mode-card practice" id="practice-btn"><span class="mode-icon" data-icon="bot"></span><span class="mode-title">혼자 연습하기</span><span class="mode-desc">AI 플레이어와 함께 한 판을 연습하세요.</span><span class="mode-action">연습 시작 <i data-icon="play"></i></span></button>
+      </div>
+    </section>
+    <aside class="tip-box" aria-label="마이티 플레이 팁"><span class="tip-icon" aria-hidden="true">♠</span><div class="tip-body"><strong id="tip-title">마이티 카드</strong><p id="tip-text">스페이드 A는 모든 카드를 이기는 마이티예요. 스페이드가 기루다일 때는 다이아몬드 A가 마이티가 됩니다.</p></div><div class="tip-controls"><button id="prev-tip" aria-label="이전 팁">‹</button><span id="tip-index">1 / 3</span><button id="next-tip" aria-label="다음 팁">›</button></div></aside>
+  </main>
+  <main id="room" class="page-wrap room-page" hidden></main>
+  <div id="game" hidden></div>
+  <footer class="site-footer" id="site-footer"><div><span class="footer-name">♠ &nbsp; Mighty Club</span><span class="footer-suits" aria-hidden="true">♠ <b>♥</b> ♣ <b>♦</b></span></div></footer>
+  <dialog class="modal" id="modal" aria-labelledby="modal-title"><div class="modal-inner"><button class="close-icon" id="close-modal" aria-label="닫기">×</button><div id="modal-content"></div></div></dialog>
+  <div id="notice" role="status" class="toast" hidden></div>
+</body>
+</html>

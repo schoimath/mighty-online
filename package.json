@@ -1,0 +1,9 @@
+{
+  "name": "mighty-online",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test",
+    "start": "node serve.mjs"
+  }
+}
