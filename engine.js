@@ -24,7 +24,7 @@ export function validateRules(rules = {}, defaults = DEFAULT_RULES) {
 }
 const nextSeat = seat => (seat + 1) % SEATS;
 const validSeat = seat => Number.isInteger(seat) && seat >= 0 && seat < SEATS;
-const mighty = trump => trump === 'S' ? 'DA' : 'SA';
+export const mighty = trump => trump === 'S' ? 'DA' : 'SA';
 const caller = trump => trump === 'C' ? 'S3' : 'C3';
 const rank = card => card === 'JK' ? -1 : RANKS.indexOf(card.slice(1));
 const point = card => Number(rank(card) >= RANKS.indexOf('10'));

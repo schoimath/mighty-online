@@ -1,70 +1,66 @@
-.g-felt.g-with-piles { min-height: 348px; }
-.g-with-piles .g-seat-0 { top: 92%; }
-.g-with-piles .g-seat-1, .g-with-piles .g-seat-4 { top: 63%; }
-.g-with-piles .g-trick-result { top: 28%; }
+/* Each seat and its played card share adjacent tracks. Rows grow with the score piles. */
+.g-felt.g-with-piles {
+  --table-card: clamp(35px, 4vw, 47px);
+  --play-slot: calc(var(--table-card) * 1.385 + 19px);
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, .62fr) minmax(0, .93fr) minmax(0, .62fr) minmax(0, 1.2fr);
+  grid-template-rows: auto repeat(3, minmax(var(--play-slot), auto)) auto;
+  align-content: center; gap: 3px; padding: 9px 8px; min-height: 365px;
+}
+.g-with-piles .g-seat {
+  position: relative; inset: auto; transform: none; min-width: 0; max-width: 100%;
+  display: flex; flex-direction: column; align-items: stretch; gap: 2px; padding: 4px;
+}
+.g-seat-head { display: flex; align-items: center; gap: 5px; min-width: 0; }
+.g-with-piles .g-seat-name { padding-right: 2px; }
 .g-with-piles .g-seat-detail { word-break: keep-all; }
 .g-with-piles .g-seat-detail:empty { display: none; }
-.g-score-anchor {
-  position: absolute; top: calc(100% + 4px); left: 50%; transform: translateX(-50%);
-  width: max-content; max-width: none; line-height: 1;
+.g-with-piles .g-seat-0 { grid-area: 5 / 2 / 6 / 5; }
+.g-with-piles .g-seat-1 { grid-area: 3 / 1; }
+.g-with-piles .g-seat-2 { grid-area: 1 / 1 / 2 / 3; align-self: end; }
+.g-with-piles .g-seat-3 { grid-area: 1 / 4 / 2 / 6; align-self: end; }
+.g-with-piles .g-seat-4 { grid-area: 3 / 5; }
+.g-with-piles .g-table-center { grid-area: 2 / 2 / 5 / 5; max-width: 100%; word-break: keep-all; }
+.g-with-piles .g-trick-result {
+  grid-area: 3 / 3; position: relative; inset: auto; transform: none; max-width: 100%;
+  border-radius: 7px; white-space: normal; overflow-wrap: anywhere;
 }
-.g-seat-0 .g-score-anchor { top: auto; bottom: calc(100% + 4px); }
-.g-score-strip, .g-score-covered {
-  display: inline-flex; align-items: center; justify-content: center; gap: 3px;
-  min-height: 23px; padding: 2px 5px; border: 1px solid #67805e; border-radius: 5px;
-  color: #e5ebd9; background: #163e2d;
+.g-score-anchor {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 2px;
+  padding: 3px 2px 0; border-top: 1px solid #68816b73; line-height: 1;
 }
 .g-score-total {
-  margin-inline: 1px; color: #f6e2af; font: 650 .74rem/1.2 "Malgun Gothic", sans-serif;
+  margin: 1px 2px; color: #f6e2af; font: 650 .78rem/1.2 "Malgun Gothic", sans-serif;
   white-space: nowrap; font-variant-numeric: tabular-nums;
 }
 .g-score-card {
   display: inline-flex; align-items: center; justify-content: center; min-width: 21px;
   padding: 2px 3px; border: 1px solid #e0d8b6; border-radius: 3px;
-  background: #faf5e4; color: #263a2c; font: 700 .78rem/1 Georgia, serif;
-  white-space: nowrap;
+  background: #faf5e4; color: #263a2c; font: 700 .78rem/1 Georgia, serif; white-space: nowrap;
 }
 .g-score-red { color: #99383a; }
-.g-score-covered { gap: 6px; color: #d0ddc5; font-size: .68rem; font-weight: 600; }
+.g-score-covered {
+  display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+  padding: 1px 3px; color: #d0ddc5; font-size: .72rem; font-weight: 600;
+}
 .g-score-covered i, .g-collect-covered .g-on-table::after {
   background-color: #355c4c;
   background-image: repeating-linear-gradient(45deg, transparent 0 3px, #e1ce9799 3px 4px),
                     repeating-linear-gradient(-45deg, transparent 0 3px, #e1ce9799 3px 4px);
 }
 .g-score-covered i {
-  width: 13px; height: 17px; border: 1px solid #e8dfbe; border-radius: 2px;
+  width: 11px; height: 15px; border: 1px solid #e8dfbe; border-radius: 2px;
   box-shadow: -2px 1px #234431, -3px 1px #9aa989; transform: rotate(5deg);
 }
-.g-score-pile { position: relative; }
-.g-score-pile summary { list-style: none; cursor: pointer; }
-.g-score-pile summary::-webkit-details-marker { display: none; }
-.g-score-pile summary:hover, .g-score-pile[open] summary { border-color: #e0c68d; }
-.g-score-pile summary i { color: #ddc88d; font: normal .68rem/1 sans-serif; }
-.g-score-pile[open] summary i { transform: rotate(180deg); }
-.g-seat:has(.g-score-pile[open]) { z-index: 4; }
-.g-score-popover {
-  position: absolute; z-index: 1; top: calc(100% + 4px); left: 0; width: max-content;
-  max-width: min(192px, 57vw); padding: 9px; border: 1px solid #9a8d60; border-radius: 7px;
-  background: #153326; box-shadow: 0 5px 12px #0e221b99; color: #f2e6c5;
-}
-.g-score-popover > strong { display: block; margin-bottom: 6px; font-size: .75rem; }
-.g-score-all { display: flex; flex-wrap: wrap; gap: 3px; }
-.g-score-all .g-score-card { min-width: 25px; min-height: 20px; font-size: .85rem; }
-.g-seat-3 .g-score-popover, .g-seat-4 .g-score-popover { left: auto; right: 0; }
-.g-seat-0 .g-score-popover, .g-seat-1 .g-score-popover, .g-seat-4 .g-score-popover { top: auto; bottom: calc(100% + 4px); }
-.g-seat-0 .g-score-popover { left: 50%; transform: translateX(-50%); }
 .g-collect-covered .g-on-table::after {
   content: ""; position: absolute; inset: 0; border: 2px solid #f0e6c9; border-radius: 5px;
 }
-@media (max-width: 729px) {
-  .g-felt.g-with-piles { min-height: 304px; }
-}
 @media (max-width: 479px) {
-  .g-with-piles .g-seat-0 { max-width: 46%; }
-  .g-with-piles .g-seat-1, .g-with-piles .g-seat-4 { top: 65%; }
-  .g-with-piles .g-trick { top: 46%; }
-  .g-with-piles .g-table-center { transform: translateY(-26px); }
-  .g-seat-1 .g-score-anchor { left: 0; transform: none; }
-  .g-seat-4 .g-score-anchor { left: auto; right: 0; transform: none; }
-  .g-score-strip { min-height: 24px; gap: 2px; padding-inline: 3px; }
+  .g-felt.g-with-piles { --table-card: 34px; min-height: 325px; gap: 2px; padding-inline: 2px; }
+  .g-with-piles .g-seat { padding: 3px; }
+  .g-with-piles .g-seat-1 .g-avatar, .g-with-piles .g-seat-4 .g-avatar { display: none; }
+  .g-with-piles .g-seat-1 .g-seat-head, .g-with-piles .g-seat-4 .g-seat-head { justify-content: center; }
+  .g-with-piles .g-seat-detail { justify-content: center; }
+  .g-with-piles .g-trick-result { padding-inline: 2px; font-size: .72rem; }
+  .g-score-total { font-size: .72rem; }
+  .g-score-card { min-width: 17px; padding: 2px 1px; font-size: .75rem; }
 }

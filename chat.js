@@ -30,12 +30,87 @@ export class ChatLog {
   }
 }
 
+function positionChat(panel, handle) {
+  const heading = handle.parentElement;
+  const viewport = window.visualViewport;
+  const corners = [[1, 1], [0, 1], [0, 0], [1, 0]];
+  let x = 1, y = 1, drag = null, dragged = false;
+  let left, top, travelX, travelY;
+
+  function place() {
+    panel.style.inset = `${top + y * travelY}px auto auto ${left + x * travelX}px`;
+    panel.toggleAttribute('data-bottom', y > .5);
+  }
+  function layout() {
+    if (panel.hidden) return;
+    const width = viewport?.width ?? document.documentElement.clientWidth;
+    const height = viewport?.height ?? document.documentElement.clientHeight;
+    const gap = width < 600 ? 8 : 16;
+    panel.style.maxWidth = Math.max(0, width - 2 * gap) + 'px';
+    panel.style.maxHeight = Math.max(0, height - 2 * gap) + 'px';
+    left = (viewport?.offsetLeft ?? 0) + gap;
+    top = (viewport?.offsetTop ?? 0) + gap;
+    travelX = Math.max(0, width - panel.offsetWidth - 2 * gap);
+    travelY = Math.max(0, height - panel.offsetHeight - 2 * gap);
+    place();
+  }
+  // Keep a relative position so rotation and the on-screen keyboard don't lose the panel.
+  function moveTo(px, py) {
+    if (travelX) x = Math.max(0, Math.min(1, (px - left) / travelX));
+    if (travelY) y = Math.max(0, Math.min(1, (py - top) / travelY));
+    place();
+  }
+  heading.addEventListener('pointerdown', event => {
+    if (!event.isPrimary || event.button !== 0 || event.target.closest('#chat-close')) return;
+    const box = panel.getBoundingClientRect();
+    const target = handle.contains(event.target) ? handle : heading;
+    drag = {id: event.pointerId, x: event.clientX, y: event.clientY, left: box.left, top: box.top};
+    dragged = false;
+    target.setPointerCapture(event.pointerId);
+  });
+  heading.addEventListener('pointermove', event => {
+    if (event.pointerId !== drag?.id) return;
+    const dx = event.clientX - drag.x, dy = event.clientY - drag.y;
+    if (!dragged && Math.hypot(dx, dy) < 4) return;
+    dragged = true;
+    heading.classList.add('chat-dragging');
+    moveTo(drag.left + dx, drag.top + dy);
+  });
+  heading.addEventListener('lostpointercapture', () => {
+    drag = null;
+    heading.classList.remove('chat-dragging');
+  });
+  handle.onclick = event => {
+    if (event.detail && dragged) return;
+    const current = corners.findIndex(([cx, cy]) => cx === Math.round(x) && cy === Math.round(y));
+    [x, y] = corners[(current + 1) % corners.length];
+    place();
+  };
+  handle.onkeydown = event => {
+    const arrows = {ArrowLeft:[-1,0], ArrowRight:[1,0], ArrowUp:[0,-1], ArrowDown:[0,1]};
+    if (event.key === 'Home') {
+      x = y = 1;
+      place();
+    } else if (Object.hasOwn(arrows, event.key)) {
+      const [dx, dy] = arrows[event.key], step = event.shiftKey ? 64 : 16;
+      moveTo(left + x * travelX + dx * step, top + y * travelY + dy * step);
+    } else return;
+    event.preventDefault();
+  };
+  window.addEventListener('resize', layout);
+  viewport?.addEventListener('resize', layout);
+  viewport?.addEventListener('scroll', layout);
+  return layout;
+}
+
 export function setupChat(send) {
   const el = id => document.getElementById(id);
   const toggle = el('chat-toggle'), badge = el('chat-unread'), panel = el('chat-panel');
   const list = el('chat-list'), scroll = el('chat-scroll'), input = el('chat-input');
   const submit = el('chat-send'), feedback = el('chat-feedback'), empty = el('chat-empty');
   const log = new ChatLog();
+  const handle = el('chat-move');
+  const layout = positionChat(panel, handle);
   let unread = 0;
 
   function showCount(count) {
@@ -49,7 +124,9 @@ export function setupChat(send) {
     toggle.setAttribute('aria-expanded', String(open));
     if (open) {
       showCount(0);
-      input.focus({preventScroll:true});
+      layout();
+      const focusTarget = window.matchMedia('(pointer: coarse)').matches ? handle : input;
+      focusTarget.focus({preventScroll:true});
       scroll.scrollTop = scroll.scrollHeight;
     } else if (toggle.isConnected && !toggle.hidden) {
       toggle.focus({preventScroll:true});

@@ -214,8 +214,12 @@ function draw() {
   showScreen('game');
   renderGame($('game'),snapshot.game,{
     names:snapshot.players.map(p => p?.name), isHost: Boolean(authority),
-    replayLabel: mode === 'practice' ? '다시 한 판' : '대기실로 돌아가기',
+    replaySetupLabel: mode === 'practice' ? '규칙 바꿔서 시작' : '대기실로 돌아가기',
     onRules:showRules, onLeave:requestLeave, onReplay() {
+      if (authority?.round?.phase === 'result') startRound();
+    },
+    onReplaySetup() {
+      if (authority?.round?.phase !== 'result') return;
       if (mode === 'practice') openPracticeSetup();
       else if (mode === 'host') { authority.returnToRoom(); publish(); }
       window.scrollTo(0,0);

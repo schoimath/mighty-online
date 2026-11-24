@@ -22,14 +22,5 @@ export function seatPile(view, seat) {
   const cards = (view.captured?.[seat] || []).filter(isPointCard);
   // Older hosts may send a total without the underlying cards.
   const total = view.captured ? cards.length : Number(view.scores[seat]) || 0;
-  const score = `<strong class="g-score-total">${total}점</strong>`;
-  const preview = cards.slice(-2).map(pointCard).join('');
-  if (cards.length <= 2) {
-    return `${anchor}<span class="g-score-strip" aria-label="획득 점수 ${total}점">${preview}${score}</span></div>`;
-  }
-
-  return `${anchor}<details class="g-score-pile" name="score-piles">
-    <summary class="g-score-strip" data-pile-toggle="${seat}" aria-label="획득한 점수 카드 ${total}장 모두 보기">${preview}${score}<i aria-hidden="true">▾</i></summary>
-    <div class="g-score-popover"><strong>획득한 점수 카드 · ${total}점</strong><div class="g-score-all">${cards.map(pointCard).join('')}</div></div>
-  </details></div>`;
+  return `${anchor}<strong class="g-score-total" aria-label="획득 점수 ${total}점">${total}점</strong>${cards.map(pointCard).join('')}</div>`;
 }

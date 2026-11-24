@@ -1,5 +1,5 @@
 import {isCoveredSeat, seatPile} from "./score-ui.js";
-import {DEFAULT_RULES} from "./engine.js";
+import {DEFAULT_RULES, mighty} from "./engine.js";
 import {playTableSound, soundControl, toggleSound} from "./sound.js";
 
 const suitInfo = {
@@ -55,9 +55,10 @@ function cardFace(card) {
   const suit = card[0], rank = card.slice(1), mark = suitInfo[suit][0];
   return `<span class="g-card-face g-face-${suit}" aria-hidden="true"><span class="g-corner"><b>${rank}</b><i>${mark}</i></span><span class="g-pip">${mark}</span><i class="g-corner-bottom">${rank}</i></span>`;
 }
-function callName(call) {
+function callName(call, trump) {
   if (!call) return "미지정";
-  return call.kind === "card" ? cardName(call.card) : call.kind === "first" ? "초구 프렌드" : "노프렌드";
+  if (call.kind === "card") return call.card === mighty(trump) ? "마이티 프렌드" : cardName(call.card);
+  return call.kind === "first" ? "초구 프렌드" : "노프렌드";
 }
 function select(label, control, options, current) {
   return `<label class="g-field"><span>${label}</span><select data-field="${control}">${options.map(([value, text]) => `<option value="${escapeHtml(value)}"${String(value) === String(current) ? " selected" : ""}>${escapeHtml(text)}</option>`).join("")}</select></label>`;
@@ -83,7 +84,9 @@ function updateDefaults(ui, view) {
 }
 function roleAt(view, seat) {
   if (view.declarer === seat) return "주공";
-  if (view.friend === seat || (view.seat === seat && view.selfRole === "friend")) return "프렌드";
+  if (view.friend === seat || (view.seat === seat && view.selfRole === "friend")) {
+    return view.call?.kind === "card" && view.call.card === mighty(view.bid.suit) ? "마이티 프렌드" : "프렌드";
+  }
   if (view.phase === "result") return "수비";
   return "";
 }
@@ -100,7 +103,8 @@ function seatMarkup(view, nameAt, winner) {
     const status = [isTurn ? "차례" : "", details].filter(Boolean).join(" · ");
     const leader = inAuction && view.bid?.seat === seat;
     const avatar = inAuction ? seat + 1 : Array.from(name.trim())[0] || "♠";
-    return `<div class="g-seat g-seat-${offset} ${isTurn ? "g-seat-active" : ""} ${leader ? "g-seat-bidder" : ""} ${winner === seat ? "g-trick-winner" : ""}" data-seat="${seat}" role="group" aria-label="${escapeHtml(name)} 자리"><span class="g-avatar g-avatar-${seat}" aria-label="${seat + 1}번 자리">${escapeHtml(avatar)}</span><span class="g-seat-tag"><span class="g-seat-name">${escapeHtml(name)}${offset === 0 ? '<small>나</small>' : ""}</span><span class="g-seat-detail">${isTurn ? '<i></i>' : ""}${escapeHtml(status)}</span></span>${seatPile(view, seat)}</div>`;
+    const header = `<span class="g-avatar g-avatar-${seat}" aria-label="${seat + 1}번 자리">${escapeHtml(avatar)}</span><span class="g-seat-tag"><span class="g-seat-name">${escapeHtml(name)}${offset === 0 ? '<small>나</small>' : ""}</span><span class="g-seat-detail">${isTurn ? '<i></i>' : ""}${escapeHtml(status)}</span></span>`;
+    return `<div class="g-seat g-seat-${offset} ${isTurn ? "g-seat-active" : ""} ${leader ? "g-seat-bidder" : ""} ${winner === seat ? "g-trick-winner" : ""}" data-seat="${seat}" role="group" aria-label="${escapeHtml(name)} 자리">${playing ? '<div class="g-seat-head">' + header + '</div>' + seatPile(view, seat) : header}</div>`;
   }).join("");
 }
 function setFlightOffset(element, prefix, from, to) {
@@ -129,13 +133,8 @@ function dealToOtherSeats(root, localSeat) {
 function renderTable(ui, nameAt) {
   const {view, root, resolving} = ui;
   const felt = root.querySelector(".g-felt");
-  const openPile = felt.querySelector(".g-score-pile[open]")?.parentElement.dataset.scoreSeat;
   felt.classList.toggle("g-with-piles", view.phase === "play" || view.phase === "result");
   felt.querySelector(".g-seats").innerHTML = seatMarkup(view, nameAt, resolving?.winner);
-  if (openPile != null) {
-    const restored = felt.querySelector('[data-score-seat="' + openPile + '"] details');
-    if (restored) restored.open = true;
-  }
   const caption = felt.querySelector(".g-trick-result");
   caption.hidden = !resolving;
   caption.textContent = resolving ? nameAt(resolving.winner) + " · " +
@@ -161,15 +160,17 @@ function renderTable(ui, nameAt) {
   }
   // Keep cards already on the felt mounted when another player acts.
   for (const move of view.trick.slice(trick.children.length)) {
-    const label = cardName(move.card);
-    const index = trick.children.length;
-    trick.insertAdjacentHTML("beforeend", `<div class="g-played" style="--tilt:${(index - 2) * 4}deg"><div class="g-on-table" role="img" aria-label="${label}">${cardFace(move.card)}</div><span>${escapeHtml(nameAt(move.seat))}${move.jokerCall ? " · 조커콜" : move.suit ? " · " + suitInfo[move.suit][0] : ""}</span></div>`);
+    const offset = (move.seat - view.seat + 5) % 5;
+    const isMighty = move.card === mighty(view.bid.suit);
+    const label = escapeHtml(nameAt(move.seat)) + " · " + cardName(move.card) + (isMighty ? " · 마이티" : "");
+    const caption = move.jokerCall ? "조커콜" : move.suit ? suitInfo[move.suit][0] + " 요구" : escapeHtml(nameAt(move.seat));
+    trick.insertAdjacentHTML("beforeend", `<div class="g-played g-played-${offset}" data-play-seat="${move.seat}"><div class="g-on-table${isMighty ? " g-mighty-play" : ""}" role="img" aria-label="${label}">${cardFace(move.card)}${isMighty ? '<b class="g-mighty-tag" aria-hidden="true">마이티</b>' : ""}</div><span class="g-play-label">${caption}</span></div>`);
     if (!motionEnabled()) continue;
     const face = trick.lastElementChild.firstElementChild;
     const ownCard = move.seat === view.seat && root.querySelector(`.g-hand-card[data-card="${move.card}"]`);
     const source = ownCard || felt.querySelector(`[data-seat="${move.seat}"]`);
     setFlightOffset(face, "play", source.getBoundingClientRect(), face.getBoundingClientRect());
-    face.style.setProperty("--play-rotate", [-9, -18, -11, 11, 18][(move.seat - view.seat + 5) % 5] + "deg");
+    face.style.setProperty("--play-rotate", [-9, -18, -11, 11, 18][offset] + "deg");
     face.classList.add("g-play-enter");
   }
 }
@@ -187,7 +188,7 @@ function renderHand(ui, newDeal) {
   }
   hand.querySelector("h2 span").textContent = view.hand.length + "장";
   const role = hand.querySelector(".g-role");
-  role.textContent = roleLabels[view.selfRole] || "";
+  role.textContent = roleAt(view, view.seat) || roleLabels[view.selfRole] || "";
   role.hidden = !role.textContent;
   if (newDeal) row.replaceChildren();
   const existing = new Map(Array.from(row.children, el => [el.dataset.card, el]));
@@ -201,10 +202,10 @@ function renderHand(ui, newDeal) {
   }
   settings.hidden = !settingsHtml;
   const legal = new Set((view.choices.plays || []).map(move => move.card));
-  const mighty = view.bid?.suit === "S" ? "DA" : "SA";
+  const mightyCard = view.bid && mighty(view.bid.suit);
   const arrivals = [];
   for (const [i, card] of view.hand.entries()) {
-    let label = cardName(card) + (view.bid && card === mighty ? " · 마이티" : "");
+    let label = cardName(card) + (card === mightyCard ? " · 마이티" : "");
     if (view.phase === "play" && interactive) {
       if (card === "JK" && ui.jokerSuit) label += " · " + suitInfo[ui.jokerSuit][1] + " 요구";
       if (ui.jokerCall && view.choices.plays.some(move => move.card === card && move.jokerCall)) label += " · 조커콜";
@@ -262,7 +263,7 @@ function friendControls(view, ui) {
   const options = view.choices.friends || [];
   const labelsByKind = { card: "카드로 지정", first: "초구 프렌드", none: "노프렌드" };
   const kinds = [...new Set(options.map(f => f.kind))].map(kind => [kind, labelsByKind[kind]]);
-  const cards = options.filter(f => f.kind === "card").map(f => [f.card, cardName(f.card)]);
+  const cards = options.filter(f => f.kind === "card").map(f => [f.card, callName(f, view.bid.suit)]);
   const hint = options.some(choice => choice.kind === "first")
     ? "카드를 부르거나 첫 트릭의 승자를 프렌드로 정할 수 있어요."
     : "함께할 사람이 가진 카드를 부르세요.";
@@ -298,12 +299,13 @@ function resultControls(view, ui) {
   return `<h2>주공 팀 ${result.won ? "승리" : "패배"}</h2>
     <p>공약은 ${escapeHtml(result.target)}점, 주공 팀은 ${escapeHtml(result.points)}점을 획득했어요.</p>
     <div class="g-result-score"><strong>${escapeHtml(result.points)}</strong><span>/ 20점</span></div>
-    ${ui.options.isHost ? button(escapeHtml(ui.options.replayLabel || "다시 한 판"), "replay") : "<p>방장이 다음 판을 시작할 수 있어요.</p>"}`;
+    ${ui.options.isHost ? button("다시 한 판", "replay") : "<p>방장이 다시 한 판을 누르면 이 자리에서 다음 판이 시작됩니다.</p>"}
+    ${ui.options.isHost && ui.options.onReplaySetup ? button(escapeHtml(ui.options.replaySetupLabel), "replay-setup", true, "secondary") : ""}`;
 }
 function previousTrick(view, nameAt) {
   const last = view.lastTrick;
   if (!last || isCoveredSeat(view, last.winner)) return "";
-  return `<details class="g-log"><summary>지난 트릭 <b>${escapeHtml(nameAt(last.winner))} 승리</b></summary><p>${escapeHtml(last.number)}트릭 · ${escapeHtml(last.points)}점 획득</p><ul>${last.cards.map(m => `<li><span>${escapeHtml(nameAt(m.seat))}</span><strong>${m.card === "JK" ? "★ 조커" : suitMark(m.card[0]) + " " + escapeHtml(m.card.slice(1))}</strong></li>`).join("")}</ul></details>`;
+  return `<details class="g-log"><summary>지난 트릭 <b>${escapeHtml(nameAt(last.winner))} 승리</b></summary><p>${escapeHtml(last.number)}트릭 · ${escapeHtml(last.points)}점 획득</p><ul>${last.cards.map(m => `<li><span>${escapeHtml(nameAt(m.seat))}</span><strong>${m.card === "JK" ? "★ 조커" : suitMark(m.card[0]) + " " + escapeHtml(m.card.slice(1))}${m.card === mighty(view.bid.suit) ? " · 마이티" : ""}</strong></li>`).join("")}</ul></details>`;
 }
 function bidHistoryMarkup(view, nameAt) {
   const history = view.bidHistory;
@@ -324,7 +326,7 @@ function infoMarkup(view, nameAt) {
   const rows = [];
   if (view.bid) rows.push(["공약", suitInfo[view.bid.suit].join(" ") + " · " + view.bid.points + "점"]);
   if (view.declarer != null) rows.push(["주공", nameAt(view.declarer)]);
-  if (view.call) rows.push(["프렌드", view.friendKnown && view.friend == null ? "노프렌드" : (view.friend != null ? nameAt(view.friend) + " · " : "") + callName(view.call)]);
+  if (view.call) rows.push(["프렌드", view.friendKnown && view.friend == null ? "노프렌드" : (view.friend != null ? nameAt(view.friend) + " · " : "") + callName(view.call, view.bid.suit)]);
   if (view.phase === "play") rows.push(["진행", view.trickNo + " / 10 트릭"]);
   return `<dl class="g-info">${rows.map(([a, b]) => `<div><dt>${a}</dt><dd>${escapeHtml(b)}</dd></div>`).join("")}</dl>` + bidHistoryMarkup(view, nameAt);
 }
@@ -365,7 +367,7 @@ function redraw(ui, newDeal = false) {
   const { view, options, root } = ui;
   const nameAt = seat => String(options.names?.[seat] ?? ((seat + 1) + "번 플레이어"));
   const focused = root.contains(document.activeElement) ? document.activeElement : null;
-  const oldFocus = focused && ["card", "field", "do", "pileToggle"].map(attr => [attr, focused.dataset[attr]]).find(([, value]) => value != null);
+  const oldFocus = focused && ["card", "field", "do"].map(attr => [attr, focused.dataset[attr]]).find(([, value]) => value != null);
   const openLog = root.querySelector(".g-log")?.open;
   const openBids = root.querySelector("details.g-bid-history")?.open;
   root.querySelector("h1").textContent = view.phase === "play" ? `${view.trickNo}번째 트릭` : labels[view.phase];
@@ -383,7 +385,7 @@ function redraw(ui, newDeal = false) {
   if (openBids && panel.querySelector("details.g-bid-history")) panel.querySelector("details.g-bid-history").open = true;
   if (oldFocus) {
     const [attr, value] = oldFocus;
-    root.querySelector(`[data-${attr === "pileToggle" ? "pile-toggle" : attr}="${value}"]`)?.focus({ preventScroll: true });
+    root.querySelector(`[data-${attr}="${value}"]`)?.focus({ preventScroll: true });
   }
 }
 function submit(ui, kind) {
@@ -413,8 +415,6 @@ function bind(ui) {
   });
   ui.root.addEventListener("click", event => {
     if (!ui.root.querySelector(".g-screen")) return;
-    const pile = ui.root.querySelector(".g-score-pile[open]");
-    if (pile && !pile.contains(event.target)) pile.open = false;
     const el = event.target.closest("button");
     if (!el || el.disabled) return;
     if (el.dataset.card) {
@@ -430,17 +430,11 @@ function bind(ui) {
     if (kind === "rules") return ui.options.onRules?.();
     if (kind === "leave") return ui.options.onLeave?.();
     if (kind === "replay") return ui.options.onReplay?.();
+    if (kind === "replay-setup") return ui.options.onReplaySetup?.();
     if (kind && ui.view.seat === ui.view.turn) {
       const action = submit(ui, kind);
       if (action) ui.options.onAction(action);
     }
-  });
-  ui.root.addEventListener("keydown", event => {
-    if (event.key !== "Escape") return;
-    const pile = ui.root.querySelector(".g-score-pile[open]");
-    if (!pile) return;
-    pile.open = false;
-    pile.querySelector("summary").focus();
   });
   ui.root.addEventListener("change", event => {
     const el = event.target;
@@ -481,6 +475,7 @@ function collectTrick(ui) {
     el.style.setProperty("--collect-rotate", ((2 - i) * 7) + "deg");
     if (covered) {
       face.replaceChildren();
+      face.classList.remove("g-mighty-play");
       face.setAttribute("aria-label", "덮은 카드");
     }
   }

@@ -83,6 +83,30 @@ test('each connection has one seat, one private hand, and a revision-checked tur
   assert.deepEqual(session.view(0), next);
 });
 
+test('a direct rematch deals to the same connected seats and opens a fresh auction', () => {
+  const session = fullRoom();
+  session.setRules({minBid: 15, allowLastJoker: true});
+  session.start();
+  while (session.round.phase !== 'result') {
+    const turn = session.round.turn;
+    session.act(turn, session.revision, botAction(session.round, turn));
+  }
+  const oldRevision = session.revision;
+  const before = session.view(2);
+  session.start();
+  const after = session.view(2);
+  assert.equal(after.game.phase, 'bid');
+  assert.equal(after.game.turn, 1);
+  assert.equal(after.game.lastTrick, null);
+  assert.deepEqual(after.game.bidHistory, []);
+  assert.deepEqual(after.game.counts, [10, 10, 10, 10, 10]);
+  assert.deepEqual(after.rules, before.rules);
+  assert.deepEqual(after.players, before.players);
+  assert.equal(session.seatFor(guests[1]), 2);
+  assert.throws(() => session.act(1, oldRevision, {type:'pass'}));
+  session.act(1, after.revision, {type:'pass'});
+});
+
 test('auction entries keep the bidder name after a bot takes the seat', () => {
   const session = fullRoom();
   session.start();
