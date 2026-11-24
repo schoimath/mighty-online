@@ -14,6 +14,147 @@ function fullRoom() {
   return session;
 }
 
+test('host and guests choose open seats without changing connection identity', () => {
+  const room = new HostSession('방장');
+  room.addGuest('a', '가');
+  room.addGuest('b', '나');
+  const clickedAt = room.revision;
+  assert.equal(room.moveSeat(null, 4, clickedAt), true);
+  assert.equal(room.hostSeat, 4);
+  assert.equal(room.view(1).hostSeat, 4);
+  assert.equal(room.players[0], null);
+  assert.equal(room.moveSeat('a', 0, room.revision), true);
+  assert.equal(room.seatFor('a'), 0);
+  assert.equal(room.view(0).players[0].name, '가');
+
+  const before = room.view(4);
+  assert.throws(() => room.moveSeat('b', 3, clickedAt), /다시 선택/);
+  assert.throws(() => room.moveSeat('b', 0, room.revision), /다른 참가자/);
+  assert.throws(() => room.moveSeat(null, 2, room.revision), /다른 참가자/);
+  assert.throws(() => room.moveSeat('disconnected', 3, room.revision), /연결/);
+  for (const invalid of [-1, 5, 1.5, '1', null]) {
+    assert.throws(() => room.moveSeat('b', invalid, room.revision), /유효하지/);
+  }
+  assert.equal(room.moveSeat('b', 2, room.revision), false);
+  assert.deepEqual(room.view(4), before);
+  assert.equal(room.seatFor('b'), 2);
+
+  const sharedRevision = room.revision;
+  room.moveSeat('b', 3, sharedRevision);
+  assert.throws(() => room.moveSeat('a', 3, sharedRevision));
+  assert.equal(room.seatFor('a'), 0);
+  assert.equal(room.seatFor('b'), 3);
+  assert.equal(room.addGuest('c', '다'), null);
+  assert.equal(room.seatFor('c'), 1);
+});
+
+test('chosen seats determine hands, turns, disconnect replacements and rematches', () => {
+  const room = new HostSession('방장');
+  room.addGuest('a', '첫 손님');
+  room.moveSeat(null, 3, room.revision);
+  room.moveSeat('a', 0, room.revision);
+  room.start();
+  const guest = room.view(room.seatFor('a'));
+  const host = room.view(room.hostSeat);
+  assert.deepEqual(guest.players.map(p => p.bot), [false, true, true, false, true]);
+  assert.equal(guest.game.turn, 0);
+  assert.equal(guest.game.seat, 0);
+  assert.equal(host.game.seat, 3);
+  assert.ok(guest.game.hand.every(c => !host.game.hand.includes(c)));
+  assert.throws(() => room.moveSeat('a', 2, room.revision), /대기실/);
+  assert.throws(() => room.act(room.hostSeat, room.revision, {type:'pass'}), /차례/);
+  room.act(guest.seat, room.revision, {type:'bid', points:14, suit:'H'});
+  assert.equal(room.round.bidHistory[0].name, '첫 손님');
+  room.removeGuest('a');
+  assert.equal(room.players[0].bot, true);
+  assert.equal(room.seatFor('a'), -1);
+  assert.equal(room.players[3].name, '방장');
+  while (room.round.phase !== 'result') {
+    if (room.botTurn) room.runBot();
+    else room.act(room.hostSeat, room.revision, botAction(room.round));
+  }
+  assert.throws(() => room.moveSeat(null, 1, room.revision), /대기실/);
+  room.returnToRoom();
+  assert.deepEqual(room.players.map(p => p?.name ?? null), [null, null, null, '방장', null]);
+  assert.equal(room.addGuest('new', '다음 손님'), null);
+  room.moveSeat('new', 1, room.revision);
+  room.start();
+  assert.equal(room.view(1).game.turn, 1);
+  assert.equal(room.view(1).hostSeat, 3);
+});
+
+test('a full room can exchange seats by mutual consent while other pairs make independent requests', () => {
+  const room = fullRoom();
+  const before = room.view(0).players;
+  const oldRevision = room.revision;
+  room.requestSeatSwap(null, 1, oldRevision);
+  assert.deepEqual(room.view(1).swap, {from: 0, to: 1});
+  const requesterView = room.view(0);
+  requesterView.swap.to = 2;
+  assert.equal(room.view(0).swap.to, 1);
+  assert.equal(room.view(2).swap, null);
+  assert.deepEqual(room.view(0).players, before);
+  assert.throws(() => room.answerSeatSwap(null, true, room.revision));
+  assert.throws(() => room.answerSeatSwap(guests[1], true, room.revision));
+  assert.throws(() => room.cancelSeatSwap(guests[0], room.revision));
+  assert.throws(() => room.requestSeatSwap(guests[1], 1, oldRevision));
+  assert.throws(() => room.requestSeatSwap(guests[1], 1, room.revision));
+  assert.throws(() => room.requestSeatSwap(guests[0], 2, room.revision));
+  assert.throws(() => room.answerSeatSwap(guests[0], 'true', room.revision));
+  const incomingRevision = room.revision;
+  room.requestSeatSwap(guests[1], 3, room.revision);
+  assert.deepEqual(room.view(2).swap, {from: 2, to: 3});
+  assert.throws(() => room.answerSeatSwap(guests[0], true, incomingRevision));
+  room.answerSeatSwap(guests[0], true, room.revision);
+  assert.equal(room.hostSeat, 1);
+  assert.equal(room.seatFor(guests[0]), 0);
+  assert.equal(room.view(0).players[0].name, before[1].name);
+  assert.equal(room.view(0).swap, null);
+  assert.equal(room.view(1).swap, null);
+  assert.deepEqual(room.view(2).swap, {from: 2, to: 3});
+  room.answerSeatSwap(guests[2], true, room.revision);
+  assert.equal(room.seatFor(guests[1]), 3);
+  assert.equal(room.seatFor(guests[2]), 2);
+  assert.equal(room.hostSeat, 1);
+  room.requestSeatSwap(guests[2], 1, room.revision);
+  room.answerSeatSwap(null, true, room.revision);
+  assert.equal(room.hostSeat, 2);
+  assert.equal(room.seatFor(guests[2]), 1);
+});
+
+test('declining, canceling, moving, leaving or starting settles pending seat requests', () => {
+  const room = new HostSession('방장');
+  room.addGuest('a', '손님');
+  assert.throws(() => room.requestSeatSwap(null, 0, room.revision));
+  assert.throws(() => room.requestSeatSwap(null, 2, room.revision));
+  room.requestSeatSwap('a', 0, room.revision);
+  room.answerSeatSwap(null, false, room.revision);
+  assert.equal(room.seatFor('a'), 1);
+  assert.equal(room.hostSeat, 0);
+  assert.equal(room.view(1).swap, null);
+  room.requestSeatSwap('a', 0, room.revision);
+  room.cancelSeatSwap('a', room.revision);
+  assert.equal(room.view(0).swap, null);
+  room.requestSeatSwap('a', 0, room.revision);
+  room.moveSeat(null, 2, room.revision);
+  assert.equal(room.view(1).swap, null);
+  room.requestSeatSwap(null, 1, room.revision);
+  const beforeExit = room.revision;
+  room.removeGuest('a');
+  room.addGuest('b', '새 손님');
+  assert.equal(room.seatFor('b'), 0);
+  room.moveSeat('b', 1, room.revision);
+  assert.equal(room.view(1).swap, null);
+  assert.throws(() => room.answerSeatSwap('b', true, beforeExit));
+  assert.throws(() => room.answerSeatSwap('b', true, room.revision));
+  room.requestSeatSwap('b', 2, room.revision);
+  room.start();
+  assert.equal(room.view(1).swap, null);
+  assert.throws(() => room.answerSeatSwap(null, true, room.revision), /대기실/);
+  assert.equal(room.hostSeat, 2);
+  assert.equal(room.seatFor('b'), 1);
+});
+
 test('host room rules are shared before play, frozen for a round and reusable on replay', () => {
   const session = new HostSession('방장');
   session.addGuest('guest', '친구');

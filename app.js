@@ -47,14 +47,14 @@ function broadcastChat(seat, text) {
   const player = authority?.players[seat];
   if (!player || player.bot || !chatText(text)) return false;
   const message = {id: chat.log.lastId + 1, time: Date.now(), seat, name: player.name, text: text.trim()};
-  if (!chat.receive(message, seat === 0)) return false;
+  if (!chat.receive(message, seat === authority.hostSeat)) return false;
   for (const [id, guestSeat] of authority.connections) {
     transport.send(id, {type:'chat-message', message, own:guestSeat === seat});
   }
   return true;
 }
 function sendChat(text) {
-  if (mode === 'host') return broadcastChat(0, text);
+  if (mode === 'host') return broadcastChat(authority.hostSeat, text);
   return mode === 'guest' && Boolean(transport?.send({type:'chat-send', text}));
 }
 
@@ -185,21 +185,90 @@ async function copyInvite() {
     $('invite-url').select();
   }
 }
+function applySeatChoice(session, id, choice) {
+  switch (choice.kind) {
+    case 'move': return session.moveSeat(id, choice.target, choice.revision);
+    case 'request': return session.requestSeatSwap(id, choice.target, choice.revision);
+    case 'accept': return session.answerSeatSwap(id, true, choice.revision);
+    case 'decline': return session.answerSeatSwap(id, false, choice.revision);
+    case 'cancel': return session.cancelSeatSwap(id, choice.revision);
+    default: throw new Error('자리 선택을 다시 확인해 주세요.');
+  }
+}
+function sendSeatChoice(kind, target) {
+  if (!snapshot || snapshot.game || !Number.isInteger(snapshot.hostSeat)) return;
+  const choice = {type:'seat-choice', kind, revision:snapshot.revision};
+  if (target !== undefined) choice.target = target;
+  if (mode === 'host') {
+    try { if (applySeatChoice(authority, null, choice)) publish(); }
+    catch (error) { toast(error.message); }
+  } else if (mode === 'guest' && !transport?.send(choice)) {
+    toast('방장과의 연결을 확인해 주세요.');
+  }
+}
+function requestSeat(target) {
+  sendSeatChoice(snapshot.players[target] ? 'request' : 'move', target);
+}
+function answerSwap(accept) {
+  sendSeatChoice(accept ? 'accept' : 'decline');
+}
+function cancelSwap() {
+  sendSeatChoice('cancel');
+}
 function drawRoom() {
   const host = mode === 'host';
   const occupied = snapshot.players.filter(Boolean).length;
-  const focusedRule = $('room').contains(document.activeElement) && document.activeElement.name;
+  const room = $('room');
+  const focus = room.contains(document.activeElement) ? document.activeElement : null;
+  const focusSeat = focus?.closest('[data-room-seat]')?.dataset.roomSeat;
+  const canChoose = Number.isInteger(snapshot.hostSeat);
+  const hostSeat = snapshot.hostSeat ?? 0;
+  const swap = snapshot.swap;
+  const seats = snapshot.players.map((player, index) => {
+    const mine = index === snapshot.seat;
+    const isHostSeat = index === hostSeat;
+    const roles = [isHostSeat && '방장', mine && '나'].filter(Boolean).join(' · ');
+    const number = (index + 1) + '번 자리';
+    const canMove = canChoose && !mine && (!player || !swap);
+    const contents = `<span class="seat-caption"><span class="seat-number">${number}</span>
+      ${roles ? '<span class="seat-tag">' + roles + '</span>' : ''}</span>
+      <strong class="seat-name"${player ? ' title="' + escape(player.name) + '"' : ''}>${player ? escape(player.name) : '빈자리'}</strong>
+      ${canMove ? '<span class="seat-action">' + (player ? '교환 요청' : '여기 앉기') + '</span>' : ''}`;
+    const description = player ? number + ' ' + player.name + (isHostSeat ? ' 방장' : '') + '에게 자리 교환 요청' : number + ' 빈자리로 이동';
+    return `<li data-room-seat="${index}" class="${mine ? 'seat-mine' : player ? 'seat-occupied' : 'seat-open'}"${mine ? ' aria-current="true" tabindex="-1"' : ''}>
+      ${canMove ? '<button type="button" class="seat-place" data-choose-seat="' + index + '" aria-label="' + escape(description) + '">' + contents + '</button>'
+        : '<div class="seat-place">' + contents + '</div>'}</li>`;
+  }).join('');
+  let swapPanel = '';
+  if (swap) {
+    const incoming = swap.to === snapshot.seat;
+    const other = incoming ? swap.from : swap.to;
+    const who = (other + 1) + '번 ' + escape(snapshot.players[other].name) + '님';
+    const message = incoming ? who + '이 자리 교환을 요청했습니다.' : who + '에게 자리 교환을 요청했습니다.';
+    const actions = incoming
+      ? '<button type="button" class="primary-button" id="swap-accept">수락</button><button type="button" class="plain-button" id="swap-decline">거절</button>'
+      : '<button type="button" class="plain-button" id="swap-cancel">요청 취소</button>';
+    swapPanel = '<div id="seat-swap"><p role="status">' + message + '</p><div class="swap-actions">' + actions + '</div></div>';
+  }
   $('room').innerHTML = '<section class="room-panel"><h1>게임 대기실</h1><p>친구에게 방 코드나 초대 링크를 보내 주세요.</p>' +
     '<div class="room-code-section"><span>방 코드</span><strong class="room-code">' + escape(roomCode) + '</strong><button id="copy-invite" class="plain-button">초대 링크 복사</button></div>' +
-    '<h2 class="room-heading">참가자 ' + occupied + ' / 5</h2><ol class="seat-list">' +
-    snapshot.players.map((p,i) => '<li><span class="seat-icon" aria-hidden="true">' + ['♠','♥','♣','♦','♠'][i] + '</span><strong>' + escape(p?.name ?? '빈자리') + '</strong><span class="seat-tag">' +
-      [p && i === 0 ? '방장' : '',p && i === snapshot.seat ? '나' : '',!p ? '참가 대기' : ''].filter(Boolean).join(' · ') + '</span></li>').join('') +
-    '</ol>' + (host ? ruleEditor(activeRules()) : '<h2 class="room-heading">테이블 규칙</h2>' + rulesSummary(activeRules())) +
+    '<div class="seat-heading"><h2>' + (canChoose ? '자리 선택' : '참가자') + '</h2><span>참가 ' + occupied + ' / 5</span></div>' +
+    (canChoose ? '<p class="seat-hint">자리 번호 순으로 진행합니다. 빈자리에 앉거나 다른 참가자에게 교환을 요청하세요.</p>' : '') +
+    '<ol class="seat-list ' + (canChoose ? 'seat-map' : 'seat-readonly') + '" aria-label="자리 번호 순서">' + seats + '</ol>' + swapPanel +
+    (host ? ruleEditor(activeRules()) : '<h2 class="room-heading">테이블 규칙</h2>' + rulesSummary(activeRules())) +
     '<p>' + (host ? (occupied < 5 ? '지금 시작하면 빈자리 ' + (5-occupied) + '곳은 AI가 맡습니다.' : '다섯 명이 모였습니다. 게임을 시작하세요.') : '방장이 게임을 시작하면 카드를 받습니다.') +
     '</p><div class="room-actions">' + (host ? '<button class="primary-button" id="start-round">게임 시작</button>' : '') +
     '<button class="plain-button" id="room-leave">나가기</button></div></section>';
   $('copy-invite').onclick = copyInvite;
   $('room-leave').onclick = requestLeave;
+  room.querySelectorAll('[data-choose-seat]').forEach(button => {
+    button.onclick = () => requestSeat(Number(button.dataset.chooseSeat));
+  });
+  if ($('swap-accept')) {
+    $('swap-accept').onclick = () => answerSwap(true);
+    $('swap-decline').onclick = () => answerSwap(false);
+  }
+  if ($('swap-cancel')) $('swap-cancel').onclick = cancelSwap;
   if (host) {
     $('start-round').onclick = startRound;
     const settings = $('room').querySelector('.rule-settings');
@@ -207,9 +276,15 @@ function drawRoom() {
       authority.setRules(readRules(settings));
       publish();
     };
-    if (focusedRule) settings.elements.namedItem(focusedRule)?.focus({preventScroll:true});
+    if (focus?.name) settings.elements.namedItem(focus.name)?.focus({preventScroll:true});
   }
   chat.attach($('room').querySelector('.room-actions'));
+  const oldControl = focus?.id ? $(focus.id) : null;
+  if (focusSeat != null || focus?.id.startsWith('swap-')) {
+    const button = focusSeat == null ? null : room.querySelector('[data-choose-seat="' + focusSeat + '"]');
+    const next = oldControl || button || $('swap-cancel') || room.querySelector('.seat-mine');
+    next?.focus({preventScroll:true});
+  } else oldControl?.focus({preventScroll:true});
   if ($('modal').open && $('modal-content').querySelector('.rules-wrap')) showRules();
 }
 
@@ -231,7 +306,7 @@ function draw() {
     },
     onAction(action) {
       if (authority) {
-        try { authority.act(0,snapshot.revision,action); publish(); return true; }
+        try { authority.act(authority.hostSeat,snapshot.revision,action); publish(); return true; }
         catch (error) { toast(error.message); return false; }
       }
       if (transport?.send({type:'action',revision:snapshot.revision,action})) return true;
@@ -247,7 +322,7 @@ function publish() {
   for (const [id, seat] of authority.connections) {
     transport?.send(id,{type:'state',view:authority.view(seat)});
   }
-  snapshot = authority.view(0);
+  snapshot = authority.view(authority.hostSeat);
   draw();
   if (authority.botTurn) {
     const pause = snapshot.game.phase === 'play' && snapshot.game.lastTrick && !snapshot.game.trick.length ? 1050 : 560;
@@ -337,9 +412,16 @@ async function connectRoom(kind, name, code, signal, rules) {
           broadcastChat(seat, packet.text);
           return;
         }
-        if (packet.type !== 'action') return;
-        try { session.act(seat,packet.revision,packet.action); publish(); }
-        catch (error) { transport.send(id,{type:'error',message:error.message}); }
+        try {
+          if (packet.type === 'seat-choice') {
+            if (applySeatChoice(session, id, packet)) publish();
+          } else if (packet.type === 'action') {
+            session.act(seat,packet.revision,packet.action);
+            publish();
+          }
+        } catch (error) {
+          transport.send(id,{type:'error',message:error.message});
+        }
       },
       onLeave(id) {
         if (!active()) return;
