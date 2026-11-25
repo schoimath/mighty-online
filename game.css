@@ -136,6 +136,7 @@ html:has(.g-screen) { scrollbar-gutter: stable; }
   @keyframes g-friend-announce { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: none; } }
 }
 .g-seat {
+  --standing-positive: #9debc2; --standing-negative: #ffb6b3; --standing-neutral: #ced6d1;
   position: relative; display: flex; flex-direction: column; align-items: stretch; gap: 2px;
   width: max-content; min-width: 0; max-width: 100%; padding: 4px; border-radius: 9px;
   border: 1px solid #65816c; color: #f3f4e9; background: #203d30; box-shadow: 0 3px 9px #0a221e66;
@@ -157,7 +158,6 @@ html:has(.g-screen) { scrollbar-gutter: stable; }
 .g-avatar-4 { background: #c6b8d1; color: #4c4055; }
 .g-seat-tag { display: grid; min-width: 0; line-height: 1.3; }
 .g-seat-identity { display: flex; flex-wrap: wrap; align-items: baseline; gap: 1px 4px; min-width: 0; }
-.g-seat .seat-standing { color: #c9e2db; }
 .g-seat-name { display: block; max-width: 112px; padding-right: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .83rem; font-weight: 700; }
 .g-seat-name small { color: #d4c39a; margin-left: 4px; font-size: .72rem; }
 .g-seat-detail { display: flex; align-items: center; gap: 4px; color: #b6c8b6; font-size: .75rem; word-break: keep-all; }

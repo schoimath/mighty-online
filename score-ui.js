@@ -38,8 +38,9 @@ export function seatStanding(board, seat, beforeSettlement = false) {
   const member = board?.members?.find(entry => entry.seat === seat);
   if (!Number.isSafeInteger(member?.total)) return '';
   const previousChange = beforeSettlement && Number.isSafeInteger(member.lastDelta) ? member.lastDelta : 0;
-  const total = signedScore(member.total - previousChange);
-  return `<span class="seat-standing" data-total-seat="${seat}" title="누적 점수 ${total}점"><small>누적</small><b>${total}</b></span>`;
+  const points = member.total - previousChange;
+  const total = signedScore(points);
+  return `<span class="seat-standing" data-total-seat="${seat}" data-sign="${Math.sign(points)}" title="누적 점수 ${total}점"><span class="visually-hidden">누적 점수 </span><b>${total}</b></span>`;
 }
 
 export function scoreTable(board, mySeat, {collapsed = false, title = '누적 점수'} = {}) {
