@@ -263,8 +263,12 @@ export class HostSession {
   view(seat) {
     if (!validSeat(seat)) throw new Error('유효하지 않은 자리입니다.');
     const swap = this.#swapAt(seat);
+    const game = this.round ? getView(this.round, seat) : null;
+    if (game?.phase === 'discard' && seat === game.declarer) {
+      game.incomingCards = [...(this.round.knownKitty || [])];
+    }
     return {revision: this.revision, seat, hostSeat: this.hostSeat, swap: swap ? {...swap} : null,
       rules: {...this.rules}, botModels: [...this.botModels], players: this.players.map(p => p && {...p}),
-      scoreboard: this.#scoreboard(), game: this.round ? getView(this.round, seat) : null};
+      scoreboard: this.#scoreboard(), game};
   }
 }

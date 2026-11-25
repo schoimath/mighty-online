@@ -17,6 +17,7 @@ const TRICK_HOLD_MS = 810;
 const COLLECT_MS = 390;
 const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
 const mightyBadge = '<b class="g-mighty-tag" aria-hidden="true">마이티</b>';
+const jokerCallBadge = '<b class="g-joker-call-tag" aria-hidden="true">조커콜</b>';
 
 function motionEnabled() {
   return !document.hidden && !reducedMotion.matches;
@@ -113,13 +114,11 @@ function button(label, name, enabled = true, style = "primary") {
   return `<button type="button" class="g-btn g-${style}" data-do="${name}"${enabled ? "" : " disabled"}>${label}</button>`;
 }
 function updateDefaults(ui, view) {
-  const signature = [view.phase, view.turn, view.dealNo, view.trickNo, view.hand.join("."), view.bid?.points, view.bid?.suit].join("|");
+  const signature = [view.phase, view.seat, view.turn, view.dealNo, view.trickNo, view.hand.join("."), view.bid?.points, view.bid?.suit].join("|");
   if (ui.signature === signature) return;
   ui.signature = signature;
   ui.selected = [];
-  const jokerSuits = view.choices.plays.filter(move => move.card === "JK" && move.suit).map(move => move.suit);
-  ui.jokerSuit = jokerSuits.length ? longestSuit(view.hand, jokerSuits) : null;
-  ui.jokerCall = false;
+  ui.pendingCard = null;
   const bids = view.choices.bids || [];
   ui.bidSuit = longestSuit(view.hand, [...new Set(bids.map(bid => bid.suit))]);
   ui.bidPoints = bids.find(bid => bid.suit === ui.bidSuit)?.points;
@@ -232,6 +231,7 @@ function renderTable(ui, nameAt) {
   trick.hidden = !view.trick.length;
   if (trick.hidden || trick.dataset.number !== String(view.trickNo)) {
     trick.replaceChildren();
+    felt.querySelector(".g-call-announcement").textContent = "";
     trick.classList.remove("g-collecting", "g-collect-covered");
     trick.dataset.number = String(view.trickNo);
   }
@@ -252,13 +252,18 @@ function renderTable(ui, nameAt) {
     const offset = (move.seat - view.seat + 5) % 5;
     const isMighty = move.card === mighty(view.bid.suit);
     const ruff = move.card[0] === view.bid.suit && lead !== view.bid.suit;
-    const label = escapeHtml(nameAt(move.seat)) + " · " + cardName(move.card) + (isMighty ? " · 마이티" : "");
-    const caption = move.jokerCall ? "조커콜" : move.suit ? suitMark(move.suit) + " 요구" : escapeHtml(nameAt(move.seat));
-    trick.insertAdjacentHTML("beforeend", `<div class="g-played g-played-${offset}" data-play-seat="${move.seat}"><div class="g-on-table${isMighty ? " g-mighty-play" : ""}" role="img" aria-label="${label}">${cardFace(move.card)}${isMighty ? mightyBadge : ""}</div><span class="g-play-label">${caption}</span></div>`);
+    const label = nameAt(move.seat) + " · " + cardName(move.card) + (move.jokerCall ? " · 조커콜" : isMighty ? " · 마이티" : "");
+    const caption = move.suit ? suitMark(move.suit) + " 요구" : escapeHtml(nameAt(move.seat));
+    const effect = move.jokerCall ? " g-joker-call-play" : isMighty ? " g-mighty-play" : "";
+    const badge = move.jokerCall ? jokerCallBadge : isMighty ? mightyBadge : "";
+    trick.insertAdjacentHTML("beforeend", `<div class="g-played g-played-${offset}" data-play-seat="${move.seat}"><div class="g-on-table${effect}" role="img" aria-label="${escapeHtml(label)}">${cardFace(move.card)}${badge}</div><span class="g-play-label">${caption}</span></div>`);
     const face = trick.lastElementChild.firstElementChild;
-    if (ruff) face.dataset.ruff = "";
+    if (move.jokerCall) {
+      felt.querySelector(".g-call-announcement").textContent = label;
+      face.dataset.landingSound = "jokerCall";
+    } else if (ruff) face.dataset.landingSound = "ruff";
     if (!motionEnabled()) {
-      if (ruff) playTableSound("ruff");
+      if (face.dataset.landingSound) playTableSound(face.dataset.landingSound);
       continue;
     }
     const ownCard = move.seat === view.seat && root.querySelector(`.g-hand-card[data-card="${move.card}"]`);
@@ -277,7 +282,7 @@ function renderHand(ui, newDeal) {
   let row = hand.querySelector(".g-cards");
   if (!row) {
     hand.setAttribute("aria-label", "내 손패");
-    hand.innerHTML = '<div class="g-section-heading"><h2>내 손패 <span></span></h2><span class="g-role"></span></div><div class="g-play-settings" hidden></div><div class="g-cards"></div>';
+    hand.innerHTML = '<div class="g-section-heading"><h2>내 손패 <span></span></h2><span class="g-role"></span></div><div class="g-cards"></div><div class="g-play-settings" hidden></div>';
     row = hand.querySelector(".g-cards");
   }
   hand.querySelector("h2 span").textContent = view.hand.length + "장";
@@ -296,20 +301,23 @@ function renderHand(ui, newDeal) {
     ui.settingsHtml = settingsHtml;
   }
   settings.hidden = !settingsHtml;
-  const legal = new Set((view.choices.plays || []).map(move => move.card));
   let trump = view.bid?.suit;
   if (view.phase === "bid" && view.turn === view.seat) trump = ui.bidSuit ?? trump;
   if (view.phase === "discard") trump = view.choices.contracts?.[ui.contractIndex]?.suit ?? trump;
   const mightyCard = trump && mighty(trump);
+  const orderedHand = view.phase !== "bid" && trump && trump !== "N"
+    ? [...view.hand.filter(card => card[0] === trump), ...view.hand.filter(card => card[0] !== trump)]
+    : view.hand;
+  const incoming = new Set(view.incomingCards);
   const arrivals = [];
-  for (const [i, card] of view.hand.entries()) {
+  for (const [i, card] of orderedHand.entries()) {
     const isMighty = card === mightyCard;
+    const isIncoming = incoming.has(card);
     let label = cardName(card) + (isMighty ? " · 마이티" : "");
     if (isMighty && (view.phase === "bid" || view.phase === "discard")) label += " (현재 기루다 기준)";
-    if (view.phase === "play" && interactive) {
-      if (card === "JK" && ui.jokerSuit) label += " · " + suitInfo[ui.jokerSuit][1] + " 요구";
-      if (ui.jokerCall && view.choices.plays.some(move => move.card === card && move.jokerCall)) label += " · 조커콜";
-    }
+    if (isIncoming) label += " · 바닥에서 받은 패";
+    const moves = view.choices.plays.filter(move => move.card === card);
+    if (moves.length > 1) label += card === "JK" ? " · 요구 무늬 선택" : " · 조커콜 선택";
     let el = existing.get(card);
     if (!el) {
       el = document.createElement("button");
@@ -318,12 +326,15 @@ function renderHand(ui, newDeal) {
       el.dataset.card = card;
       if (newDeal || view.phase === "discard") arrivals.push(el);
     }
-    if (!el.firstElementChild || el.classList.contains("g-hand-mighty") !== isMighty) {
+    if (!el.firstElementChild || el.classList.contains("g-hand-mighty") !== isMighty ||
+        el.classList.contains("g-hand-incoming") !== isIncoming) {
       el.classList.toggle("g-hand-mighty", isMighty);
-      el.innerHTML = cardFace(card) + (isMighty ? mightyBadge : "");
+      el.classList.toggle("g-hand-incoming", isIncoming);
+      el.innerHTML = cardFace(card) + (isMighty ? mightyBadge : "") +
+        (isIncoming ? '<b class="g-incoming-tag" aria-hidden="true">바닥</b>' : "");
     }
     const selected = ui.selected.includes(card);
-    const allowed = interactive && (view.phase === "discard" ? (selected || ui.selected.length < 3) : legal.has(card));
+    const allowed = interactive && (view.phase === "discard" ? (selected || ui.selected.length < 3) : moves.length > 0);
     el.classList.toggle("g-selected", selected);
     el.classList.toggle("g-illegal", interactive && !allowed);
     el.disabled = !allowed;
@@ -331,6 +342,8 @@ function renderHand(ui, newDeal) {
     el.setAttribute("aria-label", label);
     if (view.phase === "discard") el.setAttribute("aria-pressed", String(selected));
     else el.removeAttribute("aria-pressed");
+    if (interactive && moves.length > 1) el.setAttribute("aria-expanded", String(ui.pendingCard === card));
+    else el.removeAttribute("aria-expanded");
     if (row.children[i] !== el) row.insertBefore(el, row.children[i] || null);
   }
   if (arrivals.length && motionEnabled()) {
@@ -391,25 +404,46 @@ function friendControls(view, ui) {
   const solo = ui.friendKind === "card" && (view.hand.includes(ui.friendCard) || view.discarded.includes(ui.friendCard));
   return `<h2>프렌드를 정하세요</h2><p>${solo ? "내 손에 있거나 묻은 카드를 부르면 노프렌드로 진행해요." : hint}</p>${select("지정 방식", "friendKind", kinds, ui.friendKind)}${cardControls}${button("프렌드 확정", "friend")}`;
 }
-function playControls() {
-  return "<h2>카드를 내세요</h2><p>낼 수 있는 손패를 한 번 누르면 테이블에 놓입니다.</p>";
+function playControls(view) {
+  const hasChoice = view.choices.plays.some(move => move.suit || move.jokerCall);
+  return "<h2>카드를 내세요</h2><p>" + (hasChoice ? "낼 카드를 누르세요. 조커의 요구 무늬와 조커콜은 카드를 고른 뒤 정해요." : "낼 수 있는 손패를 한 번 누르면 테이블에 놓입니다.") + "</p>";
 }
 function specialPlaySettings(view, ui) {
-  const options = view.choices.plays;
-  const suits = options.filter(move => move.card === "JK" && move.suit).map(move => move.suit);
-  const caller = options.find(move => move.jokerCall);
-  const demand = suits.length ? suitPicker("조커로 선을 잡을 때 부를 무늬","jokerSuit",suits,ui.jokerSuit) : "";
-  const call = caller ? `<label class="g-call-option"><input type="checkbox" data-field="jokerCall"${ui.jokerCall ? " checked" : ""}> <span>${suitMark(caller.card[0])}3을 낼 때 조커콜</span></label>` : "";
-  return demand + call;
+  if (!ui.pendingCard) return "";
+  const options = view.choices.plays.filter(move => move.card === ui.pendingCard);
+  if (options.length < 2) return "";
+  const suits = options.map(move => move.suit).filter(Boolean);
+  const control = suits.length ? suitPicker("조커로 요구할 무늬", "jokerSuit", suits, ui.jokerSuit)
+    : `<label class="g-call-option"><input type="checkbox" data-field="jokerCall"${ui.jokerCall ? " checked" : ""}> <span>${suitMark(ui.pendingCard[0])}3 조커콜</span></label>`;
+  return control + `<div class="g-play-buttons">${button("취소", "cancel-play", true, "secondary")}${button("카드 내기", "confirm-play")}</div>`;
 }
-function playCard(ui, card) {
+function cancelPlay(ui) {
+  const card = ui.pendingCard;
+  if (!card) return;
+  ui.pendingCard = null;
+  renderHand(ui, false);
+  ui.root.querySelector(`.g-hand-card[data-card="${card}"]`)?.focus({preventScroll:true});
+}
+function playCard(ui, card, confirmed = false) {
   if (ui.playPending || ui.view.phase !== "play" || ui.view.seat !== ui.view.turn) return;
   const moves = ui.view.choices.plays.filter(move => move.card === card);
-  const useCall = ui.jokerCall && moves.some(move => move.jokerCall);
-  const choice = moves.find(move => (!move.suit || move.suit === ui.jokerSuit) && Boolean(move.jokerCall) === useCall);
+  if (!moves.length) return;
+  if (moves.length > 1 && !confirmed) {
+    if (ui.pendingCard !== card) {
+      ui.pendingCard = card;
+      const suits = moves.map(move => move.suit).filter(Boolean);
+      ui.jokerSuit = suits.length ? longestSuit(ui.view.hand, suits) : null;
+      ui.jokerCall = moves.some(move => move.jokerCall);
+      renderHand(ui, false);
+    }
+    ui.root.querySelector(".g-play-settings input:checked, .g-play-settings input[type=checkbox]")?.focus({preventScroll:true});
+    return;
+  }
+  const choice = moves.length === 1 ? moves[0] : moves.find(move =>
+    (!move.suit || move.suit === ui.jokerSuit) && Boolean(move.jokerCall) === ui.jokerCall);
   if (!choice) return;
   ui.playPending = true;
-  for (const el of ui.root.querySelectorAll(".g-hand-card")) el.disabled = true;
+  renderHand(ui, false);
   if (ui.options.onAction({type: "play", ...choice}) === false) {
     ui.playPending = false;
     renderHand(ui, false);
@@ -500,11 +534,13 @@ function mountTable(root) {
       </button>${button("게임 규칙", "rules", true, "top")}${button("나가기", "leave", true, "top")}</div>
     </div></header>
     <div class="g-main">
-      <div class="g-heading"><div><div class="g-eyebrow"><i aria-hidden="true">♠</i> 마이티 · 5인전</div><h1></h1></div><span class="g-round-tag"></span></div>
+      <div class="g-heading"><div class="g-eyebrow"><i aria-hidden="true">♠</i> 마이티 · 5인전</div>
+        <div class="g-title-row"><h1></h1><span class="g-round-tag"></span></div></div>
       <div class="g-layout">
         <section class="g-board" aria-label="게임 테이블"><div class="g-felt"><div class="g-felt-line"></div>
           <div class="g-table-center"></div><div class="g-auction-calls" hidden></div><div class="g-trick" hidden></div><div class="g-seats"></div>
           <div class="g-friend-call" role="status" aria-atomic="true" hidden><small>프렌드 선언</small><strong></strong></div>
+          <span class="g-call-announcement" role="status" aria-atomic="true"></span>
           <p class="g-trick-result" hidden><span></span><b></b></p></div></section>
         <section class="g-hand"></section><aside class="g-panel"></aside>
       </div>
@@ -521,9 +557,15 @@ function redraw(ui, newDeal = false) {
   const scoreDisclosure = root.querySelector("details.match-standings");
   if (scoreDisclosure) ui.scoresOpen = scoreDisclosure.open;
   root.querySelector("h1").textContent = view.phase === "play" ? `${view.trickNo}번째 트릭` : labels[view.phase];
-  root.querySelector(".g-round-tag").textContent = view.phase === "result" ? "10트릭 완료"
-    : view.phase === "bid" ? "경매 " + view.bidHistory.length + "회"
-    : "기루다 · " + suitInfo[view.bid.suit].join(" ");
+  const tag = root.querySelector(".g-round-tag");
+  const showContract = view.phase !== "bid" && view.phase !== "result";
+  tag.classList.toggle("g-contract-tag", showContract);
+  if (showContract) {
+    const {suit, points} = view.bid;
+    tag.innerHTML = `<span class="g-contract-prefix">공약 </span>${suitMark(suit)} ${suitInfo[suit][1]} <strong>${escapeHtml(points)}점</strong>`;
+  } else {
+    tag.textContent = view.phase === "result" ? "10트릭 완료" : "경매 " + view.bidHistory.length + "회";
+  }
   // Read the departing card's position before reconciling the player's hand.
   renderTable(ui, nameAt);
   renderHand(ui, newDeal);
@@ -562,7 +604,7 @@ function bind(ui) {
     if (event.animationName === "g-deal-card") event.target.closest(".g-hand-card")?.classList.remove("g-deal");
     if (event.animationName === "g-play-card") {
       event.target.classList.remove("g-play-enter");
-      if (motionEnabled()) playTableSound(event.target.hasAttribute("data-ruff") ? "ruff" : "play");
+      if (motionEnabled()) playTableSound(event.target.dataset.landingSound || "play");
     }
   });
   ui.root.addEventListener("click", event => {
@@ -578,6 +620,8 @@ function bind(ui) {
       return;
     }
     const kind = el.dataset.do;
+    if (kind === "cancel-play") return cancelPlay(ui);
+    if (kind === "confirm-play") return playCard(ui, ui.pendingCard, true);
     if (kind === "sound") return toggleSound(el);
     if (kind === "rules") return ui.options.onRules?.();
     if (kind === "leave") return ui.options.onLeave?.();
@@ -586,6 +630,12 @@ function bind(ui) {
     if (kind && ui.view.seat === ui.view.turn) {
       const action = submit(ui, kind);
       if (action) ui.options.onAction(action);
+    }
+  });
+  ui.root.addEventListener("keydown", event => {
+    if (event.key === "Escape" && ui.pendingCard && event.target.closest(".g-hand")) {
+      event.preventDefault();
+      cancelPlay(ui);
     }
   });
   ui.root.addEventListener("change", event => {
@@ -671,11 +721,12 @@ function collectTrick(ui) {
     el.style.setProperty("--collect-rotate", ((2 - i) * 7) + "deg");
     if (covered) {
       face.replaceChildren();
-      face.classList.remove("g-mighty-play");
+      face.classList.remove("g-mighty-play", "g-joker-call-play");
       face.setAttribute("aria-label", "덮은 카드");
     }
   }
   trick.classList.toggle("g-collect-covered", covered);
+  if (covered) ui.root.querySelector(".g-call-announcement").textContent = "";
   trick.classList.add("g-collecting");
   playTableSound("collect");
   ui.timer = setTimeout(() => finishCollection(ui), COLLECT_MS);

@@ -8,6 +8,12 @@ let output;
 let resuming;
 let lastLanding = -Infinity;
 const buffers = new Map();
+const tableGain = .34;
+const chimes = {
+  run: [392, 493.88, 587.33],
+  backrun: [523.25, 392, 329.63],
+  jokerCall: [698.46, 932.33]
+};
 
 const cues = {
   deal: {duration: .20, strokes: [0, .045, .093], decay: .019, tone: 125, tap: .10},
@@ -41,11 +47,11 @@ function paperSound(cue) {
 }
 
 function makeSound(kind) {
-  if (kind === "run" || kind === "backrun") {
-    const notes = kind === "run" ? [392, 493.88, 587.33] : [523.25, 392, 329.63];
+  const notes = chimes[kind];
+  if (notes) {
     const rate = context.sampleRate;
     const spacing = .115, sustain = .36;
-    const buffer = context.createBuffer(1, Math.ceil(rate * (2 * spacing + sustain)), rate);
+    const buffer = context.createBuffer(1, Math.ceil(rate * ((notes.length - 1) * spacing + sustain)), rate);
     const samples = buffer.getChannelData(0);
     for (const [index, note] of notes.entries()) {
       const start = Math.round(index * spacing * rate);
@@ -91,7 +97,7 @@ function makeSound(kind) {
 }
 
 function setVolume() {
-  if (output) output.gain.value = enabled && !document.hidden ? .19 : 0;
+  if (output) output.gain.value = enabled && !document.hidden ? tableGain : 0;
 }
 
 function unlock() {
@@ -100,7 +106,15 @@ function unlock() {
     if (!context) {
       context = new AudioEngine();
       output = context.createGain();
-      output.connect(context.destination);
+      // Keep overlapping card landings below full scale.
+      const limiter = context.createDynamicsCompressor();
+      limiter.threshold.value = -8;
+      limiter.knee.value = 0;
+      limiter.ratio.value = 20;
+      limiter.attack.value = 0;
+      limiter.release.value = .12;
+      output.connect(limiter);
+      limiter.connect(context.destination);
       setVolume();
     }
     if (context.state !== "running" && !resuming) {

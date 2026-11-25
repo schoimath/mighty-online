@@ -393,6 +393,33 @@ test('each connection has one seat, one private hand, and a revision-checked tur
   assert.deepEqual(session.view(0), next);
 });
 
+test('only the declarer sees which three cards arrived during the exchange', () => {
+  const session = fullRoom();
+  session.start();
+  const submit = action => session.act(session.round.turn, session.revision, action);
+  submit({type: 'pass'});
+  const declarer = session.round.turn;
+  const original = session.view(declarer).game;
+  assert.equal('incomingCards' in original, false);
+  submit({type: 'bid', points: 14, suit: 'D'});
+  while (session.round.phase === 'bid') submit({type: 'pass'});
+
+  const exchange = session.view(declarer).game;
+  const received = exchange.hand.filter(card => !original.hand.includes(card));
+  assert.equal(received.length, 3);
+  assert.deepEqual(new Set(exchange.incomingCards), new Set(received));
+  for (let seat = 0; seat < 5; seat++) {
+    if (seat === declarer) continue;
+    const packet = session.view(seat);
+    assert.equal('incomingCards' in packet.game, false);
+    for (const card of received) assert.ok(!JSON.stringify(packet).includes(JSON.stringify(card)));
+  }
+  exchange.incomingCards.pop();
+  assert.equal(session.view(declarer).game.incomingCards.length, 3);
+  submit({type: 'discard', cards: original.hand.slice(0, 3)});
+  assert.equal('incomingCards' in session.view(declarer).game, false);
+});
+
 test('a direct rematch deals to the same connected seats and opens a fresh auction', () => {
   const session = fullRoom();
   session.setRules({minBid: 15, allowLastJoker: true});
