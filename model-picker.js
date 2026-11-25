@@ -52,7 +52,7 @@ export function bindModelSettings(container, hostSeat = 0, onChange) {
     const models = readModelSettings(group);
     all.value = commonModel(models, hostSeat);
     group.querySelector('.model-description').textContent = description(all.value);
-    onChange?.(models);
+    onChange?.(models, event.target === all ? null : Number(event.target.dataset.aiSeat));
   };
 }
 

@@ -3,7 +3,7 @@ import {applyAction as applyEngineAction, legalPlays, pointsIn, sortHand} from '
 export function canDeclareSetting(state, seat) {
   return state.phase === 'play' && Number.isInteger(seat) && seat >= 0 && seat < state.hands.length &&
     seat === state.declarer && seat === state.turn && state.trick.length === 0 &&
-    state.hands[seat].length > 0 && !state.settingAwaitingFriend;
+    state.trickNo < 10 && state.hands[seat].length > 1 && !state.settingAwaitingFriend;
 }
 
 function finishSetting(state, success, friendTrick = []) {
@@ -31,7 +31,7 @@ function finishSetting(state, success, friendTrick = []) {
 
 // A verdict comes exclusively from the host's solver, never a network action.
 export function resolveSetting(state, seat, verdict) {
-  if (!canDeclareSetting(state, seat)) throw new Error('세팅은 주공이 선을 잡고 카드를 내기 전에만 선언할 수 있습니다.');
+  if (!canDeclareSetting(state, seat)) throw new Error('세팅은 1~9번째 트릭에서 주공이 선을 잡고 카드를 내기 전에 선언할 수 있습니다.');
   const success = typeof verdict === 'boolean' ? verdict : verdict?.success;
   if (typeof success !== 'boolean') throw new Error('세팅 판정이 완료되지 않았습니다.');
   let line;

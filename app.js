@@ -7,6 +7,7 @@ import {DEFAULT_RULES} from './engine.js';
 import {scoreTable, seatStanding} from './score-ui.js';
 import {bindModelSettings, modelLabel, modelSettings, modelSummary, readModelSettings} from './model-picker.js';
 import {UPDATED_AT, UPDATED_LABEL, VERSION} from './release.js';
+import {rememberRoom, roomModels, roomPreferences} from './room-preferences.js';
 
 const $ = id => document.getElementById(id);
 if ($('release-date')) {
@@ -313,17 +314,30 @@ function drawRoom() {
     $('start-round').onclick = startRound;
     const series = room.querySelector('.series-picker');
     if (series) {
-      series.onchange = () => { authority.setRoundLimit(selectedLimit(series)); publish(); };
+      series.onchange = () => {
+        const roundLimit = selectedLimit(series);
+        authority.setRoundLimit(roundLimit);
+        rememberRoom({roundLimit});
+        publish();
+      };
       if (focus?.name === 'roundLimit') series.querySelector('input:checked')?.focus({preventScroll:true});
     }
     room.querySelector('.model-details').open = Boolean(modelDetailsOpen);
-    bindModelSettings(room, hostSeat, models => {
+    bindModelSettings(room, hostSeat, (models, changedSeat) => {
       authority.setBotModels(models);
+      if (changedSeat === null) {
+        rememberRoom({models});
+      } else {
+        const overrides = roomPreferences().models;
+        overrides[changedSeat] = models[changedSeat];
+        rememberRoom({models:overrides});
+      }
       publish();
     });
     const settings = $('room').querySelector('.rule-settings');
     settings.onchange = () => {
       authority.setRules(readRules(settings));
+      rememberRoom({rules:authority.rules});
       publish();
     };
     if (focus?.name) settings.elements.namedItem(focus.name)?.focus({preventScroll:true});
@@ -525,7 +539,8 @@ async function connectRoom(kind, name, code, signal, roundLimit) {
   const active = () => token === generation && !signal.aborted;
   let link;
   if (kind === 'create') {
-    const session = new HostSession(name, undefined, undefined, roundLimit);
+    const preferences = roomPreferences();
+    const session = new HostSession(name, preferences.rules, roomModels(preferences.models), roundLimit);
     link = await hostRoom({
       signal,
       onJoin(id, guestName) {
@@ -566,6 +581,7 @@ async function connectRoom(kind, name, code, signal, roundLimit) {
     if (!active()) { link.close(); return; }
     mode = 'host';
     authority = session;
+    rememberRoom({roundLimit});
   } else {
     mode = 'joining';
     link = await joinRoom(code,name,{
@@ -603,7 +619,7 @@ function openForm(kind, code = '') {
   const intro = profile ? '' : '<p>' + (joining ? '친구에게 받은 6자리 방 코드를 입력하세요.' : '테이블을 열면 친구를 초대할 방 코드가 생깁니다. 게임 중에는 방장 탭을 열어 두세요.') + '</p>';
   modal(title, intro + '<form id="setup-form"><label class="field">닉네임<input id="name-field" name="nickname" maxlength="16" required autocomplete="nickname"></label>' +
     (joining ? '<label class="field">방 코드<input class="code-field" id="code-field" name="code" maxlength="12" placeholder="6자리 코드" required autocomplete="off" spellcheck="false"></label>' : '') +
-    (kind === 'create' ? seriesPicker() : '') +
+    (kind === 'create' ? seriesPicker(roomPreferences().roundLimit) : '') +
     '<div class="form-error" role="alert" id="form-error"></div><button class="primary-button form-submit" id="submit-form">' + (profile ? '저장' : title) + '</button></form>');
   $('name-field').value = nickname;
   if (joining) { $('code-field').value = code; (code ? $('name-field') : $('code-field')).focus(); }

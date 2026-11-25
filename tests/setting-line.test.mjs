@@ -34,17 +34,17 @@ test('a successful claim shows the forced Joker call before the ace to every sea
   }
 });
 
-test('a claimed active Joker includes its demanded suit and a failed claim reveals no line', () => {
-  const game = endgame([['H2'],['D3'],['JK'],['D4'],['H4']],{allowLastJoker:true});
+test('a ninth-trick claim includes the demanded suit for the final Joker and a failed claim reveals no line', () => {
+  const hands = [['H2','H3'],['D3','D2'],['HA','JK'],['D4','D5'],['H4','H5']];
+  const game = endgame(hands,{allowLastJoker:true});
   const verdict = analyzeSetting(game);
   assert.equal(verdict.success,true);
-  assert.equal(verdict.line.length,1);
-  assert.equal(verdict.line[0].card,'JK');
-  assert.ok(['S','H','D','C'].includes(verdict.line[0].suit));
+  assert.deepEqual(verdict.line.map(move => move.card), ['HA','JK']);
+  assert.ok(['S','H','D','C'].includes(verdict.line[1].suit));
   resolveSetting(game,2,verdict);
   assert.deepEqual(getView(game,1).result.setting.line,verdict.line);
 
-  const lost = endgame([['H2'],['D3'],['JK'],['D4'],['H4']]);
+  const lost = endgame([['SA','H3'], ...hands.slice(1)]);
   const failed = analyzeSetting(lost);
   assert.deepEqual(failed,{success:false});
   resolveSetting(lost,2,failed);

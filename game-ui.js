@@ -175,6 +175,7 @@ function setFlightOffset(element, prefix, from, to) {
   const y = from.top + from.height / 2 - to.top - to.height / 2;
   element.style.setProperty("--" + prefix + "-x", x + "px");
   element.style.setProperty("--" + prefix + "-y", y + "px");
+  return Math.hypot(x, y);
 }
 
 function dealToOtherSeats(root, localSeat) {
@@ -219,9 +220,12 @@ function sweepMarkup(kind, points) {
 
 function emptyTableMarkup(ui, nameAt) {
   const {view} = ui;
-  if (ui.sweep) return sweepMarkup(ui.sweep, view.result.points);
+  if (view.phase === "result") {
+    const outcome = (ui.sweep ? sweepMarkup(ui.sweep, view.result.points) : "") + settingLineMarkup(view);
+    if (outcome) return outcome;
+  }
   if (view.phase === "bid" || view.phase === "discard") return leadingBidMarkup(view, nameAt);
-  if (view.phase === "play" && view.seat === view.declarer && view.turn === view.seat && view.choices.canDeclareSetting === undefined) {
+  if (view.phase === "play" && view.trickNo < 10 && view.hand.length > 1 && view.seat === view.declarer && view.turn === view.seat && view.choices.canDeclareSetting === undefined) {
     return '<div class="g-setting-compat"><strong>이 방은 세팅 선언을 지원하지 않아요</strong><small>이번 판이 끝나면 방장이 게임을 새로고침하고 새 방을 열어 주세요.</small></div>';
   }
   let label = view.phase === "play" ? "첫 카드를 기다리는 중" : labels[view.phase];
@@ -285,15 +289,17 @@ function renderTable(ui, nameAt) {
     }
     const ownCard = move.seat === view.seat && root.querySelector(`.g-hand-card[data-card="${move.card}"]`);
     const source = ownCard || felt.querySelector(`[data-seat="${move.seat}"]`);
-    setFlightOffset(face, "play", source.getBoundingClientRect(), face.getBoundingClientRect());
-    face.style.setProperty("--play-rotate", [-9, -18, -11, 11, 18][offset] + "deg");
+    const distance = setFlightOffset(face, "play", source.getBoundingClientRect(), face.getBoundingClientRect());
+    face.style.setProperty("--play-time", Math.min(285, Math.round(170 + distance * .26)) + "ms");
+    face.style.setProperty("--play-scale", ownCard ? ownCard.offsetWidth / face.offsetWidth : .94);
+    face.style.setProperty("--play-rotate", [0, -6, -3, 3, 6][offset] + "deg");
     face.classList.add("g-play-enter");
   }
 }
 
 function canDeclareSetting(ui) {
   const {view} = ui;
-  return view.phase === "play" && view.seat === view.turn && view.choices.canDeclareSetting &&
+  return view.phase === "play" && view.trickNo < 10 && view.hand.length > 1 && view.seat === view.turn && view.choices.canDeclareSetting &&
     !ui.resolving && !ui.playPending && !ui.claimSubmitting && !view.claimPending;
 }
 
@@ -368,6 +374,7 @@ function renderHand(ui, newDeal) {
     const selected = ui.selected.includes(card);
     const allowed = interactive && (view.phase === "discard" ? (selected || ui.selected.length < 3) : moves.length > 0);
     el.classList.toggle("g-selected", selected);
+    el.classList.toggle("g-sending", ui.playPending === card);
     el.classList.toggle("g-illegal", interactive && !allowed);
     el.disabled = !allowed;
     el.title = label;
@@ -475,7 +482,7 @@ function playCard(ui, card, confirmed = false) {
   const choice = moves.length === 1 ? moves[0] : moves.find(move =>
     (!move.suit || move.suit === ui.jokerSuit) && Boolean(move.jokerCall) === ui.jokerCall);
   if (!choice) return;
-  ui.playPending = true;
+  ui.playPending = card;
   ui.pendingCard = null;
   renderHand(ui, false);
   if (ui.options.onAction({type: "play", ...choice}) === false) {
@@ -527,8 +534,8 @@ function settingLineMarkup(view) {
       <span class="g-setting-card${faceClass}" role="img" aria-label="${cardName(move.card)}">${cardFace(move.card)}</span>
       ${note ? `<small class="g-setting-note">${note}</small>` : ""}</li>`;
   }).join("");
-  return `<h2>세팅 성공 · 주공의 카드 순서</h2>
-    <p>주공이 모두 따는 한 가지 순서예요. 상대가 낸 카드에 따라 다음 수는 달라질 수 있어요.</p><ol start="${firstTrick}">${cards}</ol>`;
+  return `<section class="g-setting-line" aria-label="주공의 세팅 카드 순서"><h2>세팅 성공</h2>
+    <ol start="${firstTrick}" style="--setting-columns:${Math.min(5, line.length)}">${cards}</ol></section>`;
 }
 
 function resultControls(view, ui) {
@@ -636,8 +643,7 @@ function mountTable(root) {
           <div class="g-table-center"></div><div class="g-auction-calls" hidden></div><div class="g-trick" hidden></div><div class="g-seats"></div>
           <div class="g-friend-call" role="status" aria-atomic="true" hidden><small>프렌드 선언</small><strong></strong></div>
           <span class="g-call-announcement" role="status" aria-atomic="true"></span>
-          <p class="g-trick-result" hidden><span></span><b></b></p></div>
-          <section class="g-setting-line" aria-label="주공의 세팅 카드 순서" hidden></section></section>
+          <p class="g-trick-result" hidden><span></span><b></b></p></div></section>
         <section class="g-hand"></section><aside class="g-panel"></aside>
       </div>
     </div>
@@ -695,13 +701,6 @@ function redraw(ui, newDeal = false) {
   }
   // Read the departing card's position before reconciling the player's hand.
   renderTable(ui, nameAt);
-  const line = settingLineMarkup(view);
-  if (line !== ui.settingLineHtml) {
-    const region = root.querySelector(".g-setting-line");
-    region.innerHTML = line;
-    region.hidden = !line;
-    ui.settingLineHtml = line;
-  }
   renderHand(ui, newDeal);
   const claimDialog = root.querySelector(".g-claim-dialog");
   if (claimDialog.open && !canDeclareSetting(ui)) claimDialog.close();
@@ -742,14 +741,12 @@ function bind(ui) {
     if (event.animationName === "g-send-card-back") event.target.remove();
     if (event.animationName === "g-deal-card") event.target.closest(".g-hand-card")?.classList.remove("g-deal");
     if (event.animationName === "g-play-card") {
+      event.target.classList.remove("g-play-enter");
       if (motionEnabled()) playTableSound(event.target.dataset.landingSound || "play");
     }
-    if (event.animationName === "g-settle-card") event.target.classList.remove("g-play-enter");
   });
   ui.root.addEventListener("animationcancel", event => {
-    if (event.animationName === "g-play-card" || event.animationName === "g-settle-card") {
-      event.target.classList.remove("g-play-enter");
-    }
+    if (event.animationName === "g-play-card") event.target.classList.remove("g-play-enter");
   });
   ui.root.addEventListener("click", event => {
     if (!ui.root.querySelector(".g-screen")) return;
@@ -904,7 +901,7 @@ export function renderGame(container, publicView, options = {}) {
   }
   if (!container.firstElementChild) {
     mountTable(container);
-    ui.auctionMarkup = ui.centerMarkup = ui.settingsHtml = ui.settingLineHtml = ui.finalHtml = null;
+    ui.auctionMarkup = ui.centerMarkup = ui.settingsHtml = ui.finalHtml = null;
   }
   publicView = withRememberedJoker(publicView, ui.latest);
   ui.latest = publicView;
@@ -970,7 +967,7 @@ export function rulesContent(rules = DEFAULT_RULES, scoringVersion = TABLE_SCORI
     <p>${opening} 경매의 승자인 주공은 바닥패를 가져와 3장을 묻습니다. 이때 기루다를 바꾸려면 공약을 2점 이상 올려야 합니다. 묻은 점수는 주공 팀의 점수입니다.</p>
     <h3>프렌드</h3><p>주공이 부른 카드를 가진 사람이 프렌드입니다. 기본 선택은 마이티, 조커, 기루다 A 순서이며 주공이 들고 있거나 묻은 카드는 건너뜁니다. 셋 다 주공에게 있으면 노프렌드가 기본입니다. 노기루다에서는 마이티와 조커가 모두 주공에게 있으면 노프렌드입니다. 부른 카드가 나오면 모두에게 정체가 공개됩니다.${firstFriend} 노프렌드를 선택하거나 주공이 가진 카드나 묻은 카드를 부르면 혼자 플레이합니다.</p>
     <h3>카드 내기</h3><p>주공부터 한 장씩 냅니다. 선이 낸 무늬가 손에 있으면 따라야 합니다. 마이티와 조커는 무늬에 관계없이 낼 수 있습니다. 첫 트릭에서는 다른 무늬를 낼 수 있으면 기루다로 시작할 수 없습니다. 트릭을 이긴 사람이 다음 선입니다.</p>
-    <h3>세팅</h3><p>주공은 선을 잡고 카드를 내기 전에 세팅을 선언할 수 있습니다. 다른 네 사람이 어떤 합법적인 카드를 내더라도 주공 혼자 남은 트릭을 모두 딸 수 있으면 성공입니다. 성공하면 남은 점수 카드는 주공이 가져가고, 주공이 낼 수 있는 카드 순서 한 가지를 모두에게 보여줍니다. 실패하면 남은 점수 카드는 모두 야당 몫입니다. 이미 획득한 점수와 묻은 카드는 원래대로 정산합니다. 초구 프렌드를 부르고 첫 트릭 전에 세팅에 실패하면, 프렌드를 정하기 위해 첫 트릭만 진행한 뒤 정산합니다.</p>
+    <h3>세팅</h3><p>주공은 1~9트릭에 선을 잡으면 카드를 내기 전에 세팅을 선언할 수 있습니다. 마지막 트릭에는 각자 남은 카드를 냅니다. 다른 네 사람이 어떤 합법적인 카드를 내더라도 주공 혼자 남은 트릭을 모두 딸 수 있으면 성공입니다. 성공하면 남은 점수 카드는 주공이 가져가고, 주공이 낼 수 있는 카드 순서를 보드 중앙에 공개합니다. 실패하면 남은 점수 카드는 모두 야당 몫입니다. 이미 획득한 점수와 묻은 카드는 원래대로 정산합니다. 초구 프렌드를 부르고 첫 트릭 전에 세팅에 실패하면, 프렌드를 정하기 위해 첫 트릭만 진행한 뒤 정산합니다.</p>
     <h3>마이티와 조커</h3><p>가장 센 카드는 스페이드 A입니다. 스페이드가 기루다일 때는 다이아몬드 A가 마이티입니다. 그다음은 조커, 기루다, 선의 무늬 순입니다. 같은 무늬 안에서는 A가 가장 높고 2가 가장 낮습니다.</p>
     <p>${jokerTiming}</p>
     <p>${jokerCallFrom} 선이 클로버 3으로 조커콜을 선언할 수 있습니다. 조커를 가진 사람은 조커 또는 마이티를 내야 하며, 조커는 그 트릭에서 가장 약합니다. 클로버가 기루다일 때의 조커콜 카드는 스페이드 3입니다. 조커가 한 번 나오면 손패의 조커콜 표식이 사라지고 그 카드는 일반 3으로 냅니다.</p>

@@ -39,13 +39,46 @@ test('the bot keeps playing if an unseen Mighty or an undrawn trump could win', 
   }
 });
 
-test('the bot accounts for a forced Joker call and the final-trick Joker rule', () => {
+test('the bot can claim with a forced Joker call but plays out a final Joker under both rules', () => {
   const round = position([['C2','JK'], ['C3','HK'], ['D8','S8'], ['D4','H4'], ['H6','S6']], 'N');
   assert.equal(shouldDeclareSetting(botObservation(round, 1)), true);
   assert.equal(analyzeSetting(round).success, true);
   for (const allowLastJoker of [false, true]) {
     const last = position([['S3'], ['JK'], ['D2'], ['H2'], ['C2']], 'N', {...DEFAULT_RULES, allowLastJoker});
-    assert.equal(shouldDeclareSetting(botObservation(last, 1)), allowLastJoker);
+    assert.equal(analyzeSetting(last).success, allowLastJoker);
+    assert.equal(shouldDeclareSetting(botObservation(last, 1)), false);
+  }
+});
+
+test('human and AI declarers finish the tenth trick with a card and ordinary settlement', () => {
+  for (const guest of [true, false]) {
+    const room = new HostSession('방장', undefined, Array(5).fill('heuristic'));
+    if (guest) room.addGuest('guest', '주공');
+    room.start();
+    Object.assign(room.round, position([
+      ['H2','D9'], ['HA','SA'], ['H3','DJ'], ['H4','DK'], ['H5','DQ']
+    ], 'N'));
+    const play = card => {
+      const action = {type:'play', card};
+      if (room.botTurn) room.runBot(action);
+      else room.act(room.round.turn, room.revision, action);
+    };
+    assert.equal(room.view(1).game.choices.canDeclareSetting, true);
+    for (const card of ['HA','H3','H4','H5','H2']) play(card);
+    assert.equal(room.round.trickNo, 10);
+    assert.equal(room.view(1).game.choices.canDeclareSetting, false);
+    assert.deepEqual(room.view(1).game.choices.plays, [{card:'SA'}]);
+    const revision = room.revision;
+    if (guest) assert.throws(() => room.act(1, revision, {type:'claim'}), /1~9/);
+    else assert.equal(room.tryBotClaim(), null);
+    assert.equal(room.revision, revision);
+    if (guest) play('SA');
+    else room.runBot(undefined, 42);
+    for (const card of ['DJ','DK','DQ','D9']) play(card);
+    assert.equal(room.round.phase, 'result');
+    assert.equal(room.round.lastTrick.winner, 1);
+    assert.equal(room.round.result.setting, undefined);
+    assert.equal(room.view(0).scoreboard.rounds, 1);
   }
 });
 

@@ -4,7 +4,7 @@ import {DECK, jokerActive, leadSuit, legalPlays, mighty, strength} from './engin
 // sufficient line using only this seat's cards and the tricks everyone saw.
 export function shouldDeclareSetting(view) {
   if (view.phase !== 'play' || view.turn !== view.seat || view.declarer !== view.seat ||
-      view.trick.length || !view.hand.length || view.settingAwaitingFriend) return false;
+      view.trick.length || view.trickNo >= 10 || view.hand.length < 2 || view.settingAwaitingFriend) return false;
   const trump = view.bid.suit;
   const seen = new Set([...view.hand, ...view.discarded]);
   for (const trick of view.playedTricks ?? []) {

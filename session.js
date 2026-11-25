@@ -222,7 +222,7 @@ export class HostSession {
   }
 
   #beginClaim(seat) {
-    if (!canDeclareSetting(this.round, seat)) throw new Error('주공이 선을 잡았을 때 세팅을 선언할 수 있습니다.');
+    if (!canDeclareSetting(this.round, seat)) throw new Error('세팅은 1~9번째 트릭에서 주공이 선을 잡고 카드를 내기 전에 선언할 수 있습니다.');
     const {phase, turn, declarer, trickNo, trick, hands, bid, rules} = this.round;
     // This position goes only to the host's local solver. Peers receive view().
     this.#claim = structuredClone({phase, turn, declarer, trickNo, trick, hands, bid, rules});
