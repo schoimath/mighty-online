@@ -443,10 +443,14 @@ function playCard(ui, card, confirmed = false) {
     (!move.suit || move.suit === ui.jokerSuit) && Boolean(move.jokerCall) === ui.jokerCall);
   if (!choice) return;
   ui.playPending = true;
+  ui.pendingCard = null;
   renderHand(ui, false);
   if (ui.options.onAction({type: "play", ...choice}) === false) {
     ui.playPending = false;
+    if (confirmed) ui.pendingCard = card;
     renderHand(ui, false);
+    const retry = confirmed ? '[data-do="confirm-play"]' : `.g-hand-card[data-card="${card}"]`;
+    ui.root.querySelector(retry)?.focus({preventScroll:true});
   }
 }
 function resultControls(view, ui) {
