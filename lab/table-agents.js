@@ -1,5 +1,6 @@
 import {botDecision, policyPlay} from '../engine.js';
-import {conserveMightyOnTrumpAce} from '../table-tactics.js';
+import {withJokerStatus} from '../table-joker.js';
+import {conserveMightyOnTrumpAce, conserveOpeningJoker} from '../table-tactics.js';
 import {preferTrumpLead} from '../table-trump-lead.js';
 import {rngFor} from './game.js';
 import {protectPartner} from './partnership-policy.js';
@@ -35,7 +36,8 @@ function chooseModelTurn(modelId, view, rng, memory) {
 // The host commits a worker's proposed memory only after accepting the move.
 export function decideTableTurn({modelId = DEFAULT_MODEL, view, seed, memory}) {
   const rng = rngFor(seed ?? crypto.getRandomValues(new Uint32Array(1))[0]);
-  const decision = chooseModelTurn(modelId, conserveMightyOnTrumpAce(view), rng, memory);
+  const openingView = conserveOpeningJoker(withJokerStatus(view));
+  const decision = chooseModelTurn(modelId, conserveMightyOnTrumpAce(openingView), rng, memory);
   decision.action = preferTrumpLead(view, decision.action);
   return decision;
 }

@@ -438,6 +438,89 @@ test('only the declarer sees which three cards arrived during the exchange', () 
   assert.equal('incomingCards' in session.view(declarer).game, false);
 });
 
+function jokerRoom(t, seed) {
+  const room = new HostSession('방장', {allowFirstJokerCall:true});
+  room.moveSeat(null, 1, room.revision);
+  room.addGuest('declarer', '주공');
+  const random = rngFor(seed);
+  const shuffle = t.mock.method(crypto, 'getRandomValues', array => {
+    array[0] = Math.floor(random() * 2 ** 32);
+    return array;
+  });
+  room.start();
+  shuffle.mock.restore();
+  const step = action => room.botTurn ? room.runBot(action) : room.act(room.round.turn, room.revision, action);
+  const checkJoker = expected => {
+    for (let seat = 0; seat < 5; seat++) assert.equal(room.view(seat).game.jokerPlayed, expected);
+  };
+  checkJoker(false);
+  step({type:'bid', points:14, suit:'N'});
+  for (let i = 0; i < 4; i++) step({type:'pass'});
+  const startPlay = buried => {
+    step({type:'discard', cards:buried});
+    step({type:'friend', kind:'none'});
+  };
+  const firstPlay = () => step({type:'play', ...room.view(room.round.turn).game.choices.plays[0]});
+  return {room, step, checkJoker, startPlay, firstPlay};
+}
+
+test('the fifth card counts as a public Joker even when the declarer covers the trick', t => {
+  const {room, step, checkJoker, startPlay, firstPlay} = jokerRoom(t, 38);
+  startPlay(room.view(0).game.hand.filter(card => card !== 'SA' && card !== 'C3').slice(0,3));
+  step({type:'play', card:'SA'});
+  for (let i = 0; i < 3; i++) firstPlay();
+  checkJoker(false);
+  step({type:'play', card:'JK'});
+  checkJoker(true);
+  assert.deepEqual(room.view(4).game.lastTrick.cards, []);
+  assert.equal(room.view(0).game.trick.length, 0);
+  const plays = room.view(0).game.choices.plays;
+  const raw = botObservation(room.round, 0);
+  assert.ok(raw.choices.plays.some(move => move.jokerCall));
+  for (const {id:modelId} of MODEL_CATALOG) {
+    const request = {modelId, seed:38, view:raw};
+    const actual = decideTableTurn(request);
+    assert.deepEqual(actual, decideTableTurn({...request, view:{...raw, jokerPlayed:true, choices:{...raw.choices, plays}}}));
+    assert.ok(!actual.action.jokerCall);
+  }
+  assert.deepEqual(plays.filter(p => p.card === 'C3'), [{card:'C3'}]);
+  const other = plays.find(p => p.card !== 'C3');
+  assert.throws(() => step({type:'play', ...other, jokerCall:true}), /낼 수 있는 카드/);
+
+  room.removeGuest('declarer');
+  const request = room.botRequest(1);
+  assert.equal(request.view.jokerPlayed, true);
+  assert.deepEqual(request.view.choices.plays.filter(p => p.card === 'C3'), [{card:'C3'}]);
+  step({type:'play', card:'C3', jokerCall:true}); // A previously legal declaration from an older client.
+  assert.deepEqual(room.view(0).game.trick[0], {seat:0, card:'C3'});
+  while (room.round.phase === 'play') firstPlay();
+  checkJoker(true);
+  room.start();
+  checkJoker(false);
+});
+
+test('a Joker responding to a live call is public immediately and preserves that declaration', t => {
+  const {room, step, checkJoker, startPlay} = jokerRoom(t, 11);
+  startPlay(room.view(0).game.hand.filter(card => card !== 'C3').slice(0,3));
+  step({type:'play', card:'C3', jokerCall:true});
+  checkJoker(false);
+  step({type:'play', card:'JK'});
+  checkJoker(true);
+  assert.deepEqual(room.view(3).game.trick[0], {seat:0, card:'C3', jokerCall:true});
+});
+
+test('a Joker privately picked up and buried never becomes publicly played', t => {
+  const {room, checkJoker, startPlay, firstPlay} = jokerRoom(t, 3);
+  assert.ok(room.view(0).game.incomingCards.includes('JK'));
+  checkJoker(false);
+  startPlay(['JK', ...room.view(0).game.hand.filter(card => card !== 'JK').slice(0,2)]);
+  while (room.round.phase === 'play') {
+    checkJoker(false);
+    firstPlay();
+  }
+  checkJoker(false);
+});
+
 test('a direct rematch deals to the same connected seats and opens a fresh auction', () => {
   const session = fullRoom();
   session.setRules({minBid: 15, allowLastJoker: true});

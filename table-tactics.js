@@ -1,5 +1,17 @@
 import {jokerActive, mighty, pointsIn, winningPlay} from './engine.js';
 
+export function conserveOpeningJoker(view) {
+  if (view.phase !== 'play' || view.trickNo !== 1 || view.trick[0]?.jokerCall) return view;
+  const {plays} = view.choices;
+  if (!plays.some(move => move.card === 'JK')) return view;
+  const alternatives = plays.filter(move => move.card !== 'JK');
+  if (!alternatives.length) return view;
+  // A declarer can keep the lead with the Mighty if it is the only alternative.
+  // A follower facing that same choice may need to save the Mighty instead.
+  if (view.trick.length && alternatives.every(move => move.card === mighty(view.bid.suit))) return view;
+  return {...view, choices:{...view.choices, plays:alternatives}};
+}
+
 export function conserveMightyOnTrumpAce(view) {
   if (view.phase !== 'play' || view.selfRole !== 'friend' || view.trickNo >= 9) return view;
   const master = mighty(view.bid.suit);

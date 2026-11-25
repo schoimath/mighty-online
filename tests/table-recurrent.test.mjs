@@ -8,6 +8,7 @@ import {botObservation} from '../engine.js';
 import {playLiveEpisode} from '../lab/live-game.js';
 import {ruleAction} from '../lab/rules-agents.js';
 import {decideTableTurn} from '../lab/table-agents.js';
+import {conserveOpeningJoker} from '../table-tactics.js';
 
 test('four identical models keep separate private memories through worker retries and a rematch', () => {
   const room = new HostSession('방장', undefined, Array(5).fill('recurrent_balanced'));
@@ -28,7 +29,7 @@ test('four identical models keep separate private memories through worker retrie
     const request = room.botRequest(++job);
     assert.deepEqual(request.memory, reference[seat].getMemory());
     const reply = decideTableTurn(request);
-    assert.deepEqual(reply.action, reference[seat](request.view, rngFor(job)));
+    assert.deepEqual(reply.action, reference[seat](conserveOpeningJoker(request.view), rngFor(job)));
     assert.deepEqual(reply.memory, reference[seat].getMemory());
     assert.deepEqual(room.botRequest(job), request);
     assert.ok(!JSON.stringify(room.view(0)).includes('"memory"'));

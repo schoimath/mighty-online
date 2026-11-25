@@ -1,5 +1,6 @@
-import {botObservation, DEFAULT_RULES, validateRules} from './engine.js';
+import {botObservation, DEFAULT_RULES, legalPlays, validateRules} from './engine.js';
 import {applyAction, createGame, getView} from './table-deal.js';
+import {jokerWasPlayed, withJokerStatus} from './table-joker.js';
 import {settlements, TABLE_SCORING_VERSION} from './table-scoring.js';
 import {decideTableTurn, hasSeatMemory, isModelId, memoryForReplacement, randomSeatModels} from './lab/table-agents.js';
 
@@ -193,7 +194,7 @@ export class HostSession {
   botRequest(seed) {
     if (!this.botTurn) return null;
     const seat = this.round.turn, modelId = this.players[seat].modelId;
-    const request = {revision:this.revision, seed, modelId, view:botObservation(this.round, seat)};
+    const request = {revision:this.revision, seed, modelId, view:withJokerStatus(botObservation(this.round, seat))};
     if (hasSeatMemory(modelId)) request.memory = structuredClone(this.#botMemory[seat]);
     return request;
   }
@@ -217,7 +218,13 @@ export class HostSession {
     // Keep only the departing guest's own decision history for a possible
     // mid-round recurrent substitute. These records never enter a room view.
     const track = seat !== this.hostSeat && !this.players[seat].bot && hasSeatMemory(this.botModels[seat]);
-    const observation = track ? botObservation(this.round, seat) : null;
+    const observation = track ? withJokerStatus(botObservation(this.round, seat)) : null;
+    // Older clients still offer a call after everyone has seen the Joker.
+    if (action?.type === 'play' && action.jokerCall === true && this.round.phase === 'play' &&
+        jokerWasPlayed(this.round) && legalPlays(this.round, this.round.hands[seat]).some(move =>
+          move.jokerCall && move.card === action.card && move.suit === action.suit)) {
+      action = {...action, jokerCall:false};
+    }
     applyAction(this.round, seat, action);
     if (this.round.dealNo !== dealNo) this.#resetBotMemory();
     else if (track) {
@@ -263,7 +270,7 @@ export class HostSession {
   view(seat) {
     if (!validSeat(seat)) throw new Error('유효하지 않은 자리입니다.');
     const swap = this.#swapAt(seat);
-    const game = this.round ? getView(this.round, seat) : null;
+    const game = this.round ? withJokerStatus(getView(this.round, seat), jokerWasPlayed(this.round)) : null;
     if (game?.phase === 'discard' && seat === game.declarer) {
       game.incomingCards = [...(this.round.knownKitty || [])];
     }

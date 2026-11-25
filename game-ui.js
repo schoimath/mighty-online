@@ -1,5 +1,6 @@
 import {isCoveredSeat, scoreTable, seatPile, seatStanding, signedScore} from "./score-ui.js";
 import {DEFAULT_RULES, leadSuit, mighty} from "./engine.js";
+import {jokerWasPlayed, withJokerStatus} from "./table-joker.js";
 import {playTableSound, soundControl, toggleSound} from "./sound.js";
 import {AUCTION_BEAT_MS, FRIEND_ANNOUNCEMENT_MS} from "./table-timing.js";
 import {settlementDetails, TABLE_SCORING_VERSION} from "./table-scoring.js";
@@ -251,14 +252,15 @@ function renderTable(ui, nameAt) {
   for (const move of view.trick.slice(trick.children.length)) {
     const offset = (move.seat - view.seat + 5) % 5;
     const isMighty = move.card === mighty(view.bid.suit);
+    const called = move.jokerCall && (!view.jokerPlayed || view.trick.some(play => play.card === "JK"));
     const ruff = move.card[0] === view.bid.suit && lead !== view.bid.suit;
-    const label = nameAt(move.seat) + " · " + cardName(move.card) + (move.jokerCall ? " · 조커콜" : isMighty ? " · 마이티" : "");
+    const label = nameAt(move.seat) + " · " + cardName(move.card) + (called ? " · 조커콜" : isMighty ? " · 마이티" : "");
     const caption = move.suit ? suitMark(move.suit) + " 요구" : escapeHtml(nameAt(move.seat));
-    const effect = move.jokerCall ? " g-joker-call-play" : isMighty ? " g-mighty-play" : "";
-    const badge = move.jokerCall ? jokerCallBadge : isMighty ? mightyBadge : "";
+    const effect = called ? " g-joker-call-play" : isMighty ? " g-mighty-play" : "";
+    const badge = called ? jokerCallBadge : isMighty ? mightyBadge : "";
     trick.insertAdjacentHTML("beforeend", `<div class="g-played g-played-${offset}" data-play-seat="${move.seat}"><div class="g-on-table${effect}" role="img" aria-label="${escapeHtml(label)}">${cardFace(move.card)}${badge}</div><span class="g-play-label">${caption}</span></div>`);
     const face = trick.lastElementChild.firstElementChild;
-    if (move.jokerCall) {
+    if (called) {
       felt.querySelector(".g-call-announcement").textContent = label;
       face.dataset.landingSound = "jokerCall";
     } else if (ruff) face.dataset.landingSound = "ruff";
@@ -313,7 +315,7 @@ function renderHand(ui, newDeal) {
   const arrivals = [];
   for (const [i, card] of orderedHand.entries()) {
     const isMighty = card === mightyCard;
-    const isJokerCall = card === jokerCallCard;
+    const isJokerCall = card === jokerCallCard && !view.jokerPlayed;
     const isIncoming = incoming.has(card);
     let label = cardName(card);
     if (isMighty) label += " · 마이티";
@@ -755,6 +757,13 @@ export function clearGame(container) {
   container.replaceChildren();
 }
 
+// Older hosts report the visible cards but do not remember the Joker for guests.
+function withRememberedJoker(view, previous) {
+  if (view.jokerPlayed !== undefined || view.phase !== "play") return view;
+  const sameDeal = previous?.phase === "play" && previous.dealNo === view.dealNo && previous.trickNo <= view.trickNo;
+  return withJokerStatus(view, (sameDeal && previous.jokerPlayed) || jokerWasPlayed(view));
+}
+
 export function renderGame(container, publicView, options = {}) {
   let ui = cache.get(container);
   if (!ui) {
@@ -766,6 +775,7 @@ export function renderGame(container, publicView, options = {}) {
     mountTable(container);
     ui.auctionMarkup = ui.centerMarkup = ui.settingsHtml = null;
   }
+  publicView = withRememberedJoker(publicView, ui.latest);
   ui.latest = publicView;
   ui.playPending = false;
   ui.options = options;
@@ -822,7 +832,7 @@ export function rulesContent(rules = DEFAULT_RULES, scoringVersion = TABLE_SCORI
     <h3>카드 내기</h3><p>주공부터 한 장씩 냅니다. 선이 낸 무늬가 손에 있으면 따라야 합니다. 마이티와 조커는 무늬에 관계없이 낼 수 있습니다. 첫 트릭에서는 다른 무늬를 낼 수 있으면 기루다로 시작할 수 없습니다. 트릭을 이긴 사람이 다음 선입니다.</p>
     <h3>마이티와 조커</h3><p>가장 센 카드는 스페이드 A입니다. 스페이드가 기루다일 때는 다이아몬드 A가 마이티입니다. 그다음은 조커, 기루다, 선의 무늬 순입니다. 같은 무늬 안에서는 A가 가장 높고 2가 가장 낮습니다.</p>
     <p>${jokerTiming}</p>
-    <p>${jokerCallFrom} 선이 클로버 3으로 조커콜을 선언할 수 있습니다. 조커를 가진 사람은 조커 또는 마이티를 내야 하며, 조커는 그 트릭에서 가장 약합니다. 클로버가 기루다일 때의 조커콜 카드는 스페이드 3입니다.</p>
+    <p>${jokerCallFrom} 선이 클로버 3으로 조커콜을 선언할 수 있습니다. 조커를 가진 사람은 조커 또는 마이티를 내야 하며, 조커는 그 트릭에서 가장 약합니다. 클로버가 기루다일 때의 조커콜 카드는 스페이드 3입니다. 조커가 한 번 나오면 손패의 조커콜 표식이 사라지고 그 카드는 일반 3으로 냅니다.</p>
     <h3>점수 카드와 승패</h3><p>10, J, Q, K, A는 각각 1점으로, 한 판에는 총 20점이 있습니다. 가져간 점수 카드는 보드의 각자 자리 옆에 모읍니다. 주공은 처음부터 카드를 덮고, 프렌드는 정체가 밝혀지는 즉시 앞서 가져간 카드까지 모두 덮습니다. 열 번째 트릭이 끝났을 때 주공 팀의 점수가 공약 이상이면 주공 팀이 승리합니다.</p>
     <p>${scoring} 배율을 모두 곱한 값이 여당 기준점수입니다. 프렌드는 그 점수 그대로, 주공은 2배, 야당은 각각 부호를 바꿔 정산합니다. 노프렌드 주공은 4배입니다.</p>
   </div>`;
