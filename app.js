@@ -95,6 +95,7 @@ async function refreshDirectory() {
   clearTimeout(directoryTimer);
   const controller = new AbortController();
   directoryScan = controller;
+  let nextScan = 45000;
   renderPublicTables(listedRooms, {loading:true, capacity:PUBLIC_ROOM_LIMIT});
   try {
     const rooms = await listPublicRooms({signal:controller.signal});
@@ -102,11 +103,15 @@ async function refreshDirectory() {
     listedRooms = rooms;
     renderPublicTables(rooms, {capacity:PUBLIC_ROOM_LIMIT});
   } catch (error) {
-    if (!controller.signal.aborted) renderPublicTables(listedRooms, {error:error.message, capacity:PUBLIC_ROOM_LIMIT});
+    if (!controller.signal.aborted) {
+      listedRooms = [];
+      renderPublicTables(listedRooms, {error:error.message, capacity:PUBLIC_ROOM_LIMIT});
+      nextScan = 15000;
+    }
   } finally {
     if (directoryScan === controller) {
       directoryScan = null;
-      directoryTimer = setTimeout(refreshDirectory, 45000);
+      directoryTimer = setTimeout(refreshDirectory, nextScan);
     }
   }
 }
@@ -222,6 +227,10 @@ function stopSession(message) {
     history.replaceState(null,'',url);
   }
   showScreen('lobby');
+  // The last scan predates the entire visit. In particular our former host
+  // may just have closed; only show tables confirmed by a fresh scan.
+  listedRooms = [];
+  renderPublicTables(listedRooms, {loading:true, capacity:PUBLIC_ROOM_LIMIT});
   refreshDirectory();
   window.scrollTo(0,0);
   if (message) toast(message);
