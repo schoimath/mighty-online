@@ -34,6 +34,15 @@ export function signedScore(points) {
   return Number.isSafeInteger(points) ? (points > 0 ? '+' : '') + points : '—';
 }
 
+// These cards form one opposition pile, with no seat-of-origin information.
+export function settingPenaltyPile(view) {
+  const cards = view.settingPenaltyCards?.filter(isPointCard);
+  if (view.phase !== 'result' || view.result?.setting?.success !== false || !cards?.length) return '';
+  const master = mighty(view.bid.suit);
+  return '<div class="g-setting-pile" role="group" aria-label="세팅 페널티로 야당이 받은 점수 카드">' +
+    cards.map(card => pointCard(card, master)).join('') + '</div>';
+}
+
 export function seatStanding(board, seat, beforeSettlement = false) {
   const member = board?.members?.find(entry => entry.seat === seat);
   if (!Number.isSafeInteger(member?.total)) return '';

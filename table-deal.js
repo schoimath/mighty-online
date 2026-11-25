@@ -1,4 +1,7 @@
 import {applyAction as applyEngineAction, createGame as deal, getView as project, pointsIn} from './engine.js';
+import {canDeclareSetting, finishSettingFriendTrick} from './table-setting.js';
+
+export {canDeclareSetting, resolveSetting} from './table-setting.js';
 
 // Limit retries if a faulty random source repeatedly returns an unusable deal
 // or a value rejected by the engine's unbiased shuffle.
@@ -29,6 +32,9 @@ export function createGame(options = {}) {
 }
 
 export function applyAction(state, seat, action, randomSource) {
+  if (state.settingAwaitingFriend && state.trick.length === 4) {
+    return finishSettingFriendTrick(state, seat, action);
+  }
   if (state.phase !== 'bid' || state.bid || action?.type !== 'pass') {
     return applyEngineAction(state, seat, action);
   }
@@ -41,5 +47,13 @@ export function applyAction(state, seat, action, randomSource) {
 }
 
 export function getView(state, seat) {
-  return {...project(state, seat), misdealCount: state.misdealCount ?? 0};
+  const view = project(state, seat);
+  if (state.phase === 'play' || state.result?.setting) {
+    view.choices.canDeclareSetting = canDeclareSetting(state, seat);
+    view.settingAwaitingFriend = Boolean(state.settingAwaitingFriend);
+  }
+  if (state.result?.setting?.success === false) {
+    view.settingPenaltyCards = state.settingOppositionPile.slice();
+  }
+  return {...view, misdealCount: state.misdealCount ?? 0};
 }

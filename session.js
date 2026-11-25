@@ -1,5 +1,5 @@
 import {botObservation, DEFAULT_RULES, legalPlays, validateRules} from './engine.js';
-import {applyAction, createGame, getView} from './table-deal.js';
+import {applyAction, canDeclareSetting, createGame, getView, resolveSetting} from './table-deal.js';
 import {jokerWasPlayed, withJokerStatus} from './table-joker.js';
 import {settlements, TABLE_SCORING_VERSION} from './table-scoring.js';
 import {decideTableTurn, hasSeatMemory, isModelId, memoryForReplacement, randomSeatModels} from './lab/table-agents.js';
@@ -24,6 +24,7 @@ export class HostSession {
   #lastSettlement = new Map();
   #botMemory = Array(5).fill(null);
   #guestDecisions = Array.from({length:5}, () => []);
+  #claim = null;
 
   constructor(hostName, rules = DEFAULT_RULES, botModels = randomSeatModels()) {
     this.players = [this.#player('host', hostName, false), null, null, null, null];
@@ -184,11 +185,37 @@ export class HostSession {
   act(seat, revision, action) {
     if (!this.round || !Number.isInteger(seat) || seat < 0 || seat > 4 || this.players[seat]?.bot) throw new Error('플레이어 자리를 확인해 주세요.');
     if (revision !== this.revision) throw new Error('테이블 상태가 바뀌었습니다. 다시 선택해 주세요.');
+    if (this.#claim) throw new Error('세팅을 판정하고 있습니다.');
+    if (action?.type === 'claim') {
+      if (!canDeclareSetting(this.round, seat)) throw new Error('주공이 선을 잡았을 때 세팅을 선언할 수 있습니다.');
+      const {phase, turn, declarer, trickNo, trick, hands, bid, rules} = this.round;
+      // This position goes only to the host's local solver. Peers receive view().
+      this.#claim = structuredClone({phase, turn, declarer, trickNo, trick, hands, bid, rules});
+      this.revision++;
+      return this.#claim;
+    }
     this.#applyTurn(seat, action);
   }
 
+  finishClaim(position, success) {
+    if (!position || this.#claim !== position) return false;
+    if (typeof success !== 'boolean') throw new Error('세팅 판정 결과를 확인해 주세요.');
+    resolveSetting(this.round, this.round.declarer, success);
+    this.#claim = null;
+    this.#recordResult();
+    this.revision++;
+    return true;
+  }
+
+  abandonClaim(position) {
+    if (!position || this.#claim !== position) return false;
+    this.#claim = null;
+    this.revision++;
+    return true;
+  }
+
   get botTurn() {
-    return Boolean(this.round && this.round.phase !== 'result' && this.players[this.round.turn]?.bot);
+    return Boolean(!this.#claim && this.round && this.round.phase !== 'result' && this.players[this.round.turn]?.bot);
   }
 
   botRequest(seed) {
@@ -233,6 +260,15 @@ export class HostSession {
       this.#guestDecisions[seat].push(entry);
     }
     else if (memory != null) this.#botMemory[seat] = structuredClone(memory);
+    this.#recordResult();
+    if (action.type === 'bid' || action.type === 'pass') {
+      const entry = this.round.bidHistory.at(-1);
+      if (entry) entry.name = this.players[seat].name;
+    }
+    this.revision++;
+  }
+
+  #recordResult() {
     if (this.round.result && this.#roundMembers) {
       const changes = settlements(this.round.result, this.round.bid.suit);
       this.#lastSettlement.clear();
@@ -247,11 +283,6 @@ export class HostSession {
       const opener = this.round.result.friend ?? this.round.result.declarer;
       this.#nextBidder = {seat: opener, player: this.players[opener]};
     }
-    if (action.type === 'bid' || action.type === 'pass') {
-      const entry = this.round.bidHistory.at(-1);
-      if (entry) entry.name = this.players[seat].name;
-    }
-    this.revision++;
   }
 
   #scoreboard() {
@@ -271,6 +302,12 @@ export class HostSession {
     if (!validSeat(seat)) throw new Error('유효하지 않은 자리입니다.');
     const swap = this.#swapAt(seat);
     const game = this.round ? withJokerStatus(getView(this.round, seat), jokerWasPlayed(this.round)) : null;
+    if (game && this.#claim) {
+      game.claimPending = true;
+      game.turn = null;
+      game.choices.canDeclareSetting = false;
+      game.choices.plays = [];
+    }
     if (game?.phase === 'discard' && seat === game.declarer) {
       game.incomingCards = [...(this.round.knownKitty || [])];
     }

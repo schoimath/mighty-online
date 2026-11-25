@@ -1,4 +1,4 @@
-import {isCoveredSeat, scoreTable, seatPile, seatStanding, signedScore} from "./score-ui.js";
+import {isCoveredSeat, scoreTable, seatPile, seatStanding, settingPenaltyPile, signedScore} from "./score-ui.js";
 import {DEFAULT_RULES, leadSuit, mighty} from "./engine.js";
 import {jokerWasPlayed, withJokerStatus} from "./table-joker.js";
 import {playTableSound, soundControl, toggleSound} from "./sound.js";
@@ -117,6 +117,8 @@ function button(label, name, enabled = true, style = "primary") {
 function updateDefaults(ui, view) {
   const signature = [view.phase, view.seat, view.turn, view.dealNo, view.trickNo, view.hand.join("."), view.bid?.points, view.bid?.suit].join("|");
   if (ui.signature === signature) return;
+  const claimDialog = ui.root.querySelector(".g-claim-dialog");
+  if (claimDialog?.open) claimDialog.close();
   ui.signature = signature;
   ui.selected = [];
   ui.pendingCard = null;
@@ -237,7 +239,10 @@ function renderTable(ui, nameAt) {
     trick.dataset.number = String(view.trickNo);
   }
   if (!center.hidden) {
-    const emptyLabel = view.phase === "play" ? "첫 카드를 기다리는 중" : labels[view.phase];
+    let emptyLabel = view.phase === "play" ? "첫 카드를 기다리는 중" : labels[view.phase];
+    if (view.claimPending || ui.claimSubmitting) emptyLabel = "세팅 판정 중";
+    else if (view.settingAwaitingFriend) emptyLabel = "초구 프렌드 결정";
+    else if (view.phase === "result" && view.result.setting) emptyLabel = view.result.setting.success ? "세팅 성공" : "세팅 실패";
     const markup = ui.sweep ? sweepMarkup(ui.sweep, view.result.points)
       : view.phase === "bid" || view.phase === "discard" ? leadingBidMarkup(view, nameAt)
       : `<span class="g-table-symbol" aria-hidden="true">♠</span><strong>${escapeHtml(emptyLabel)}</strong>`;
@@ -276,6 +281,12 @@ function renderTable(ui, nameAt) {
   }
 }
 
+function canDeclareSetting(ui) {
+  const {view} = ui;
+  return view.phase === "play" && view.seat === view.turn && view.choices.canDeclareSetting &&
+    !ui.resolving && !ui.playPending && !ui.claimSubmitting && !view.claimPending;
+}
+
 function renderHand(ui, newDeal) {
   const {view, root} = ui;
   const hand = root.querySelector(".g-hand");
@@ -284,7 +295,7 @@ function renderHand(ui, newDeal) {
   let row = hand.querySelector(".g-cards");
   if (!row) {
     hand.setAttribute("aria-label", "내 손패");
-    hand.innerHTML = '<div class="g-section-heading"><h2>내 손패 <span></span></h2><span class="g-role"></span></div><div class="g-cards"></div><div class="g-play-settings" hidden></div>';
+    hand.innerHTML = '<div class="g-section-heading"><h2>내 손패 <span></span></h2><div class="g-hand-actions"><span class="g-role"></span><button type="button" class="g-btn g-claim-open" data-do="claim" aria-haspopup="dialog" hidden>세팅 선언</button></div></div><div class="g-cards"></div><div class="g-play-settings" hidden></div>';
     row = hand.querySelector(".g-cards");
   }
   hand.querySelector("h2 span").textContent = view.hand.length + "장";
@@ -292,10 +303,12 @@ function renderHand(ui, newDeal) {
   hand.dataset.seatRole = visibleRole(view, view.seat);
   role.textContent = roleAt(view, view.seat) || roleLabels[view.selfRole] || "";
   role.hidden = !role.textContent;
+  hand.querySelector('[data-do="claim"]').hidden = !canDeclareSetting(ui);
   if (newDeal) row.replaceChildren();
   const existing = new Map(Array.from(row.children, el => [el.dataset.card, el]));
   for (const [card, el] of existing) if (!view.hand.includes(card)) el.remove();
-  const interactive = view.turn === view.seat && !ui.playPending && (view.phase === "discard" || view.phase === "play");
+  const interactive = view.turn === view.seat && !ui.playPending && !ui.claimSubmitting && !view.claimPending &&
+    (view.phase === "discard" || view.phase === "play");
   const settings = hand.querySelector(".g-play-settings");
   const settingsHtml = interactive && view.phase === "play" ? specialPlaySettings(view, ui) : "";
   if (settingsHtml !== ui.settingsHtml) {
@@ -434,7 +447,7 @@ function cancelPlay(ui) {
   ui.root.querySelector(`.g-hand-card[data-card="${card}"]`)?.focus({preventScroll:true});
 }
 function playCard(ui, card, confirmed = false) {
-  if (ui.playPending || ui.view.phase !== "play" || ui.view.seat !== ui.view.turn) return;
+  if (ui.playPending || ui.claimSubmitting || ui.view.claimPending || ui.view.phase !== "play" || ui.view.seat !== ui.view.turn) return;
   const moves = ui.view.choices.plays.filter(move => move.card === card);
   if (!moves.length) return;
   if (moves.length > 1 && !confirmed) {
@@ -463,8 +476,38 @@ function playCard(ui, card, confirmed = false) {
     ui.root.querySelector(retry)?.focus({preventScroll:true});
   }
 }
+
+function claimClick(ui, kind) {
+  const dialog = ui.root.querySelector(".g-claim-dialog");
+  if (kind === "claim") {
+    if (!canDeclareSetting(ui) || dialog.open) return;
+    dialog.querySelector(".g-claim-count").textContent = ui.view.hand.length;
+    dialog.showModal();
+    dialog.querySelector('[data-do="cancel-claim"]').focus();
+    return;
+  }
+  if (!dialog.open) return;
+  dialog.close();
+  if (kind !== "confirm-claim" || !canDeclareSetting(ui)) return;
+
+  ui.claimSubmitting = true;
+  ui.pendingCard = null;
+  redraw(ui);
+  if (ui.options.onAction({type:"claim"}) === false) {
+    ui.claimSubmitting = false;
+    redraw(ui);
+    ui.root.querySelector('[data-do="claim"]')?.focus({preventScroll:true});
+  }
+}
+
 function resultControls(view, ui) {
   const result = view.result;
+  const setting = result.setting;
+  const recipient = setting?.success ? "주공이" : "야당이";
+  const claimResult = setting ? `<div class="g-claim-outcome" data-success="${Boolean(setting.success)}">
+    <strong>세팅 ${setting.success ? "성공" : "실패"}</strong>
+    <p>남은 ${escapeHtml(setting.remainingTricks)}개 트릭에 ${setting.remainingPoints
+      ? `걸린 ${escapeHtml(setting.remainingPoints)}점을 ${recipient} 가져갔어요.` : "점수 카드가 없었어요."}</p>${settingPenaltyPile(view)}</div>` : "";
   const board = ui.options.scoreboard;
   const net = board ? board.members.find(m => m.seat === view.seat)?.lastDelta : archivedSettlements(result, view.bid.suit)[view.seat];
   let breakdown = "";
@@ -482,7 +525,7 @@ function resultControls(view, ui) {
   const role = view.seat === result.declarer ? (result.friend == null ? "주공 ×4" : "주공 ×2")
     : view.seat === result.friend ? "프렌드" : "야당";
   return `<h2>주공 팀 ${result.won ? "승리" : "패배"}</h2>
-    <p>공약은 ${escapeHtml(result.target)}점, 주공 팀은 ${escapeHtml(result.points)}점을 획득했어요.</p>
+    ${claimResult}<p>공약은 ${escapeHtml(result.target)}점, 주공 팀은 ${escapeHtml(result.points)}점을 획득했어요.</p>
     <div class="g-result-score"><strong>${escapeHtml(result.points)}</strong><span>/ 20점</span></div>
     ${breakdown}${net == null ? '' : `<p class="g-my-settlement">내 정산 <strong>${signedScore(net)}점</strong> <small>(${role})</small></p>`}
     ${scoreTable(board, view.seat)}
@@ -534,9 +577,12 @@ function panelMarkup(view, ui, nameAt) {
   const mine = view.seat === view.turn;
   const controls = { bid: bidControls, discard: discardControls, friend: friendControls, play: playControls, result: resultControls };
   const waiting = view.phase !== "result" && !mine;
-  const content = waiting ? `<h2>${escapeHtml(nameAt(view.turn))}님 차례</h2><p>${({ bid: "입찰을 기다리고 있어요.", discard: "주공이 바닥패를 교환하고 있어요.", friend: "주공이 프렌드를 정하고 있어요.", play: "카드를 고르고 있어요." })[view.phase]}</p>` : controls[view.phase](view, ui);
+  const pending = view.claimPending || ui.claimSubmitting;
+  const content = pending ? `<h2>세팅 판정 중</h2><p>${escapeHtml(nameAt(view.declarer))}님이 남은 트릭을 모두 딸 수 있는지 확인하고 있어요.</p>`
+    : waiting ? `<h2>${escapeHtml(nameAt(view.turn))}님 차례</h2><p>${({ bid: "입찰을 기다리고 있어요.", discard: "주공이 바닥패를 교환하고 있어요.", friend: "주공이 프렌드를 정하고 있어요.", play: "카드를 고르고 있어요." })[view.phase]}</p>` : controls[view.phase](view, ui);
+  const firstFriend = view.settingAwaitingFriend ? '<p class="g-claim-outcome" data-success="false"><strong>세팅 실패</strong>초구 프렌드를 정하기 위해 첫 트릭만 진행합니다.</p>' : "";
   const standings = view.phase === "result" ? "" : scoreTable(ui.options.scoreboard, view.seat, {collapsed:true});
-  return `<div class="g-panel-body"><div class="g-panel-caption"><i class="${waiting ? "g-wait-dot" : ""}"></i>${view.phase === "result" ? "최종 결과" : mine ? "내 차례" : "상대 차례"}</div><div class="g-action" aria-live="polite">${content}</div>${standings}${infoMarkup(view, nameAt)}</div>${previousTrick(view, nameAt)}`;
+  return `<div class="g-panel-body"><div class="g-panel-caption"><i class="${waiting ? "g-wait-dot" : ""}"></i>${view.phase === "result" ? "최종 결과" : pending ? "세팅 선언" : mine ? "내 차례" : "상대 차례"}</div><div class="g-action" aria-live="polite">${firstFriend}${content}</div>${standings}${infoMarkup(view, nameAt)}</div>${previousTrick(view, nameAt)}`;
 }
 function mountTable(root) {
   root.innerHTML = `<div class="g-screen">
@@ -558,7 +604,13 @@ function mountTable(root) {
           <p class="g-trick-result" hidden><span></span><b></b></p></div></section>
         <section class="g-hand"></section><aside class="g-panel"></aside>
       </div>
-    </div></div>`;
+    </div>
+    <dialog class="modal g-claim-dialog" aria-labelledby="g-claim-title" aria-describedby="g-claim-description g-claim-warning">
+      <div class="modal-inner"><h2 id="g-claim-title">세팅을 선언할까요?</h2>
+        <p id="g-claim-description">다른 사람이 어떤 카드를 내도 남은 <b class="g-claim-count"></b>개 트릭을 주공 혼자 모두 딸 수 있어야 합니다.</p>
+        <p id="g-claim-warning"><strong>실패하면 남은 점수 카드는 모두 야당이 가져갑니다.</strong></p>
+        <div class="room-actions"><button type="button" class="plain-button" data-do="cancel-claim" autofocus>취소</button><button type="button" class="primary-button" data-do="confirm-claim">세팅 선언하기</button></div>
+      </div></dialog></div>`;
   soundControl(root.querySelector('[data-do="sound"]'));
 }
 function redraw(ui, newDeal = false) {
@@ -578,11 +630,13 @@ function redraw(ui, newDeal = false) {
     const {suit, points} = view.bid;
     tag.innerHTML = `<span class="g-contract-prefix">공약 </span>${suitMark(suit)} ${suitInfo[suit][1]} <strong>${escapeHtml(points)}점</strong>`;
   } else {
-    tag.textContent = view.phase === "result" ? "10트릭 완료" : "경매 " + view.bidHistory.length + "회";
+    tag.textContent = view.phase === "result" ? (view.result.setting ? "세팅 종료" : "10트릭 완료") : "경매 " + view.bidHistory.length + "회";
   }
   // Read the departing card's position before reconciling the player's hand.
   renderTable(ui, nameAt);
   renderHand(ui, newDeal);
+  const claimDialog = root.querySelector(".g-claim-dialog");
+  if (claimDialog.open && !canDeclareSetting(ui)) claimDialog.close();
   if (newDeal) dealToOtherSeats(root, view.seat);
   const panel = root.querySelector(".g-panel");
   panel.innerHTML = panelMarkup(view, ui, nameAt);
@@ -634,6 +688,7 @@ function bind(ui) {
       return;
     }
     const kind = el.dataset.do;
+    if (kind === "claim" || kind === "cancel-claim" || kind === "confirm-claim") return claimClick(ui, kind);
     if (kind === "cancel-play") return cancelPlay(ui);
     if (kind === "confirm-play") return playCard(ui, ui.pendingCard, true);
     if (kind === "sound") return toggleSound(el);
@@ -706,9 +761,9 @@ function displayLatest(ui) {
       }
     }
   }
-  if (view.phase === "play" && view.trickNo === 1 && view.call && previous?.phase !== "play") {
+  if (view.phase === "play" && view.trickNo === 1 && view.call && !view.claimPending && !view.settingAwaitingFriend && previous?.phase !== "play") {
     announceFriend(ui, view);
-  } else if (view.phase !== "play") {
+  } else if (view.phase !== "play" || view.claimPending || view.settingAwaitingFriend) {
     clearTimeout(ui.friendTimer);
     ui.root.querySelector(".g-friend-call").hidden = true;
   }
@@ -778,7 +833,16 @@ export function renderGame(container, publicView, options = {}) {
   publicView = withRememberedJoker(publicView, ui.latest);
   ui.latest = publicView;
   ui.playPending = false;
+  ui.claimSubmitting = false;
   ui.options = options;
+  // A failed opening claim may play one trick solely to identify the friend.
+  // Its point cards are awarded by the claim, not to that trick's winner.
+  if (publicView.phase === "result" && publicView.result.setting) {
+    clearTimeout(ui.timer);
+    ui.resolving = null;
+    displayLatest(ui);
+    return;
+  }
   if (ui.auctionTimer) {
     redraw(ui);
     return;
@@ -830,6 +894,7 @@ export function rulesContent(rules = DEFAULT_RULES, scoringVersion = TABLE_SCORI
     <p>${opening} 경매의 승자인 주공은 바닥패를 가져와 3장을 묻습니다. 이때 기루다를 바꾸려면 공약을 2점 이상 올려야 합니다. 묻은 점수는 주공 팀의 점수입니다.</p>
     <h3>프렌드</h3><p>주공이 부른 카드를 가진 사람이 프렌드입니다. 기본 선택은 마이티, 조커, 기루다 A 순서이며 주공이 들고 있거나 묻은 카드는 건너뜁니다. 셋 다 주공에게 있으면 노프렌드가 기본입니다. 노기루다에서는 마이티와 조커가 모두 주공에게 있으면 노프렌드입니다. 부른 카드가 나오면 모두에게 정체가 공개됩니다.${firstFriend} 노프렌드를 선택하거나 주공이 가진 카드나 묻은 카드를 부르면 혼자 플레이합니다.</p>
     <h3>카드 내기</h3><p>주공부터 한 장씩 냅니다. 선이 낸 무늬가 손에 있으면 따라야 합니다. 마이티와 조커는 무늬에 관계없이 낼 수 있습니다. 첫 트릭에서는 다른 무늬를 낼 수 있으면 기루다로 시작할 수 없습니다. 트릭을 이긴 사람이 다음 선입니다.</p>
+    <h3>세팅</h3><p>주공은 선을 잡고 카드를 내기 전에 세팅을 선언할 수 있습니다. 다른 네 사람이 어떤 합법적인 카드를 내더라도 주공 혼자 남은 트릭을 모두 딸 수 있으면 성공입니다. 성공하면 남은 점수 카드는 주공이, 실패하면 야당이 모두 가져갑니다. 이미 획득한 점수와 묻은 카드는 원래대로 정산합니다. 초구 프렌드를 부르고 첫 트릭 전에 세팅에 실패하면, 프렌드를 정하기 위해 첫 트릭만 진행한 뒤 정산합니다.</p>
     <h3>마이티와 조커</h3><p>가장 센 카드는 스페이드 A입니다. 스페이드가 기루다일 때는 다이아몬드 A가 마이티입니다. 그다음은 조커, 기루다, 선의 무늬 순입니다. 같은 무늬 안에서는 A가 가장 높고 2가 가장 낮습니다.</p>
     <p>${jokerTiming}</p>
     <p>${jokerCallFrom} 선이 클로버 3으로 조커콜을 선언할 수 있습니다. 조커를 가진 사람은 조커 또는 마이티를 내야 하며, 조커는 그 트릭에서 가장 약합니다. 클로버가 기루다일 때의 조커콜 카드는 스페이드 3입니다. 조커가 한 번 나오면 손패의 조커콜 표식이 사라지고 그 카드는 일반 3으로 냅니다.</p>

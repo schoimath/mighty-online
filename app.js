@@ -41,6 +41,7 @@ let mode = 'lobby';
 let generation = 0;
 let botTimer, toastTimer;
 let botWorker = null;
+let claimWorker = null;
 let workerUnavailable = false;
 let pendingConnect = null;
 let roomCode = '';
@@ -140,6 +141,8 @@ function stopSession(message) {
   clearTimeout(botTimer);
   botWorker?.terminate();
   botWorker = null;
+  claimWorker?.terminate();
+  claimWorker = null;
   workerUnavailable = false;
   const oldTransport = transport;
   transport = null;
@@ -323,7 +326,7 @@ function draw() {
     },
     onAction(action) {
       if (authority) {
-        try { authority.act(authority.hostSeat,snapshot.revision,action); publish(); return true; }
+        try { submitTurn(authority, authority.hostSeat, snapshot.revision, action); return true; }
         catch (error) { toast(error.message); return false; }
       }
       if (transport?.send({type:'action',revision:snapshot.revision,action})) return true;
@@ -351,6 +354,56 @@ function publish() {
     botTimer = setTimeout(takeBotTurn,pause);
   }
 }
+
+function submitTurn(session, seat, revision, action) {
+  const position = session.act(seat, revision, action);
+  publish();
+  if (position) verifyClaim(session, position);
+}
+
+function verifyClaim(session, position) {
+  let worker;
+  const releaseWorker = () => {
+    worker?.terminate();
+    if (claimWorker === worker) claimWorker = null;
+  };
+  const failed = () => {
+    if (session !== authority || !session.abandonClaim(position)) return;
+    releaseWorker();
+    const message = '세팅 판정을 완료하지 못했습니다. 점수는 그대로이며 다시 선언하거나 카드를 낼 수 있습니다.';
+    toast(message);
+    for (const [id, seat] of session.connections) {
+      if (seat === position.declarer) transport?.send(id, {type:'error', message});
+    }
+    publish();
+  };
+  const finish = success => {
+    if (typeof success !== 'boolean') { failed(); return; }
+    if (session !== authority || !session.finishClaim(position, success)) return;
+    releaseWorker();
+    publish();
+  };
+  const retryLocally = async () => {
+    releaseWorker();
+    try {
+      const {canSweepRemaining} = await import('./table-claim.js');
+      if (session === authority) finish(canSweepRemaining(position));
+    } catch {
+      failed();
+    }
+  };
+  try {
+    worker = new Worker(new URL('./claim-worker.js', import.meta.url), {type:'module'});
+    claimWorker = worker;
+    worker.onmessage = event => finish(event.data);
+    worker.onerror = event => { event.preventDefault(); retryLocally(); };
+    worker.onmessageerror = retryLocally;
+    worker.postMessage(position);
+  } catch {
+    retryLocally();
+  }
+}
+
 function takeBotTurn() {
   const session = authority;
   if (!session?.botTurn) return;
@@ -449,8 +502,7 @@ async function connectRoom(kind, name, code, signal) {
           if (packet.type === 'seat-choice') {
             if (applySeatChoice(session, id, packet)) publish();
           } else if (packet.type === 'action') {
-            session.act(seat,packet.revision,packet.action);
-            publish();
+            submitTurn(session, seat, packet.revision, packet.action);
           }
         } catch (error) {
           transport.send(id,{type:'error',message:error.message});

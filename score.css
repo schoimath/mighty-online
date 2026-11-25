@@ -57,6 +57,7 @@
 .g-my-settlement small { color: #c1cebf; white-space: nowrap; }
 .g-misdeal { color: #efd79b; font-size: .85rem; }
 .g-score-mighty { background: #f7e4a7; border-color: #e1bb62; }
+.g-setting-pile { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 6px; }
 .g-score-mighty sup { color: #725017; font-size: .55rem; align-self: flex-start; }
 .g-score-covered {
   display: inline-flex; align-items: center; justify-content: center; gap: 5px;
