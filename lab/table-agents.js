@@ -1,4 +1,6 @@
 import {botDecision, policyPlay} from '../engine.js';
+import {conserveMightyOnTrumpAce} from '../table-tactics.js';
+import {preferTrumpLead} from '../table-trump-lead.js';
 import {rngFor} from './game.js';
 import {protectPartner} from './partnership-policy.js';
 import {contractSearchAction} from './contract-search.js';
@@ -21,13 +23,19 @@ export function memoryForReplacement(id, seatHistory) {
   return hasSeatMemory(id) ? replayBalancedMemory(seatHistory) : null;
 }
 
-// The host commits a worker's proposed memory only after accepting the move.
-export function decideTableTurn({modelId = DEFAULT_MODEL, view, seed, memory}) {
-  const rng = rngFor(seed ?? crypto.getRandomValues(new Uint32Array(1))[0]);
+function chooseModelTurn(modelId, view, rng, memory) {
   switch (modelId) {
     case 'contract_search': return {action:contractSearchAction(view, rng)};
     case 'recurrent_balanced': return balancedTurn(view, rng, memory);
     case 'heuristic': return {action:botDecision(protectPartner(view), policyPlay)};
     default: throw new Error('지원하지 않는 AI 모델입니다.');
   }
+}
+
+// The host commits a worker's proposed memory only after accepting the move.
+export function decideTableTurn({modelId = DEFAULT_MODEL, view, seed, memory}) {
+  const rng = rngFor(seed ?? crypto.getRandomValues(new Uint32Array(1))[0]);
+  const decision = chooseModelTurn(modelId, conserveMightyOnTrumpAce(view), rng, memory);
+  decision.action = preferTrumpLead(view, decision.action);
+  return decision;
 }
