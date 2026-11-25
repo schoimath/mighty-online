@@ -7,9 +7,11 @@ let context;
 let output;
 let resuming;
 let lastLanding = -Infinity;
+let settingChimeEnd = 0;
 const buffers = new Map();
 const tableGain = .34;
 const chimes = {
+  setting: [293.66, 440],
   run: [392, 493.88, 587.33],
   backrun: [523.25, 392, 329.63],
   jokerCall: [698.46, 932.33]
@@ -167,5 +169,8 @@ export function playTableSound(kind, bid) {
   }
   source.connect(output);
   source.onended = () => source.disconnect();
-  source.start();
+  // An immediate verdict can arrive while the declaration is still ringing.
+  if (kind === "setting") settingChimeEnd = context.currentTime + source.buffer.duration;
+  if (kind === "run" || kind === "backrun") source.start(Math.max(context.currentTime, settingChimeEnd));
+  else source.start();
 }

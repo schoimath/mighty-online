@@ -1,6 +1,6 @@
 import {isCoveredSeat, scoreTable, seatPile, seatStanding, settingPenaltyPile, signedScore} from "./score-ui.js";
 import {DECK, DEFAULT_RULES, leadSuit, mighty} from "./engine.js";
-import {UPDATED_AT, UPDATED_LABEL, VERSION} from "./release.js";
+import {VERSION} from "./release.js";
 import {jokerWasPlayed, withJokerStatus} from "./table-joker.js";
 import {playTableSound, soundControl, toggleSound} from "./sound.js";
 import {AUCTION_BEAT_MS, FRIEND_ANNOUNCEMENT_MS} from "./table-timing.js";
@@ -635,16 +635,17 @@ function mountTable(root) {
     </div></header>
     <div class="g-main">
       <div class="g-heading"><div class="g-eyebrow"><i aria-hidden="true">♠</i> 마이티 · 5인전
-        <small class="g-release-note"><span>v${VERSION}</span> <span>마지막 업데이트 <time datetime="${UPDATED_AT}">${UPDATED_LABEL}</time></span></small></div>
-        <div class="g-title-row"><h1></h1><span class="g-round-tag"></span><span class="g-match-progress" hidden></span></div></div>
-      <section class="g-match-final" aria-label="경기 최종 결과" hidden></section>
+        <span class="g-match-progress" hidden></span><small class="g-release-note">v${VERSION}</small></div>
+        <div class="g-title-row"><h1></h1><span class="g-round-tag"></span></div></div>
       <div class="g-layout">
         <section class="g-board" aria-label="게임 테이블"><div class="g-felt"><div class="g-felt-line"></div>
           <div class="g-table-center"></div><div class="g-auction-calls" hidden></div><div class="g-trick" hidden></div><div class="g-seats"></div>
           <div class="g-friend-call" role="status" aria-atomic="true" hidden><small>프렌드 선언</small><strong></strong></div>
           <span class="g-call-announcement" role="status" aria-atomic="true"></span>
           <p class="g-trick-result" hidden><span></span><b></b></p></div></section>
-        <section class="g-hand"></section><aside class="g-panel"></aside>
+        <section class="g-hand"></section>
+        <section class="g-match-final" aria-label="경기 최종 결과" hidden></section>
+        <aside class="g-panel"></aside>
       </div>
     </div>
     <dialog class="modal g-claim-dialog" aria-labelledby="g-claim-title" aria-describedby="g-claim-description g-claim-warning">
@@ -677,7 +678,6 @@ function redraw(ui, newDeal = false) {
     progress.setAttribute("aria-label", `총 ${board.roundLimit}판 중 ${current}번째 판`);
   }
   const final = root.querySelector(".g-match-final");
-  const showFinal = finished && final.hidden;
   if (finished) {
     const action = options.isHost && options.onReplaySetup ? button(escapeHtml(options.replaySetupLabel), "replay-setup") : "";
     const summary = scoreTable(board, view.seat, {final:true, title:"최종 순위"}) + action;
@@ -695,7 +695,7 @@ function redraw(ui, newDeal = false) {
     const {suit, points} = view.bid;
     tag.innerHTML = `<span class="g-contract-prefix">공약 </span>${suitMark(suit)} ${suitInfo[suit][1]} <strong>${escapeHtml(points)}점</strong>`;
   } else if (finished) {
-    tag.textContent = `마지막 판 · 주공 팀 ${view.result.won ? "승리" : "패배"} (${view.result.points}점)`;
+    tag.innerHTML = `주공 팀 ${view.result.won ? "승리" : "패배"} <span class="g-final-points">(${escapeHtml(view.result.points)}점)</span>`;
   } else {
     tag.textContent = view.phase === "result" ? (view.result.setting ? "세팅 종료" : "10트릭 완료") : "경매 " + view.bidHistory.length + "회";
   }
@@ -715,9 +715,6 @@ function redraw(ui, newDeal = false) {
     const [attr, value] = oldFocus;
     const radio = focused.type === "radio" ? `[value="${focused.value}"]` : "";
     root.querySelector(`[data-${attr}="${value}"]${radio}`)?.focus({ preventScroll: true });
-  }
-  if (showFinal && !document.querySelector("dialog[open], #chat-panel:not([hidden])") && root.getBoundingClientRect().top < 0) {
-    root.scrollIntoView({block:"start", behavior:"instant"});
   }
 }
 function submit(ui, kind) {
@@ -892,6 +889,10 @@ function withRememberedJoker(view, previous) {
   return withJokerStatus(view, (sameDeal && previous.jokerPlayed) || jokerWasPlayed(view));
 }
 
+function hasSettingDeclaration(view) {
+  return view.claimPending || view.settingAwaitingFriend || view.result?.setting;
+}
+
 export function renderGame(container, publicView, options = {}) {
   let ui = cache.get(container);
   if (!ui) {
@@ -904,6 +905,9 @@ export function renderGame(container, publicView, options = {}) {
     ui.auctionMarkup = ui.centerMarkup = ui.settingsHtml = ui.finalHtml = null;
   }
   publicView = withRememberedJoker(publicView, ui.latest);
+  if (ui.latest && !hasSettingDeclaration(ui.latest) && hasSettingDeclaration(publicView)) {
+    playTableSound("setting");
+  }
   ui.latest = publicView;
   ui.playPending = false;
   ui.claimSubmitting = false;

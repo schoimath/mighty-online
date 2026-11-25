@@ -42,7 +42,7 @@
 .g-panel .match-standings { color: #e1eadb; }
 .g-action .match-standings strong { color: #f3dea6; }
 .g-match-final {
-  margin-bottom: 16px; padding: clamp(14px, 2.4vw, 24px); color: #e6eddf;
+  grid-column: 1; min-width: 0; padding: clamp(14px, 2.4vw, 24px); color: #e6eddf;
   border: 1px solid #958153; border-radius: 13px; background: #213d30;
 }
 .g-match-final .match-final { margin: 0; }

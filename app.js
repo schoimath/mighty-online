@@ -6,15 +6,11 @@ import {chatText, setupChat} from './chat.js';
 import {DEFAULT_RULES} from './engine.js';
 import {scoreTable, seatStanding} from './score-ui.js';
 import {bindModelSettings, modelLabel, modelSettings, modelSummary, readModelSettings} from './model-picker.js';
-import {UPDATED_AT, UPDATED_LABEL, VERSION} from './release.js';
+import {VERSION} from './release.js';
 import {rememberRoom, roomModels, roomPreferences} from './room-preferences.js';
 
 const $ = id => document.getElementById(id);
-if ($('release-date')) {
-  $('release-version').textContent = 'v' + VERSION;
-  $('release-date').dateTime = UPDATED_AT;
-  $('release-date').textContent = UPDATED_LABEL + ' KST';
-}
+if ($('release-version')) $('release-version').textContent = 'v' + VERSION;
 const escape = text => String(text ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const icons = {
   user:'<circle cx="12" cy="8" r="3.3"/><path d="M5 20a7 7 0 0 1 14 0"/>',
