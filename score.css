@@ -18,6 +18,12 @@
   background: #faf5e4; color: #263a2c; font: 700 .78rem/1 Georgia, serif; white-space: nowrap;
 }
 .g-score-red { color: #99383a; }
+.seat-standing {
+  display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: 0 .2em; max-width: 100%;
+  font-size: .77rem; line-height: 1.15; font-variant-numeric: tabular-nums;
+}
+.seat-standing small { font-size: .68rem; }
+.seat-standing b { min-width: 0; overflow-wrap: anywhere; }
 .match-standings { margin: 16px 0; color: inherit; font-size: .88rem; }
 .match-standings h3, .match-standings summary { margin: 0; font-size: .95rem; font-weight: 700; }
 .match-standings summary { cursor: pointer; }
@@ -31,6 +37,20 @@
 .standing-mine { background: #a9b97922; }
 .g-panel .match-standings { color: #e1eadb; }
 .g-action .match-standings strong { color: #f3dea6; }
+.g-settlement-formula {
+  margin: 12px 0 4px; padding: 9px 11px; border-inline-start: 2px solid #b59a63;
+  background: #112c23; border-radius: 0 6px 6px 0;
+}
+.g-settlement-formula > span { color: #c8d8c8; font-size: .78rem; }
+.g-equation {
+  display: flex; align-items: baseline; flex-wrap: wrap; gap: 3px .35em; margin-top: 4px;
+  color: #f4ecd7; font-size: .94rem; line-height: 1.5; font-variant-numeric: tabular-nums;
+}
+.g-equation > * { white-space: nowrap; }
+.g-equation small { color: #cadacb; font-size: .8rem; }
+.g-equation abbr { text-decoration: none; }
+.g-equation strong { color: #f5d48e; }
+.g-my-settlement small { color: #c1cebf; white-space: nowrap; }
 .g-misdeal { color: #efd79b; font-size: .85rem; }
 .g-score-mighty { background: #f7e4a7; border-color: #e1bb62; }
 .g-score-mighty sup { color: #725017; font-size: .55rem; align-self: flex-start; }

@@ -1,4 +1,4 @@
-import {isCoveredSeat, scoreTable, seatPile, signedScore} from "./score-ui.js";
+import {isCoveredSeat, scoreTable, seatPile, seatStanding, signedScore} from "./score-ui.js";
 import {DEFAULT_RULES, leadSuit, mighty} from "./engine.js";
 import {playTableSound, soundControl, toggleSound} from "./sound.js";
 import {AUCTION_BEAT_MS, FRIEND_ANNOUNCEMENT_MS} from "./table-timing.js";
@@ -148,10 +148,12 @@ function roleAt(view, seat) {
   if (role === "friend" && view.call?.kind === "card" && view.call.card === mighty(view.bid.suit)) return "마이티 프렌드";
   return roleLabels[role] || "";
 }
-function seatMarkup(view, nameAt, winner, modelLabels) {
+function seatMarkup(ui, nameAt) {
+  const {view, options, resolving} = ui;
+  const beforeSettlement = resolving && ui.latest.phase === "result";
   return Array.from({ length: 5 }, (_, offset) => {
     const seat = (view.seat + offset) % 5, name = nameAt(seat);
-    const model = modelLabels?.[seat];
+    const model = options.modelLabels?.[seat];
     const isTurn = view.turn === seat && view.phase !== "result";
     const role = roleAt(view, seat);
     const playing = view.phase === "play" || view.phase === "result";
@@ -160,8 +162,9 @@ function seatMarkup(view, nameAt, winner, modelLabels) {
     const status = [isTurn ? "차례" : "", details].filter(Boolean).join(" · ");
     const leader = inAuction && view.bid?.seat === seat;
     const avatar = inAuction ? seat + 1 : Array.from(name.trim())[0] || "♠";
-    const header = `<span class="g-avatar g-avatar-${seat}" aria-label="${seat + 1}번 자리">${escapeHtml(avatar)}</span><span class="g-seat-tag"><span class="g-seat-name">${escapeHtml(name)}${offset === 0 ? '<small>나</small>' : ""}</span><span class="g-seat-detail">${isTurn ? '<i></i>' : ""}${status}</span></span>`;
-    return `<div class="g-seat g-seat-${offset} ${isTurn ? "g-seat-active" : ""} ${leader ? "g-seat-bidder" : ""} ${winner === seat ? "g-trick-winner" : ""}" data-seat="${seat}" data-seat-role="${visibleRole(view, seat)}" role="group" aria-label="${escapeHtml(name)} 자리${model ? ' · ' + escapeHtml(model) : ''}"${model ? ' title="' + escapeHtml(model) + '"' : ""}><div class="g-seat-head">${header}</div>${seatPile(view, seat)}</div>`;
+    const standing = seatStanding(options.scoreboard, seat, beforeSettlement);
+    const header = `<span class="g-avatar g-avatar-${seat}" aria-label="${seat + 1}번 자리">${escapeHtml(avatar)}</span><span class="g-seat-tag"><span class="g-seat-identity"><span class="g-seat-name">${escapeHtml(name)}${offset === 0 ? '<small>나</small>' : ""}</span>${standing}</span><span class="g-seat-detail">${isTurn ? '<i></i>' : ""}${status}</span></span>`;
+    return `<div class="g-seat g-seat-${offset} ${isTurn ? "g-seat-active" : ""} ${leader ? "g-seat-bidder" : ""} ${resolving?.winner === seat ? "g-trick-winner" : ""}" data-seat="${seat}" data-seat-role="${visibleRole(view, seat)}" role="group" aria-label="${escapeHtml(name)} 자리${model ? ' · ' + escapeHtml(model) : ''}"${model ? ' title="' + escapeHtml(model) + '"' : ""}><div class="g-seat-head">${header}</div>${seatPile(view, seat)}</div>`;
   }).join("");
 }
 function setFlightOffset(element, prefix, from, to) {
@@ -187,11 +190,35 @@ function dealToOtherSeats(root, localSeat) {
   }
 }
 
+function roundSweep(view, board) {
+  if (view.phase !== "result") return null;
+  if (!board) {
+    // The original host awards a backrun for a ten-point contract shortfall.
+    const {won, target, points} = view.result;
+    if (won && points === 20) return "run";
+    if (!won && target - points >= 10) return "backrun";
+    return null;
+  }
+  const {bonuses} = settlementDetails(view.result, view.bid.suit);
+  if (bonuses.includes("런")) return "run";
+  if (bonuses.includes("백런")) return "backrun";
+  return null;
+}
+
+function sweepMarkup(kind, points) {
+  const run = kind === "run";
+  return `<div class="g-sweep g-sweep-${kind}" role="status">
+    <i class="g-sweep-crest" aria-hidden="true"></i>
+    <strong class="g-sweep-title">${run ? "런" : "백런"}</strong>
+    <small>${run ? "여당" : "야당"} ${escapeHtml(run ? points : 20 - points)}점</small>
+  </div>`;
+}
+
 function renderTable(ui, nameAt) {
   const {view, root, resolving} = ui;
   const felt = root.querySelector(".g-felt");
   felt.dataset.phase = view.phase;
-  felt.querySelector(".g-seats").innerHTML = seatMarkup(view, nameAt, resolving?.winner, ui.options.modelLabels);
+  felt.querySelector(".g-seats").innerHTML = seatMarkup(ui, nameAt);
   renderAuctionCalls(ui, felt, nameAt);
   const caption = felt.querySelector(".g-trick-result");
   caption.hidden = !resolving;
@@ -210,7 +237,8 @@ function renderTable(ui, nameAt) {
   }
   if (!center.hidden) {
     const emptyLabel = view.phase === "play" ? "첫 카드를 기다리는 중" : labels[view.phase];
-    const markup = view.phase === "bid" || view.phase === "discard" ? leadingBidMarkup(view, nameAt)
+    const markup = ui.sweep ? sweepMarkup(ui.sweep, view.result.points)
+      : view.phase === "bid" || view.phase === "discard" ? leadingBidMarkup(view, nameAt)
       : `<span class="g-table-symbol" aria-hidden="true">♠</span><strong>${escapeHtml(emptyLabel)}</strong>`;
     if (ui.centerMarkup !== markup) {
       center.innerHTML = markup;
@@ -390,13 +418,25 @@ function playCard(ui, card) {
 function resultControls(view, ui) {
   const result = view.result;
   const board = ui.options.scoreboard;
-  const {base, bonuses, multiplier} = settlementDetails(result, view.bid.suit);
   const net = board ? board.members.find(m => m.seat === view.seat)?.lastDelta : archivedSettlements(result, view.bid.suit)[view.seat];
-  const breakdown = board?.scoringVersion === TABLE_SCORING_VERSION ? `<p>여당 한 몫 ${signedScore(base)}점${bonuses.length ? ' · ' + bonuses.map(name => name + ' ×2').join(' · ') + ' (총 ×' + multiplier + ')' : ''}</p>` : '';
+  let breakdown = "";
+  if (board?.scoringVersion === TABLE_SCORING_VERSION) {
+    const {base, bonuses, unit} = settlementDetails(result, view.bid.suit);
+    const factors = bonuses.map(name => {
+      const label = name === "노기루다" ? '<abbr title="노기루다">NT</abbr>' : name;
+      return `<span class="g-factor">×2 <small>(${label})</small></span>`;
+    });
+    const equation = bonuses.length
+      ? `<span>${signedScore(base)}점</span> ${factors.join(" ")} <strong>= ${signedScore(unit)}점</strong>`
+      : `<strong>${signedScore(unit)}점</strong>`;
+    breakdown = `<div class="g-settlement-formula"><span>여당 기준점수</span><div class="g-equation">${equation}</div></div>`;
+  }
+  const role = view.seat === result.declarer ? (result.friend == null ? "주공 ×4" : "주공 ×2")
+    : view.seat === result.friend ? "프렌드" : "야당";
   return `<h2>주공 팀 ${result.won ? "승리" : "패배"}</h2>
     <p>공약은 ${escapeHtml(result.target)}점, 주공 팀은 ${escapeHtml(result.points)}점을 획득했어요.</p>
     <div class="g-result-score"><strong>${escapeHtml(result.points)}</strong><span>/ 20점</span></div>
-    ${breakdown}${net == null ? '' : `<p>내 정산 <strong>${signedScore(net)}점</strong></p>`}
+    ${breakdown}${net == null ? '' : `<p class="g-my-settlement">내 정산 <strong>${signedScore(net)}점</strong> <small>(${role})</small></p>`}
     ${scoreTable(board, view.seat)}
     ${ui.options.isHost ? button("다시 한 판", "replay") : "<p>방장이 다시 한 판을 누르면 이 자리에서 다음 판이 시작됩니다.</p>"}
     ${ui.options.isHost && ui.options.onReplaySetup ? button(escapeHtml(ui.options.replaySetupLabel), "replay-setup", true, "secondary") : ""}`;
@@ -608,6 +648,8 @@ function displayLatest(ui) {
     clearTimeout(ui.friendTimer);
     ui.root.querySelector(".g-friend-call").hidden = true;
   }
+  ui.sweep = roundSweep(view, ui.options.scoreboard);
+  if (ui.sweep && previous && previous.phase !== "result") playTableSound(ui.sweep);
   ui.view = view;
   updateDefaults(ui, view);
   redraw(ui, newDeal);
@@ -701,7 +743,7 @@ export function rulesContent(rules = DEFAULT_RULES, scoringVersion = TABLE_SCORI
   const hasStandings = scoringVersion !== 'ten-base-v1';
   const opening = hasStandings ? " 처음 받은 10장에 점수 카드(10·J·Q·K·A)가 한 장도 없는 사람이 있으면 파토입니다. 공약 전에 모두 다시 받고 같은 자리부터 시작합니다." : "";
   const contractRule = scoringVersion === TABLE_SCORING_VERSION
-    ? "여당이 공약에 성공하면 한 몫은 2 × (최종 공약 − 13) + (여당 득점 − 최종 공약)입니다. 실패하면 모자란 점수만큼 잃습니다. 15점 공약에서 17점이면 +6점, 14점이면 −1점입니다."
+    ? "여당이 공약에 성공하면 기본점수는 2 × (최종 공약 − 13) + (여당 득점 − 최종 공약)입니다. 실패하면 모자란 점수만큼 잃습니다. 15점 공약에서 17점이면 +6점, 14점이면 −1점입니다."
     : "이 방에서는 최종 공약에서 10을 뺀 값을 한 몫으로 정해 성공하면 더하고 실패하면 뺍니다.";
   const scoring = hasStandings
     ? contractRule + " 런(여당 20점), 백런(야당 10점 이상), 노기루다, 노프렌드는 각각 2배이며 겹치면 곱합니다. 새 테이블에서는 모두 0점으로 시작하며 개인 점수는 판마다 누적됩니다."
@@ -719,6 +761,6 @@ export function rulesContent(rules = DEFAULT_RULES, scoringVersion = TABLE_SCORI
     <p>${jokerTiming}</p>
     <p>${jokerCallFrom} 선이 클로버 3으로 조커콜을 선언할 수 있습니다. 조커를 가진 사람은 조커 또는 마이티를 내야 하며, 조커는 그 트릭에서 가장 약합니다. 클로버가 기루다일 때의 조커콜 카드는 스페이드 3입니다.</p>
     <h3>점수 카드와 승패</h3><p>10, J, Q, K, A는 각각 1점으로, 한 판에는 총 20점이 있습니다. 가져간 점수 카드는 보드의 각자 자리 옆에 모읍니다. 주공은 처음부터 카드를 덮고, 프렌드는 정체가 밝혀지는 즉시 앞서 가져간 카드까지 모두 덮습니다. 열 번째 트릭이 끝났을 때 주공 팀의 점수가 공약 이상이면 주공 팀이 승리합니다.</p>
-    <p>${scoring} 주공은 두 몫, 프렌드는 한 몫, 야당은 각각 반대 부호 한 몫입니다. 노프렌드 주공은 네 몫입니다.</p>
+    <p>${scoring} 배율을 모두 곱한 값이 여당 기준점수입니다. 프렌드는 그 점수 그대로, 주공은 2배, 야당은 각각 부호를 바꿔 정산합니다. 노프렌드 주공은 4배입니다.</p>
   </div>`;
 }

@@ -4,7 +4,7 @@ import {hostRoom, joinRoom, normalizeRoomCode} from './network.js';
 import {HostSession} from './session.js';
 import {chatText, setupChat} from './chat.js';
 import {botObservation, DEFAULT_RULES} from './engine.js';
-import {scoreTable} from './score-ui.js';
+import {scoreTable, seatStanding} from './score-ui.js';
 import {bindModelSettings, modelLabel, modelSettings, modelSummary, readModelSettings} from './model-picker.js';
 
 const $ = id => document.getElementById(id);
@@ -256,13 +256,14 @@ function drawRoom() {
     const roles = [isHostSeat && '방장', mine && '나'].filter(Boolean).join(' · ');
     const number = (index + 1) + '번 자리';
     const canMove = canChoose && !mine && (!player || !swap);
+    const standing = player ? seatStanding(snapshot.scoreboard, index) : '';
     const contents = `<span class="seat-caption"><span class="seat-number">${number}</span>
       ${roles ? '<span class="seat-tag">' + roles + '</span>' : ''}</span>
-      <strong class="seat-name"${player ? ' title="' + escape(player.name) + '"' : ''}>${player ? escape(player.name) : '빈자리'}</strong>
+      <span class="seat-identity"><strong class="seat-name"${player ? ' title="' + escape(player.name) + '"' : ''}>${player ? escape(player.name) : '빈자리'}</strong>${standing ? '<span id="room-total-' + index + '">' + standing + '</span>' : ''}</span>
       ${canMove ? '<span class="seat-action">' + (player ? '교환 요청' : '여기 앉기') + '</span>' : ''}`;
     const description = player ? number + ' ' + player.name + (isHostSeat ? ' 방장' : '') + '에게 자리 교환 요청' : number + ' 빈자리로 이동';
     return `<li data-room-seat="${index}" class="${mine ? 'seat-mine' : player ? 'seat-occupied' : 'seat-open'}"${mine ? ' aria-current="true" tabindex="-1"' : ''}>
-      ${canMove ? '<button type="button" class="seat-place" data-choose-seat="' + index + '" aria-label="' + escape(description) + '">' + contents + '</button>'
+      ${canMove ? '<button type="button" class="seat-place" data-choose-seat="' + index + '" aria-label="' + escape(description) + '"' + (standing ? ' aria-describedby="room-total-' + index + '"' : '') + '>' + contents + '</button>'
         : '<div class="seat-place">' + contents + '</div>'}</li>`;
   }).join('');
   let swapPanel = '';

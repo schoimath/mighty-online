@@ -41,6 +41,23 @@ function paperSound(cue) {
 }
 
 function makeSound(kind) {
+  if (kind === "run" || kind === "backrun") {
+    const notes = kind === "run" ? [392, 493.88, 587.33] : [523.25, 392, 329.63];
+    const rate = context.sampleRate;
+    const spacing = .115, sustain = .36;
+    const buffer = context.createBuffer(1, Math.ceil(rate * (2 * spacing + sustain)), rate);
+    const samples = buffer.getChannelData(0);
+    for (const [index, note] of notes.entries()) {
+      const start = Math.round(index * spacing * rate);
+      const end = Math.min(samples.length, start + Math.round(sustain * rate));
+      for (let i = start; i < end; i++) {
+        const t = (i - start) / rate, phase = 2 * Math.PI * note * t;
+        const envelope = Math.min(1, t / .007, (end - i) / (rate * .04)) * Math.exp(-t / .11);
+        samples[i] += envelope * (.48 * Math.sin(phase) + .09 * Math.sin(2 * phase));
+      }
+    }
+    return buffer;
+  }
   if (kind === "bid" || kind === "pass") {
     // Bids start at C4. A pass is a shorter, softer E3 at every contract.
     const pass = kind === "pass";

@@ -38,9 +38,13 @@
 .g-bid-seat.g-avatar-0 { background: #c1d1a6; color: #113628; }
 .g-seat.g-seat-bidder { border-color: #c9aa66; background: #394734; }
 .g-seat-bidder .g-seat-detail { color: #f1d79b; }
+.g-auction-calls {
+  --call-width: 68px;
+  width: min(320px, calc(100% - var(--call-width) - 12px));
+}
 .g-auction-call {
   position: absolute; translate: -50% -50%; display: grid; justify-items: center;
-  gap: 3px; width: 68px; pointer-events: none; text-align: center;
+  gap: 3px; width: var(--call-width); pointer-events: none; text-align: center;
 }
 .g-auction-call > strong {
   display: inline-flex; align-items: center; gap: .25em; padding: 3px 8px;
@@ -106,7 +110,10 @@
   .g-table-center .g-leading-bid > strong { font-size: 1.45rem; }
 }
 @container (max-width: 550px) {
-  .g-auction-call { width: 50px; }
+  .g-auction-calls {
+    --call-width: 50px;
+    width: min(320px, calc(100% - var(--table-card) - 12px));
+  }
   .g-auction-call > strong { padding: 2px 5px; font-size: .84rem; }
   .g-call-pass > strong, .g-auction-call > small { font-size: .69rem; }
   .g-felt:is([data-phase="bid"], [data-phase="discard"]) .g-table-center { max-width: calc(100% - var(--table-card) - 65px); }

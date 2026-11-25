@@ -34,6 +34,14 @@ export function signedScore(points) {
   return Number.isSafeInteger(points) ? (points > 0 ? '+' : '') + points : '—';
 }
 
+export function seatStanding(board, seat, beforeSettlement = false) {
+  const member = board?.members?.find(entry => entry.seat === seat);
+  if (!Number.isSafeInteger(member?.total)) return '';
+  const previousChange = beforeSettlement && Number.isSafeInteger(member.lastDelta) ? member.lastDelta : 0;
+  const total = signedScore(member.total - previousChange);
+  return `<span class="seat-standing" data-total-seat="${seat}" title="누적 점수 ${total}점"><small>누적</small><b>${total}</b></span>`;
+}
+
 export function scoreTable(board, mySeat, {collapsed = false, title = '누적 점수'} = {}) {
   if (!Number.isSafeInteger(board?.rounds) || !Array.isArray(board.members)) return '';
   const rows = board.members.map(member => {
