@@ -305,6 +305,7 @@ function renderHand(ui, newDeal) {
   if (view.phase === "bid" && view.turn === view.seat) trump = ui.bidSuit ?? trump;
   if (view.phase === "discard") trump = view.choices.contracts?.[ui.contractIndex]?.suit ?? trump;
   const mightyCard = trump && mighty(trump);
+  const jokerCallCard = trump && (trump === "C" ? "S3" : "C3");
   const orderedHand = view.phase !== "bid" && trump && trump !== "N"
     ? [...view.hand.filter(card => card[0] === trump), ...view.hand.filter(card => card[0] !== trump)]
     : view.hand;
@@ -312,12 +313,15 @@ function renderHand(ui, newDeal) {
   const arrivals = [];
   for (const [i, card] of orderedHand.entries()) {
     const isMighty = card === mightyCard;
+    const isJokerCall = card === jokerCallCard;
     const isIncoming = incoming.has(card);
-    let label = cardName(card) + (isMighty ? " · 마이티" : "");
-    if (isMighty && (view.phase === "bid" || view.phase === "discard")) label += " (현재 기루다 기준)";
+    let label = cardName(card);
+    if (isMighty) label += " · 마이티";
+    if (isJokerCall) label += " · 조커콜 카드";
+    if ((isMighty || isJokerCall) && (view.phase === "bid" || view.phase === "discard")) label += " (현재 기루다 기준)";
     if (isIncoming) label += " · 바닥에서 받은 패";
     const moves = view.choices.plays.filter(move => move.card === card);
-    if (moves.length > 1) label += card === "JK" ? " · 요구 무늬 선택" : " · 조커콜 선택";
+    if (moves.length > 1) label += card === "JK" ? " · 요구 무늬 선택" : " · 선언 여부 선택";
     let el = existing.get(card);
     if (!el) {
       el = document.createElement("button");
@@ -327,10 +331,13 @@ function renderHand(ui, newDeal) {
       if (newDeal || view.phase === "discard") arrivals.push(el);
     }
     if (!el.firstElementChild || el.classList.contains("g-hand-mighty") !== isMighty ||
+        el.classList.contains("g-hand-joker-call") !== isJokerCall ||
         el.classList.contains("g-hand-incoming") !== isIncoming) {
       el.classList.toggle("g-hand-mighty", isMighty);
+      el.classList.toggle("g-hand-joker-call", isJokerCall);
       el.classList.toggle("g-hand-incoming", isIncoming);
-      el.innerHTML = cardFace(card) + (isMighty ? mightyBadge : "") +
+      const badge = isMighty ? mightyBadge : isJokerCall ? jokerCallBadge : "";
+      el.innerHTML = cardFace(card) + badge +
         (isIncoming ? '<b class="g-incoming-tag" aria-hidden="true">바닥</b>' : "");
     }
     const selected = ui.selected.includes(card);
