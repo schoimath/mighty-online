@@ -41,6 +41,19 @@
 .standing-mine { background: #a9b97922; }
 .g-panel .match-standings { color: #e1eadb; }
 .g-action .match-standings strong { color: #f3dea6; }
+.g-match-final {
+  margin-bottom: 16px; padding: clamp(14px, 2.4vw, 24px); color: #e6eddf;
+  border: 1px solid #958153; border-radius: 13px; background: #213d30;
+}
+.g-match-final .match-final { margin: 0; }
+.g-match-final h2 { margin: 0; font-size: 1.12rem; color: #f1d696; }
+.match-final table { margin-block: 10px 0; }
+.match-final th, .match-final td { padding: 7px 5px; }
+.match-final thead th:first-child { width: 19%; }
+.match-final thead th:nth-child(2), .match-final tbody th { text-align: left; overflow-wrap: anywhere; }
+.match-final thead th:nth-child(2) { width: 41%; }
+.match-final .standing-rank { color: #f0d69a; font-weight: 650; text-align: left; }
+.g-match-final .g-btn { width: auto; margin-top: 14px; }
 .g-settlement-formula {
   margin: 12px 0 4px; padding: 9px 11px; border-inline-start: 2px solid #b59a63;
   background: #112c23; border-radius: 0 6px 6px 0;

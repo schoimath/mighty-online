@@ -6,13 +6,13 @@ import {chatText, setupChat} from './chat.js';
 import {DEFAULT_RULES} from './engine.js';
 import {scoreTable, seatStanding} from './score-ui.js';
 import {bindModelSettings, modelLabel, modelSettings, modelSummary, readModelSettings} from './model-picker.js';
-import {UPDATED_ON, VERSION} from './release.js';
+import {UPDATED_AT, UPDATED_LABEL, VERSION} from './release.js';
 
 const $ = id => document.getElementById(id);
 if ($('release-date')) {
   $('release-version').textContent = 'v' + VERSION;
-  $('release-date').dateTime = UPDATED_ON;
-  $('release-date').textContent = UPDATED_ON;
+  $('release-date').dateTime = UPDATED_AT;
+  $('release-date').textContent = UPDATED_LABEL + ' KST';
 }
 const escape = text => String(text ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const icons = {
@@ -134,6 +134,23 @@ function readRules(container) {
   };
 }
 
+function seriesPicker(limit = null) {
+  const options = [10, 20, null].map(value =>
+    `<label><input type="radio" name="roundLimit" value="${value ?? 0}"${value === limit ? ' checked' : ''}><span>${value ? value + '판' : '무제한'}</span></label>`);
+  return `<fieldset class="series-picker"><legend>경기 판수</legend><div>${options.join('')}</div></fieldset>`;
+}
+
+function selectedLimit(container) {
+  return Number(container.querySelector('[name="roundLimit"]:checked')?.value) || null;
+}
+
+function seriesSummary(board) {
+  const limit = board?.roundLimit;
+  const target = limit === 10 || limit === 20 ? limit + '판' : '무제한';
+  const settled = Number.isSafeInteger(board?.rounds) && board.rounds > 0 ? ' · ' + board.rounds + '판 완료' : '';
+  return `<p class="series-summary"><strong>경기 판수</strong> ${target}${settled}</p>`;
+}
+
 function showRules() {
   const rules = activeRules();
   const board = snapshot?.scoreboard;
@@ -233,6 +250,8 @@ function drawRoom() {
   const host = mode === 'host';
   const occupied = snapshot.players.filter(Boolean).length;
   const room = $('room');
+  const board = snapshot.scoreboard;
+  const canSetLimit = host && !board?.rounds;
   const focus = room.contains(document.activeElement) ? document.activeElement : null;
   const modelDetailsOpen = room.querySelector('.model-details')?.open;
   const standingsOpen = room.querySelector('details.match-standings')?.open;
@@ -272,6 +291,7 @@ function drawRoom() {
     '<div class="seat-heading"><h2>' + (canChoose ? '자리 선택' : '참가자') + '</h2><span>참가 ' + occupied + ' / 5</span></div>' +
     (canChoose ? '<p class="seat-hint">자리 번호 순으로 진행합니다. 빈자리에 앉거나 다른 참가자에게 교환을 요청하세요.</p>' : '') +
     '<ol class="seat-list ' + (canChoose ? 'seat-map' : 'seat-readonly') + '" aria-label="자리 번호 순서">' + seats + '</ol>' + swapPanel +
+    (canSetLimit ? seriesPicker(board?.roundLimit) : seriesSummary(board)) +
     (host ? modelSettings(snapshot.botModels, hostSeat, snapshot.players) : modelSummary(snapshot)) +
     (host ? ruleEditor(activeRules()) : '<h2 class="room-heading">테이블 규칙</h2>' + rulesSummary(activeRules())) +
     '<p>' + (host ? (occupied < 5 ? '지금 시작하면 빈자리 ' + (5-occupied) + '곳은 AI가 맡습니다.' : '다섯 명이 모였습니다. 게임을 시작하세요.') : '방장이 게임을 시작하면 카드를 받습니다.') +
@@ -291,6 +311,11 @@ function drawRoom() {
   if ($('swap-cancel')) $('swap-cancel').onclick = cancelSwap;
   if (host) {
     $('start-round').onclick = startRound;
+    const series = room.querySelector('.series-picker');
+    if (series) {
+      series.onchange = () => { authority.setRoundLimit(selectedLimit(series)); publish(); };
+      if (focus?.name === 'roundLimit') series.querySelector('input:checked')?.focus({preventScroll:true});
+    }
     room.querySelector('.model-details').open = Boolean(modelDetailsOpen);
     bindModelSettings(room, hostSeat, models => {
       authority.setBotModels(models);
@@ -320,9 +345,9 @@ function draw() {
   renderGame($('game'),snapshot.game,{
     names:snapshot.players.map(p => p?.name), isHost: Boolean(authority), scoreboard:snapshot.scoreboard,
     modelLabels:snapshot.players.map(p => p?.bot && p.modelId ? modelLabel(p.modelId) : ''),
-    replaySetupLabel: mode === 'practice' ? '규칙·AI 바꿔서 시작' : '대기실로 돌아가기',
+    replaySetupLabel: mode === 'practice' ? (snapshot.scoreboard?.complete ? '새 연습 경기 설정' : '규칙·AI 바꿔서 시작') : '대기실로 돌아가기',
     onRules:showRules, onLeave:requestLeave, onReplay() {
-      if (authority?.round?.phase === 'result') startRound();
+      if (authority?.round?.phase === 'result' && !snapshot.scoreboard?.complete) startRound();
     },
     onReplaySetup() {
       if (authority?.round?.phase !== 'result') return;
@@ -470,7 +495,10 @@ function startRound() {
 
 function openPracticeSetup() {
   const replay = mode === 'practice' && authority?.round?.phase === 'result';
-  modal('연습 게임 설정', '<form id="practice-setup">' + modelSettings(replay ? authority.botModels : undefined) +
+  const board = replay ? snapshot.scoreboard : null;
+  const canSetLimit = !replay || board.complete;
+  modal('연습 게임 설정', '<form id="practice-setup">' +
+    (canSetLimit ? seriesPicker(board?.roundLimit) : seriesSummary(board)) + modelSettings(replay ? authority.botModels : undefined) +
     ruleEditor(replay ? activeRules() : DEFAULT_RULES) +
     '<button type="submit" class="primary-button form-submit" id="start-practice">연습 시작</button></form>');
   bindModelSettings($('practice-setup'));
@@ -480,23 +508,24 @@ function openPracticeSetup() {
     const models = readModelSettings(event.currentTarget);
     if (replay) {
       authority.returnToRoom();
+      if (canSetLimit) authority.setRoundLimit(selectedLimit(event.currentTarget));
       authority.setRules(rules);
       authority.setBotModels(models);
     } else {
       mode = 'practice';
-      authority = new HostSession(nickname, rules, models);
+      authority = new HostSession(nickname, rules, models, selectedLimit(event.currentTarget));
     }
     closeModal();
     startRound();
   };
 }
 
-async function connectRoom(kind, name, code, signal) {
+async function connectRoom(kind, name, code, signal, roundLimit) {
   const token = ++generation;
   const active = () => token === generation && !signal.aborted;
   let link;
   if (kind === 'create') {
-    const session = new HostSession(name);
+    const session = new HostSession(name, undefined, undefined, roundLimit);
     link = await hostRoom({
       signal,
       onJoin(id, guestName) {
@@ -574,6 +603,7 @@ function openForm(kind, code = '') {
   const intro = profile ? '' : '<p>' + (joining ? '친구에게 받은 6자리 방 코드를 입력하세요.' : '테이블을 열면 친구를 초대할 방 코드가 생깁니다. 게임 중에는 방장 탭을 열어 두세요.') + '</p>';
   modal(title, intro + '<form id="setup-form"><label class="field">닉네임<input id="name-field" name="nickname" maxlength="16" required autocomplete="nickname"></label>' +
     (joining ? '<label class="field">방 코드<input class="code-field" id="code-field" name="code" maxlength="12" placeholder="6자리 코드" required autocomplete="off" spellcheck="false"></label>' : '') +
+    (kind === 'create' ? seriesPicker() : '') +
     '<div class="form-error" role="alert" id="form-error"></div><button class="primary-button form-submit" id="submit-form">' + (profile ? '저장' : title) + '</button></form>');
   $('name-field').value = nickname;
   if (joining) { $('code-field').value = code; (code ? $('name-field') : $('code-field')).focus(); }
@@ -593,7 +623,7 @@ function openForm(kind, code = '') {
     submit.disabled = true;
     submit.textContent = '연결 중…';
     $('form-error').textContent = '';
-    try { await connectRoom(kind,name,code,controller.signal); }
+    try { await connectRoom(kind,name,code,controller.signal,selectedLimit(event.currentTarget)); }
     catch (error) {
       if (controller.signal.aborted) return;
       $('form-error').textContent = error.message;

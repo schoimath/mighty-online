@@ -52,17 +52,22 @@ export function seatStanding(board, seat, beforeSettlement = false) {
   return `<span class="seat-standing" data-total-seat="${seat}" data-sign="${Math.sign(points)}" title="누적 점수 ${total}점"><span class="visually-hidden">누적 점수 </span><b>${total}</b></span>`;
 }
 
-export function scoreTable(board, mySeat, {collapsed = false, title = '누적 점수'} = {}) {
+export function scoreTable(board, mySeat, {collapsed = false, final = false, title = '누적 점수'} = {}) {
   if (!Number.isSafeInteger(board?.rounds) || !Array.isArray(board.members)) return '';
-  const rows = board.members.map(member => {
+  const members = final ? board.members.filter(member => Number.isSafeInteger(member.rank))
+    .sort((a, b) => a.rank - b.rank) : board.members;
+  const rows = members.map((member, index) => {
     const name = String(member.name).replace(/[&<>]/g, c => ({'&':'&amp;', '<':'&lt;', '>':'&gt;'}[c]));
-    const seat = Number.isInteger(member.seat) ? member.seat + 1 + '번' : '이전';
+    const seat = Number.isInteger(member.seat) ? member.seat + 1 + '번' : '이전 참가자';
     const mine = Number.isInteger(mySeat) && member.seat === mySeat;
-    return `<tr${mine ? ' class="standing-mine"' : ''}><th scope="row"><small>${seat}</small> ${name}${mine ? ' <small>나</small>' : ''}</th>
+    const tied = final && (members[index - 1]?.rank === member.rank || members[index + 1]?.rank === member.rank);
+    const rank = final ? `<td class="standing-rank">${tied ? '공동 ' : ''}${member.rank}위</td>` : '';
+    return `<tr${mine ? ' class="standing-mine"' : ''}>${rank}<th scope="row"><small>${seat}</small> ${name}${mine ? ' <small>나</small>' : ''}</th>
       <td>${signedScore(member.lastDelta)}</td><td><strong>${signedScore(member.total)}</strong></td></tr>`;
   }).join('');
   const heading = `${title} <small>${board.rounds}판 완료</small>`;
-  const table = `<table aria-label="${title}"><thead><tr><th scope="col">참가자</th><th scope="col">직전 판</th><th scope="col">누적</th></tr></thead><tbody>${rows}</tbody></table>`;
+  const table = `<table aria-label="${title}"><thead><tr>${final ? '<th scope="col">순위</th>' : ''}<th scope="col">참가자</th><th scope="col">${final ? '마지막 판' : '직전 판'}</th><th scope="col">누적</th></tr></thead><tbody>${rows}</tbody></table>`;
+  if (final) return `<div class="match-standings match-final"><h2>${title}</h2>${table}</div>`;
   return collapsed
     ? `<details class="match-standings"><summary>${heading}</summary>${table}</details>`
     : `<section class="match-standings"><h3>${heading}</h3>${table}</section>`;

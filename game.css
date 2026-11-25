@@ -50,7 +50,9 @@
 .g-heading h1 { margin: 0; color: var(--g-cream); font-size: clamp(1.75rem, 3.4vw, 2.5rem); font-weight: 700; letter-spacing: -.055em; line-height: 1.2; }
 .g-eyebrow { display: flex; align-items: center; gap: 6px; font-size: .8rem; font-weight: 600; color: #b9c8b3; }
 .g-eyebrow i { color: #ddbc76; font: normal 1.1rem Georgia, serif; }
-.g-release-note { margin-inline-start: auto; color: #b1c3b5; font-size: .74rem; font-weight: 400; }
+.g-release-note { display: flex; flex-wrap: wrap; justify-content: end; gap: 0 8px; margin-inline-start: auto; color: #b1c3b5; font-size: .74rem; font-weight: 400; }
+.g-release-note > span { white-space: nowrap; }
+.g-match-progress { color: #cad7c6; font-size: .85rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .g-round-tag { color: #c2d4c5; border: 1px solid #486151; border-radius: 20px; padding: 5px 11px; font-size: .8rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .g-round-tag:not(.g-contract-tag) { margin-inline-start: auto; }
 .g-contract-tag strong { color: var(--g-cream); }
@@ -58,6 +60,9 @@
   .g-title-row { column-gap: 6px; }
   .g-contract-tag { padding-inline: 7px; }
   .g-contract-prefix { position: absolute; clip-path: inset(50%); width: 1px; height: 1px; overflow: hidden; }
+}
+@media (max-width: 560px) {
+  .g-release-note { flex-direction: column; align-items: end; }
 }
 html:has(.g-screen) { scrollbar-gutter: stable; }
 .g-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(242px, 29%); gap: 16px 20px; align-items: start; }
@@ -445,7 +450,12 @@ html:has(.g-screen) { scrollbar-gutter: stable; }
     animation: g-reveal-face 320ms ease-out var(--deal-delay, 0ms) backwards;
   }
   .g-on-table.g-play-enter {
-    animation: g-play-card 370ms cubic-bezier(.2, .72, .27, 1) backwards;
+    --play-flight: 190ms;
+    animation: g-play-card var(--play-flight) linear backwards,
+      g-settle-card 95ms var(--play-flight) ease-out;
+  }
+  .g-play-enter > .g-card-face {
+    animation: g-play-shadow var(--play-flight) linear;
   }
   .g-mighty-play::before, .g-joker-call-play::before {
     content: ""; position: absolute; inset: -3px; border: 2px solid #fbe09a; border-radius: 7px;
@@ -477,10 +487,25 @@ html:has(.g-screen) { scrollbar-gutter: stable; }
 }
 @keyframes g-reveal-face { 0%, 23% { opacity: 1; } 76%, 100% { opacity: 0; } }
 @keyframes g-play-card {
-  from { opacity: .35; transform: translate(var(--play-x, 0px), var(--play-y, 24px)) rotate(var(--play-rotate, -7deg)) scale(.78); }
-  22% { opacity: 1; }
-  80% { transform: translateY(-3px) rotate(var(--tilt, 0deg)) scale(1.045); }
-  to { opacity: 1; transform: rotate(var(--tilt, 0deg)); }
+  from {
+    transform: translate(var(--play-x), var(--play-y)) rotate(var(--play-rotate)) scale(.96);
+    animation-timing-function: cubic-bezier(.22, .5, .46, .84);
+  }
+  62% {
+    transform: translate(calc(var(--play-x) * .20), calc(var(--play-y) * .20 - 13px)) rotate(var(--tilt)) scale(1.09);
+    animation-timing-function: cubic-bezier(.48, .06, .82, .58);
+  }
+  to { transform: rotate(var(--tilt)) scale(1.028, .965); }
+}
+@keyframes g-settle-card {
+  from { transform: rotate(var(--tilt)) scale(1.028, .965); }
+  45% { transform: translateY(-1.5px) rotate(var(--tilt)) scale(.995, 1.009); }
+  to { transform: rotate(var(--tilt)); }
+}
+@keyframes g-play-shadow {
+  from { box-shadow: 0 2px 3px #14251f4d; }
+  62% { box-shadow: 0 8px 8px #12241e52; }
+  to { box-shadow: 0 1px 2px #14251f66; }
 }
 @keyframes g-mighty-ring {
   from { opacity: .95; transform: scale(.98); }

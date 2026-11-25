@@ -15,6 +15,11 @@ function validateBotModels(models) {
   return [...models];
 }
 
+function validateRoundLimit(limit) {
+  if (limit !== null && limit !== 10 && limit !== 20) throw new Error('대국 길이는 10판, 20판, 무제한 중에서 선택해 주세요.');
+  return limit;
+}
+
 export class HostSession {
   #swaps = [];
   #nextBidder = {seat: 0, player: null};
@@ -22,17 +27,19 @@ export class HostSession {
   #members = new Map();
   #roundMembers = null;
   #completedRounds = 0;
+  #roundLimit;
   #lastSettlement = new Map();
   #botMemory = Array(5).fill(null);
   #guestDecisions = Array.from({length:5}, () => []);
   #claim = null;
   #skipBotClaim = false;
 
-  constructor(hostName, rules = DEFAULT_RULES, botModels = randomSeatModels()) {
+  constructor(hostName, rules = DEFAULT_RULES, botModels = randomSeatModels(), roundLimit = null) {
     this.players = [this.#player('host', hostName, false), null, null, null, null];
     this.hostSeat = 0;
     this.rules = validateRules(rules);
     this.botModels = validateBotModels(botModels);
+    this.#roundLimit = validateRoundLimit(roundLimit);
     this.connections = new Map();
     this.revision = 0;
     this.round = null;
@@ -163,7 +170,20 @@ export class HostSession {
     this.revision++;
   }
 
+  setRoundLimit(limit) {
+    validateRoundLimit(limit);
+    if (limit === this.#roundLimit) return;
+    if (this.round || this.#completedRounds) throw new Error('대국 길이는 첫 판을 시작하기 전에만 변경할 수 있습니다.');
+    this.#roundLimit = limit;
+    this.revision++;
+  }
+
+  get #complete() {
+    return this.#roundLimit !== null && this.#completedRounds >= this.#roundLimit;
+  }
+
   start() {
+    if (this.#complete) throw new Error('목표 판수를 모두 마쳤습니다. 새 대국을 시작해 주세요.');
     if (this.round && this.round.phase !== 'result') throw new Error('이미 게임이 진행 중입니다.');
     const players = this.players.map((p, i) => p ?? this.botPlayer(i));
     const bidderSeat = players.indexOf(this.#nextBidder.player);
@@ -181,6 +201,15 @@ export class HostSession {
     if (this.round?.phase !== 'result') throw new Error('게임을 끝낸 후 대기실로 돌아갈 수 있습니다.');
     this.round = null;
     this.players = this.players.map(p => p?.bot ? null : p);
+    if (this.#complete) {
+      this.#completedRounds = 0;
+      this.#lastSettlement.clear();
+      this.#members.clear();
+      for (const player of this.players) {
+        if (player) this.#player(player.memberId, player.name, player.bot);
+      }
+      this.#nextBidder = {seat:0, player:null};
+    }
     this.revision++;
   }
 
@@ -303,11 +332,19 @@ export class HostSession {
       const current = this.players.findIndex(p => p?.memberId === member.id);
       if (current < 0 && !member.rounds && !this.#roundMembers?.includes(member.id)) continue;
       const latest = this.#lastSettlement.get(member.id);
-      members.push({...member, seat: current < 0 ? null : current,
+      members.push({...member, seat: current < 0 ? null : current, rank:null,
         lastSeat: latest?.lastSeat ?? null, lastDelta: latest?.lastDelta ?? null});
     }
+    if (this.#complete) {
+      const ranked = members.filter(member => member.rounds > 0).sort((a, b) => b.total - a.total);
+      ranked.forEach((member, i) => {
+        const previous = ranked[i - 1];
+        member.rank = previous?.total === member.total ? previous.rank : i + 1;
+      });
+    }
     members.sort((a, b) => (a.seat ?? BOT_NAMES.length) - (b.seat ?? BOT_NAMES.length));
-    return {scoringVersion: TABLE_SCORING_VERSION, rounds: this.#completedRounds, members};
+    return {scoringVersion: TABLE_SCORING_VERSION, rounds: this.#completedRounds,
+      roundLimit:this.#roundLimit, complete:this.#complete, members};
   }
 
   view(seat) {

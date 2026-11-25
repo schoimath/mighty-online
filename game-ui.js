@@ -1,6 +1,6 @@
 import {isCoveredSeat, scoreTable, seatPile, seatStanding, settingPenaltyPile, signedScore} from "./score-ui.js";
 import {DECK, DEFAULT_RULES, leadSuit, mighty} from "./engine.js";
-import {UPDATED_ON, VERSION} from "./release.js";
+import {UPDATED_AT, UPDATED_LABEL, VERSION} from "./release.js";
 import {jokerWasPlayed, withJokerStatus} from "./table-joker.js";
 import {playTableSound, soundControl, toggleSound} from "./sound.js";
 import {AUCTION_BEAT_MS, FRIEND_ANNOUNCEMENT_MS} from "./table-timing.js";
@@ -555,13 +555,14 @@ function resultControls(view, ui) {
   }
   const role = view.seat === result.declarer ? (result.friend == null ? "주공 ×4" : "주공 ×2")
     : view.seat === result.friend ? "프렌드" : "야당";
+  const next = board?.complete ? "" : scoreTable(board, view.seat)
+    + (ui.options.isHost ? button("다시 한 판", "replay") : "<p>방장이 다시 한 판을 누르면 이 자리에서 다음 판이 시작됩니다.</p>")
+    + (ui.options.isHost && ui.options.onReplaySetup ? button(escapeHtml(ui.options.replaySetupLabel), "replay-setup", true, "secondary") : "");
   return `<h2>주공 팀 ${result.won ? "승리" : "패배"}</h2>
     ${claimResult}<p>공약은 ${escapeHtml(result.target)}점, 주공 팀은 ${escapeHtml(result.points)}점을 획득했어요.</p>
     <div class="g-result-score"><strong>${escapeHtml(result.points)}</strong><span>/ 20점</span></div>
     ${breakdown}${net == null ? '' : `<p class="g-my-settlement">내 정산 <strong>${signedScore(net)}점</strong> <small>(${role})</small></p>`}
-    ${scoreTable(board, view.seat)}
-    ${ui.options.isHost ? button("다시 한 판", "replay") : "<p>방장이 다시 한 판을 누르면 이 자리에서 다음 판이 시작됩니다.</p>"}
-    ${ui.options.isHost && ui.options.onReplaySetup ? button(escapeHtml(ui.options.replaySetupLabel), "replay-setup", true, "secondary") : ""}`;
+    ${next}`;
 }
 function previousTrick(view, nameAt) {
   const last = view.lastTrick;
@@ -613,7 +614,8 @@ function panelMarkup(view, ui, nameAt) {
     : waiting ? `<h2>${escapeHtml(nameAt(view.turn))}님 차례</h2><p>${({ bid: "입찰을 기다리고 있어요.", discard: "주공이 바닥패를 교환하고 있어요.", friend: "주공이 프렌드를 정하고 있어요.", play: "카드를 고르고 있어요." })[view.phase]}</p>` : controls[view.phase](view, ui);
   const firstFriend = view.settingAwaitingFriend ? '<p class="g-claim-outcome" data-success="false"><strong>세팅 실패</strong>초구 프렌드를 정하기 위해 첫 트릭만 진행합니다.</p>' : "";
   const standings = view.phase === "result" ? "" : scoreTable(ui.options.scoreboard, view.seat, {collapsed:true});
-  return `<div class="g-panel-body"><div class="g-panel-caption"><i class="${waiting ? "g-wait-dot" : ""}"></i>${view.phase === "result" ? "최종 결과" : pending ? "세팅 선언" : mine ? "내 차례" : "상대 차례"}</div><div class="g-action" aria-live="polite">${firstFriend}${content}</div>${standings}${infoMarkup(view, nameAt)}</div>${previousTrick(view, nameAt)}`;
+  const resultCaption = ui.options.scoreboard?.complete ? "마지막 판 결과" : "최종 결과";
+  return `<div class="g-panel-body"><div class="g-panel-caption"><i class="${waiting ? "g-wait-dot" : ""}"></i>${view.phase === "result" ? resultCaption : pending ? "세팅 선언" : mine ? "내 차례" : "상대 차례"}</div><div class="g-action" aria-live="polite">${firstFriend}${content}</div>${standings}${infoMarkup(view, nameAt)}</div>${previousTrick(view, nameAt)}`;
 }
 function mountTable(root) {
   root.innerHTML = `<div class="g-screen">
@@ -626,8 +628,9 @@ function mountTable(root) {
     </div></header>
     <div class="g-main">
       <div class="g-heading"><div class="g-eyebrow"><i aria-hidden="true">♠</i> 마이티 · 5인전
-        <small class="g-release-note">v${VERSION} · 마지막 업데이트 <time datetime="${UPDATED_ON}">${UPDATED_ON}</time></small></div>
-        <div class="g-title-row"><h1></h1><span class="g-round-tag"></span></div></div>
+        <small class="g-release-note"><span>v${VERSION}</span> <span>마지막 업데이트 <time datetime="${UPDATED_AT}">${UPDATED_LABEL}</time></span></small></div>
+        <div class="g-title-row"><h1></h1><span class="g-round-tag"></span><span class="g-match-progress" hidden></span></div></div>
+      <section class="g-match-final" aria-label="경기 최종 결과" hidden></section>
       <div class="g-layout">
         <section class="g-board" aria-label="게임 테이블"><div class="g-felt"><div class="g-felt-line"></div>
           <div class="g-table-center"></div><div class="g-auction-calls" hidden></div><div class="g-trick" hidden></div><div class="g-seats"></div>
@@ -655,13 +658,37 @@ function redraw(ui, newDeal = false) {
   const openBids = root.querySelector("details.g-bid-history")?.open;
   const scoreDisclosure = root.querySelector("details.match-standings");
   if (scoreDisclosure) ui.scoresOpen = scoreDisclosure.open;
-  root.querySelector("h1").textContent = view.phase === "play" ? `${view.trickNo}번째 트릭` : labels[view.phase];
+  const board = options.scoreboard;
+  const finished = view.phase === "result" && board?.complete;
+  root.querySelector("h1").textContent = finished ? `${board.rounds}판 경기 종료`
+    : view.phase === "play" ? `${view.trickNo}번째 트릭` : labels[view.phase];
+  const progress = root.querySelector(".g-match-progress");
+  progress.hidden = !board?.roundLimit || finished;
+  if (!progress.hidden) {
+    const settled = view.phase === "result" || (ui.resolving && ui.latest.phase === "result");
+    const current = board.rounds + (settled ? 0 : 1);
+    progress.textContent = `${current} / ${board.roundLimit}판`;
+    progress.setAttribute("aria-label", `총 ${board.roundLimit}판 중 ${current}번째 판`);
+  }
+  const final = root.querySelector(".g-match-final");
+  if (finished) {
+    const action = options.isHost && options.onReplaySetup ? button(escapeHtml(options.replaySetupLabel), "replay-setup") : "";
+    const summary = scoreTable(board, view.seat, {final:true, title:"최종 순위"}) + action;
+    if (ui.finalHtml !== summary) final.innerHTML = summary;
+    ui.finalHtml = summary;
+  } else if (!final.hidden) {
+    final.replaceChildren();
+    ui.finalHtml = null;
+  }
+  final.hidden = !finished;
   const tag = root.querySelector(".g-round-tag");
   const showContract = view.phase !== "bid" && view.phase !== "result";
   tag.classList.toggle("g-contract-tag", showContract);
   if (showContract) {
     const {suit, points} = view.bid;
     tag.innerHTML = `<span class="g-contract-prefix">공약 </span>${suitMark(suit)} ${suitInfo[suit][1]} <strong>${escapeHtml(points)}점</strong>`;
+  } else if (finished) {
+    tag.textContent = `마지막 판 · 주공 팀 ${view.result.won ? "승리" : "패배"} (${view.result.points}점)`;
   } else {
     tag.textContent = view.phase === "result" ? (view.result.setting ? "세팅 종료" : "10트릭 완료") : "경매 " + view.bidHistory.length + "회";
   }
@@ -711,8 +738,13 @@ function bind(ui) {
     if (event.animationName === "g-send-card-back") event.target.remove();
     if (event.animationName === "g-deal-card") event.target.closest(".g-hand-card")?.classList.remove("g-deal");
     if (event.animationName === "g-play-card") {
-      event.target.classList.remove("g-play-enter");
       if (motionEnabled()) playTableSound(event.target.dataset.landingSound || "play");
+    }
+    if (event.animationName === "g-settle-card") event.target.classList.remove("g-play-enter");
+  });
+  ui.root.addEventListener("animationcancel", event => {
+    if (event.animationName === "g-play-card" || event.animationName === "g-settle-card") {
+      event.target.classList.remove("g-play-enter");
     }
   });
   ui.root.addEventListener("click", event => {
@@ -868,7 +900,7 @@ export function renderGame(container, publicView, options = {}) {
   }
   if (!container.firstElementChild) {
     mountTable(container);
-    ui.auctionMarkup = ui.centerMarkup = ui.settingsHtml = ui.settingLineHtml = null;
+    ui.auctionMarkup = ui.centerMarkup = ui.settingsHtml = ui.settingLineHtml = ui.finalHtml = null;
   }
   publicView = withRememberedJoker(publicView, ui.latest);
   ui.latest = publicView;

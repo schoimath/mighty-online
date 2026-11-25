@@ -118,6 +118,15 @@ button.seat-place:hover { border-color:#47744d; background:#ecf4e8; }
 @media(max-width:390px){.header-inner{gap:10px}.hero-art{right:-2%;transform:translateY(-50%) scale(.49)}.hero-copy{width:69%}.hero-specs{gap:4px}.profile{padding-left:0}.tip-icon{display:none}.main-nav{gap:10px}}
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{scroll-behavior:auto!important;transition:none!important;animation:none!important}}
 
+.series-picker { margin: 18px 0; padding: 0; border: 0; }
+.series-picker legend, .series-summary strong { padding: 0; color: #284a36; font-size: .92rem; font-weight: 700; }
+.series-picker > div { display: flex; gap: 5px; margin-top: 7px; }
+.series-picker label { position: relative; flex: 1; cursor: pointer; }
+.series-picker input { position: absolute; opacity: 0; }
+.series-picker span { display: block; padding: 9px 4px; border: 1px solid #c5d0c3; border-radius: 6px; background: #fffefa; color: #415c49; text-align: center; font-weight: 650; }
+.series-picker :checked + span { background: #28573d; border-color: #28573d; color: #fff; }
+.series-picker :focus-visible + span { outline: 2px solid #8b682c; outline-offset: 2px; }
+.series-summary strong { margin-inline-end: 8px; }
 .rule-settings {
   min-width: 0; margin: 20px 0; padding: 0 15px 2px;
   border: 1px solid #cbd5c5; border-radius: 10px; background: #f3f6ed;
