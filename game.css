@@ -267,7 +267,8 @@ html:has(.g-screen) { scrollbar-gutter: stable; }
 .g-hand-card[aria-expanded="true"] { outline: 3px solid #eabd66; outline-offset: 0; }
 .g-hand-card.g-illegal .g-card-face { background: #abb8a9; border-color: #7e9382; box-shadow: none; }
 .g-hand-joker-call.g-illegal .g-card-face { background: #b7adbd; border-color: #93869c; }
-.g-hand-incoming { container-type: inline-size; }
+.g-hand-incoming, .g-hand-joker-call { container-type: inline-size; }
+.g-hand-joker-call .g-pip { top: 53%; font-size: min(2rem, 53cqi); }
 .g-hand-incoming .g-card-face { border-color: #247d72; }
 .g-incoming-tag {
   position: absolute; top: 3%; right: 3%; padding: 2px; border-radius: 3px;
