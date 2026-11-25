@@ -2,17 +2,17 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {HostSession} from '../session.js';
 import {rngFor} from '../lab/game.js';
-import {recurrentModels} from '../lab/artifacts/recurrent-aux/selected.js';
-import {createRecurrentPolicy, replayRecurrentMemory} from '../lab/recurrent.js';
+import {balancedTurn, replayBalancedMemory} from '../lab/table-memory-entry.js';
 import {botObservation} from '../engine.js';
 import {playLiveEpisode} from '../lab/live-game.js';
 import {ruleAction} from '../lab/rules-agents.js';
 import {decideTableTurn} from '../lab/table-agents.js';
-import {conserveOpeningJoker} from '../table-tactics.js';
+import {conserveMightyOnTrumpAce, conserveOpeningJoker} from '../table-tactics.js';
+import {preferTrumpLead} from '../table-trump-lead.js';
 
 test('four identical models keep separate private memories through worker retries and a rematch', () => {
   const room = new HostSession('방장', undefined, Array(5).fill('recurrent_balanced'));
-  const reference = Array.from({length:5}, () => createRecurrentPolicy(recurrentModels.balanced, 'balanced'));
+  const referenceMemory = Array(5).fill(null);
   room.start();
   room.act(0, room.revision, {type:'bid', suit:'N', points:20});
   const seen = new Set();
@@ -27,10 +27,13 @@ test('four identical models keep separate private memories through worker retrie
       continue;
     }
     const request = room.botRequest(++job);
-    assert.deepEqual(request.memory, reference[seat].getMemory());
+    assert.deepEqual(request.memory, referenceMemory[seat]);
     const reply = decideTableTurn(request);
-    assert.deepEqual(reply.action, reference[seat](conserveOpeningJoker(request.view), rngFor(job)));
-    assert.deepEqual(reply.memory, reference[seat].getMemory());
+    const view = conserveMightyOnTrumpAce(conserveOpeningJoker(request.view));
+    const expected = balancedTurn(view, rngFor(job), referenceMemory[seat]);
+    referenceMemory[seat] = expected.memory;
+    assert.deepEqual(reply.action, preferTrumpLead(request.view, expected.action));
+    assert.deepEqual(reply.memory, expected.memory);
     assert.deepEqual(room.botRequest(job), request);
     assert.ok(!JSON.stringify(room.view(0)).includes('"memory"'));
     if (job % 2) room.runBot(undefined, job);
@@ -75,7 +78,7 @@ test('a substitute reconstructs its own past decisions including the human’s r
   guest({type:'discard', cards:room.view(1).game.hand.slice(0,3), contract:{suit:'D', points:16}});
   room.removeGuest('guest');
   const request = room.botRequest(28);
-  assert.deepEqual(request.memory, replayRecurrentMemory(recurrentModels.balanced, 'balanced', history));
+  assert.deepEqual(request.memory, replayBalancedMemory(history));
   assert.ok(Array.isArray(request.memory));
   assert.equal(request.view.phase,'friend');
 });
@@ -83,11 +86,17 @@ test('a substitute reconstructs its own past decisions including the human’s r
 test('recurrent seats finish randomized games at every room rule setting', () => {
   let decisions = 0;
   for (let seed = 0; seed < 128; seed++) {
-    const goal = ['win','score','balanced'][seed % 3], seat = seed % 5;
+    const seat = seed % 5;
     const rules = {minBid:13 + (seed % 8), allowFirstFriend:Boolean(seed & 8),
       allowFirstJokerCall:Boolean(seed & 16), allowLastJoker:Boolean(seed & 32)};
-    const policies = Array.from({length:5}, (_, s) => s === seat ? createRecurrentPolicy(recurrentModels[goal],goal)
-      : (view, rng) => ruleAction('random',view,rng));
+    let deal, memory;
+    const activeModel = (view, rng) => {
+      if (deal !== view.dealNo) { deal = view.dealNo; memory = null; }
+      const reply = decideTableTurn({modelId:'recurrent_balanced', view, memory, seed:Math.floor(rng() * 2 ** 32)});
+      memory = reply.memory;
+      return reply.action;
+    };
+    const policies = Array.from({length:5}, (_, s) => s === seat ? activeModel : (view, rng) => ruleAction('random',view,rng));
     const game = playLiveEpisode({seed:8100000 + seed, firstSeat:(seed + 1) % 5, policies, rules});
     decisions += game.actions;
     assert.equal(game.outcomes.reduce((sum, p) => sum + p.settlement, 0),0);

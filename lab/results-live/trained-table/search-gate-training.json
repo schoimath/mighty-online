@@ -1,0 +1,78 @@
+{
+  "method": "paired-terminal-ridge-search-gate-v1",
+  "baseSha256": "c13471b7362afb5671b2a4ca8c9d1fa1ced485e4cb43565eb33057b8acc8676a",
+  "candidateSha256": "7e30396572b2abb4d564ee2dfbe65877373f6d42e599b9b6e2526e02e98b5746",
+  "trainSeed": 32410000,
+  "validSeed": 32450000,
+  "train": 280,
+  "valid": 60,
+  "trainingChoices": 3975,
+  "validationChoices": 858,
+  "choices": [
+    {
+      "budget": 0.2,
+      "threshold": 0.03056472782273294,
+      "frequency": 0.21561771561771562,
+      "meanUtilityGain": 0.003292905011655011,
+      "meanSidePointsGain": 0.026806526806526808
+    },
+    {
+      "budget": 0.35,
+      "threshold": 0.02255586977422902,
+      "frequency": 0.3951048951048951,
+      "meanUtilityGain": 0.007432801573426574,
+      "meanSidePointsGain": 0.06177156177156177
+    },
+    {
+      "budget": 0.5,
+      "threshold": 0.01771449116908005,
+      "frequency": 0.5524475524475524,
+      "meanUtilityGain": 0.0057923586829836836,
+      "meanSidePointsGain": 0.045454545454545456
+    },
+    {
+      "budget": 0.6,
+      "threshold": 0.013706957283016054,
+      "frequency": 0.6398601398601399,
+      "meanUtilityGain": 0.006619136072261074,
+      "meanSidePointsGain": 0.047785547785547784
+    }
+  ],
+  "selected": {
+    "budget": 0.35,
+    "threshold": 0.02255586977422902,
+    "frequency": 0.3951048951048951,
+    "meanUtilityGain": 0.007432801573426574,
+    "meanSidePointsGain": 0.06177156177156177
+  },
+  "workers": 3,
+  "ridge": 8,
+  "sidePointWeight": 0.025,
+  "searchGate": {
+    "weights": [
+      -0.013657552221831019,
+      -0.011636257802244913,
+      0.015386866775158402,
+      0.010599594284203482,
+      0.006679142146053972,
+      0.005817985005402691,
+      0.01562974106517511,
+      0.025092618159554582,
+      0.008685016919132187,
+      -0.022343833554019914,
+      -0.029334018730811786,
+      0.027626194814860255,
+      0.01350649549585472,
+      0.009958949539450698,
+      -0.010678758997261952,
+      -0.014215935612129886,
+      0.004092246961737747,
+      0.020228780643633502,
+      -0.0029976232981795813,
+      -0.030402047040368564
+    ],
+    "threshold": 0.02255586977422902
+  },
+  "nodeVersion": "v24.15.0",
+  "command": "node lab/train-search-gate.mjs <base-weights> <new-output> 280 60 3 32410000 32450000"
+}

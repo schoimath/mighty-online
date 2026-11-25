@@ -1,0 +1,70 @@
+{
+  "reference": {
+    "commit": "8694c73",
+    "file": "lab/artifacts/recurrent-aux/best-balanced.json",
+    "sha256": "c13471b7362afb5671b2a4ca8c9d1fa1ced485e4cb43565eb33057b8acc8676a",
+    "environment": {"node": "24.15.0", "python": "3.12.9", "torch": "2.8.0+cpu"}
+  },
+  "selfPlayPPO": {
+    "command": "python lab/finetune_balanced.py --initial lab/artifacts/recurrent-aux/best-balanced.json --out replay/ppo --updates 6 --episodes 180 --validation-deals 48",
+    "initialization": "Exported reference weights; fresh Adam",
+    "training": {
+      "seedRangeInclusive": [22000000, 22001079],
+      "games": 1080, "decisions": 12546, "optimizerSteps": 270,
+      "seats": [216, 216, 216, 216, 216],
+      "roles": {"declarer": 175, "friend": 228, "opposition": 677},
+      "opponentSeats": {"recentSelf": 1917, "history": 1289, "heuristic": 387, "aggressive": 367, "conservative": 360}
+    },
+    "selection": {
+      "seedRangeInclusive": [23000000, 23000047], "seatsPerDeal": 5, "generations": 6,
+      "highestBalancedUtilityGeneration": 6, "referenceWins": 145, "candidateWins": 156, "seatGames": 240,
+      "referenceMeanSettlement": 1.204166667, "candidateMeanSettlement": 1.454166667
+    },
+    "export": {"file": "replay/ppo/generation-6.json", "sha256": "0704d3080a5c83000bd8195ade8f9c456378411fe83da262611ed50c72184a55", "independentRepeatMatchedBytes": true},
+    "tableDevelopment": {
+      "seedRangeInclusive": [23100000, 23100479], "pairs": 480, "mode": "compare",
+      "referenceDeclarer": 47, "candidateDeclarer": 2, "referenceWins": 242, "candidateWins": 235,
+      "winDelta": -0.014583333, "winDeltaCI95": [-0.039583333, 0.010416667],
+      "meanSettlementDelta": -0.5, "meanSettlementDeltaCI95": [-0.8875, -0.152083333],
+      "sameDealsFixedOpening": {"winDelta": 0, "meanSettlementDelta": -0.083333333}
+    },
+    "selectedForRelease": false
+  },
+  "counterfactualPlayActor": {
+    "commands": [
+      "node lab/collect-table-play.mjs lab/artifacts/recurrent-aux/best-balanced.json replay/play-training.json 24100000 768 5",
+      "node lab/collect-table-play.mjs lab/artifacts/recurrent-aux/best-balanced.json replay/play-validation.json 24200000 192 2",
+      "python lab/fit-table-play.py --initial lab/artifacts/recurrent-aux/best-balanced.json --training replay/play-training.json --validation replay/play-validation.json --out replay/play"
+    ],
+    "training": {
+      "seedRangeInclusive": [24100000, 24100767], "deals": 768, "continuations": 12125, "cardPairs": 10426,
+      "differentTeamWin": 1318, "differentTrainingReward": 4619,
+      "dataSHA256": "2def66b461b71896558dee42ad58f05edc9a1775c18d7a21448e5cbb24be2c58",
+      "optimizer": "Adam", "optimizerSeed": 24300000, "totalSteps": 876,
+      "pairwiseTarget": "Difference in balanced utility plus 0.015 times the difference in points taken by the focal side"
+    },
+    "selection": {
+      "seedRangeInclusive": [24200000, 24200191], "deals": 192, "continuations": 3029, "cardPairs": 2602,
+      "differentTeamWin": 281, "differentTrainingReward": 1098,
+      "dataSHA256": "efe64094f8ccf09ea48f1f461b2610e6460da07eb6b9a13c7e6d395e3d8ba28f",
+      "epoch": 9, "strength": 1, "selectedSteps": 657
+    },
+    "export": {"file": "replay/play/candidate.json", "sha256": "096bd52e55d5f330bda70299ee7f4a12c2b9e51cf08dfe82fb15ad03137d5c03"},
+    "tableDevelopment": [
+      {"mode": "compare-play", "seedRangeInclusive": [23100000, 23100479], "pairs": 480,
+        "referenceWins": 242, "candidateWins": 239, "winDelta": -0.00625, "winDeltaCI95": [-0.039583333, 0.027083333],
+        "meanSettlementDelta": -0.010416667, "meanSettlementDeltaCI95": [-0.347916667, 0.339583333]},
+      {"mode": "compare-play", "seedRangeInclusive": [32301000, 32301399], "pairs": 400,
+        "referenceWins": 189, "candidateWins": 196, "winDelta": 0.0175, "winDeltaCI95": [-0.02, 0.0525],
+        "meanSettlementDelta": -0.0825, "meanSettlementDeltaCI95": [-0.49, 0.3225]}
+    ],
+    "selectedForRelease": false
+  },
+  "tableReproduction": {
+    "runner": "lab/evaluate-table-gru.mjs",
+    "baseline": "node lab/evaluate-table-gru.mjs baseline OLD_WEIGHTS CACHE_DIR PAIRS WORKERS FIRST_SEED",
+    "candidate": "node lab/evaluate-table-gru.mjs MODE OLD_WEIGHTS CACHE_DIR PAIRS WORKERS FIRST_SEED CANDIDATE_WEIGHTS",
+    "confidenceInterval": "4000 paired bootstrap samples of independent deals",
+    "openingInComparePlay": "Baseline through bid, discard, friend choice and resolution of a first-trick friend; both models receive the same seat's observation history"
+  }
+}

@@ -1,0 +1,185 @@
+{
+  "mode": "compare",
+  "spec": {
+    "version": 1,
+    "n": 1600,
+    "start": 32900000,
+    "oldHash": "c13471b7362afb5671b2a4ca8c9d1fa1ced485e4cb43565eb33057b8acc8676a",
+    "opponents": [
+      "contract_search",
+      "recurrent_balanced",
+      "heuristic"
+    ],
+    "rules": "table defaults",
+    "reward": {
+      "alpha": 0.7,
+      "scoreScale": 640
+    }
+  },
+  "tableRules": {
+    "minBid": 14,
+    "allowFirstFriend": true,
+    "allowFirstJokerCall": false,
+    "allowLastJoker": false
+  },
+  "candidateHash": "7e30396572b2abb4d564ee2dfbe65877373f6d42e599b9b6e2526e02e98b5746",
+  "summary": {
+    "overall": {
+      "pairs": 1600,
+      "lostToWon": 106,
+      "wonToLost": 47,
+      "utility": {
+        "before": 0.32959316406249956,
+        "after": 0.3556772460937493,
+        "delta": 0.026084082031249737,
+        "ci95": [
+          0.015906445312499993,
+          0.036608398437499974
+        ]
+      },
+      "win": {
+        "before": 0.47125,
+        "after": 0.508125,
+        "delta": 0.036875,
+        "ci95": [
+          0.0225,
+          0.051875
+        ]
+      },
+      "settlement": {
+        "before": -0.60125,
+        "after": -0.021875,
+        "delta": 0.579375,
+        "ci95": [
+          0.410625,
+          0.748125
+        ]
+      }
+    },
+    "byReferenceRole": {
+      "declarer": {
+        "pairs": 154,
+        "lostToWon": 26,
+        "wonToLost": 10,
+        "utility": {
+          "before": 0.35920048701298735,
+          "after": 0.43313920454545457,
+          "delta": 0.07393871753246724,
+          "ci95": [
+            0.02345170454545454,
+            0.12887378246753245
+          ]
+        },
+        "win": {
+          "before": 0.512987012987013,
+          "after": 0.6168831168831169,
+          "delta": 0.1038961038961039,
+          "ci95": [
+            0.032467532467532464,
+            0.18181818181818182
+          ]
+        },
+        "settlement": {
+          "before": 0.23376623376623376,
+          "after": 2.8181818181818183,
+          "delta": 2.5844155844155843,
+          "ci95": [
+            1.3766233766233766,
+            3.831168831168831
+          ]
+        }
+      },
+      "solo": {
+        "pairs": 0
+      },
+      "friend": {
+        "pairs": 371,
+        "lostToWon": 49,
+        "wonToLost": 23,
+        "utility": {
+          "before": 0.36640414420485146,
+          "after": 0.4157677729110512,
+          "delta": 0.04936362870619977,
+          "ci95": [
+            0.018994272237196772,
+            0.07966854784366577
+          ]
+        },
+        "win": {
+          "before": 0.522911051212938,
+          "after": 0.5929919137466307,
+          "delta": 0.07008086253369272,
+          "ci95": [
+            0.026954177897574125,
+            0.11320754716981132
+          ]
+        },
+        "settlement": {
+          "before": 0.7816711590296496,
+          "after": 1.4366576819407009,
+          "delta": 0.6549865229110512,
+          "ci95": [
+            0.2587601078167116,
+            1.0323450134770888
+          ]
+        }
+      },
+      "opposition": {
+        "pairs": 1075,
+        "lostToWon": 31,
+        "wonToLost": 14,
+        "utility": {
+          "before": 0.31264767441860464,
+          "after": 0.32384215116279064,
+          "delta": 0.011194476744185998,
+          "ci95": [
+            0.002736773255813953,
+            0.020300290697674413
+          ]
+        },
+        "win": {
+          "before": 0.4474418604651163,
+          "after": 0.46325581395348836,
+          "delta": 0.01581395348837209,
+          "ci95": [
+            0.0037209302325581397,
+            0.02883720930232558
+          ]
+        },
+        "settlement": {
+          "before": -1.198139534883721,
+          "after": -0.932093023255814,
+          "delta": 0.266046511627907,
+          "ci95": [
+            0.15534883720930232,
+            0.38232558139534883
+          ]
+        }
+      }
+    },
+    "roleCounts": {
+      "declarer": {
+        "before": 154,
+        "after": 154
+      },
+      "solo": {
+        "before": 0,
+        "after": 0
+      },
+      "friend": {
+        "before": 371,
+        "after": 371
+      },
+      "opposition": {
+        "before": 1075,
+        "after": 1075
+      }
+    },
+    "roleChanged": 0
+  },
+  "archive": {
+    "file": "final-test.pairs.json.gz",
+    "bytes": 13291,
+    "sha256": "dc4c8be70300fd97a11f38ebb2059acfc64c38c423c17ae659700c8306afab7d"
+  }
+}

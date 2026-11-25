@@ -32,9 +32,11 @@ test('all three policies draw from six hearts headed by A-K-Q after the Joker ha
     balancedTurn(view, rngFor(97), memory).action,
     botDecision(view, policyPlay)
   ];
-  assert.deepEqual(proposed.map(action => action.card), ['D7','C9','C9']);
   const snapshot = structuredClone(view);
-  for (const action of proposed) {
+  // Both of these off-suit leads were observed in the original table models.
+  // Exercise them even if a newer model already chooses to draw trump.
+  const pastLeads = ['D7','C9'].map(card => ({type:'play',card}));
+  for (const action of [...pastLeads,...proposed]) {
     const choice = preferTrumpLead(view, action);
     assert.deepEqual(choice, {type:'play', card:'HA'});
     assert.doesNotThrow(() => applyAction(structuredClone(state), 0, choice));
