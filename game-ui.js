@@ -439,7 +439,8 @@ function playCard(ui, card, confirmed = false) {
     if (ui.pendingCard !== card) {
       ui.pendingCard = card;
       const suits = moves.map(move => move.suit).filter(Boolean);
-      ui.jokerSuit = suits.length ? longestSuit(ui.view.hand, suits) : null;
+      const trump = ui.view.bid.suit;
+      ui.jokerSuit = suits.includes(trump) ? trump : longestSuit(ui.view.hand, suits);
       ui.jokerCall = moves.some(move => move.jokerCall);
       renderHand(ui, false);
     }
