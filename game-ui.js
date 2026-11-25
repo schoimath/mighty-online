@@ -2,7 +2,7 @@ import {isCoveredSeat, scoreTable, seatPile, signedScore} from "./score-ui.js";
 import {DEFAULT_RULES, leadSuit, mighty} from "./engine.js";
 import {playTableSound, soundControl, toggleSound} from "./sound.js";
 import {AUCTION_BEAT_MS, FRIEND_ANNOUNCEMENT_MS} from "./table-timing.js";
-import {settlementDetails} from "./table-scoring.js";
+import {settlementDetails, TABLE_SCORING_VERSION} from "./table-scoring.js";
 import {settlements as archivedSettlements} from "./lab/scoring.js";
 
 const suitInfo = {
@@ -392,7 +392,7 @@ function resultControls(view, ui) {
   const board = ui.options.scoreboard;
   const {base, bonuses, multiplier} = settlementDetails(result, view.bid.suit);
   const net = board ? board.members.find(m => m.seat === view.seat)?.lastDelta : archivedSettlements(result, view.bid.suit)[view.seat];
-  const breakdown = board ? `<p>여당 한 몫 ${signedScore(base)}점${bonuses.length ? ' · ' + bonuses.map(name => name + ' ×2').join(' · ') + ' (총 ×' + multiplier + ')' : ''}</p>` : '';
+  const breakdown = board?.scoringVersion === TABLE_SCORING_VERSION ? `<p>여당 한 몫 ${signedScore(base)}점${bonuses.length ? ' · ' + bonuses.map(name => name + ' ×2').join(' · ') + ' (총 ×' + multiplier + ')' : ''}</p>` : '';
   return `<h2>주공 팀 ${result.won ? "승리" : "패배"}</h2>
     <p>공약은 ${escapeHtml(result.target)}점, 주공 팀은 ${escapeHtml(result.points)}점을 획득했어요.</p>
     <div class="g-result-score"><strong>${escapeHtml(result.points)}</strong><span>/ 20점</span></div>
@@ -694,13 +694,17 @@ export function renderGame(container, publicView, options = {}) {
   displayLatest(ui);
 }
 
-export function rulesContent(rules = DEFAULT_RULES, currentTable = true) {
+export function rulesContent(rules = DEFAULT_RULES, scoringVersion = TABLE_SCORING_VERSION) {
   const bidRange = rules.minBid === 20 ? "20점을 걸고" : `${escapeHtml(rules.minBid)}~20점 사이에서`;
   const firstFriend = rules.allowFirstFriend ? " 첫 트릭의 승자를 초구 프렌드로 지정할 수도 있습니다." : "";
   const jokerCallFrom = rules.allowFirstJokerCall ? "첫 트릭부터" : "두 번째 트릭부터";
-  const opening = currentTable ? " 처음 받은 10장에 점수 카드(10·J·Q·K·A)가 한 장도 없는 사람이 있으면 파토입니다. 공약 전에 모두 다시 받고 같은 자리부터 시작합니다." : "";
-  const scoring = currentTable
-    ? "여당 한 몫의 기본점은 최종 공약에서 10을 뺀 값입니다. 성공하면 더하고 실패하면 뺍니다. 런(여당 20점), 백런(야당 10점 이상), 노기루다, 노프렌드는 각각 2배이며 겹치면 곱합니다. 새 테이블에서는 모두 0점으로 시작하며 개인 점수는 판마다 누적됩니다."
+  const hasStandings = scoringVersion !== 'ten-base-v1';
+  const opening = hasStandings ? " 처음 받은 10장에 점수 카드(10·J·Q·K·A)가 한 장도 없는 사람이 있으면 파토입니다. 공약 전에 모두 다시 받고 같은 자리부터 시작합니다." : "";
+  const contractRule = scoringVersion === TABLE_SCORING_VERSION
+    ? "여당이 공약에 성공하면 한 몫은 2 × (최종 공약 − 13) + (여당 득점 − 최종 공약)입니다. 실패하면 모자란 점수만큼 잃습니다. 15점 공약에서 17점이면 +6점, 14점이면 −1점입니다."
+    : "이 방에서는 최종 공약에서 10을 뺀 값을 한 몫으로 정해 성공하면 더하고 실패하면 뺍니다.";
+  const scoring = hasStandings
+    ? contractRule + " 런(여당 20점), 백런(야당 10점 이상), 노기루다, 노프렌드는 각각 2배이며 겹치면 곱합니다. 새 테이블에서는 모두 0점으로 시작하며 개인 점수는 판마다 누적됩니다."
     : "여당이 성공하면 획득 점수에서 10을 뺀 값, 실패하면 공약에 모자란 값으로 정산합니다. 런(여당 20점), 백런(공약보다 10점 이상 부족), 노기루다, 노프렌드는 각각 2배입니다.";
   const jokerTiming = rules.allowLastJoker
     ? "첫 트릭에서는 조커가 가장 약하고, 조커로 시작하면 두 번째 카드가 따를 무늬를 정합니다. 2~10번째 트릭에서는 조커가 기루다를 이기며, 조커로 시작하는 사람이 따를 무늬를 부릅니다."

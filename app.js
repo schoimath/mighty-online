@@ -147,7 +147,9 @@ function readRules(container) {
 
 function showRules() {
   const rules = activeRules();
-  modal('게임 규칙', '<div class="rules-wrap">' + rulesSummary(rules) + modelSummary(snapshot) + rulesContent(rules, !snapshot || Boolean(snapshot.scoreboard)) + '</div>');
+  const board = snapshot?.scoreboard;
+  const scoringVersion = snapshot ? board?.scoringVersion ?? (board ? 'contract-flat-v1' : 'ten-base-v1') : undefined;
+  modal('게임 규칙', '<div class="rules-wrap">' + rulesSummary(rules) + modelSummary(snapshot) + rulesContent(rules, scoringVersion) + '</div>');
 }
 $('nav-rules').onclick = showRules;
 

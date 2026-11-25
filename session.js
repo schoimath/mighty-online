@@ -1,6 +1,6 @@
 import {botObservation, DEFAULT_RULES, validateRules} from './engine.js';
 import {applyAction, createGame, getView} from './table-deal.js';
-import {settlements} from './table-scoring.js';
+import {settlements, TABLE_SCORING_VERSION} from './table-scoring.js';
 import {chooseModelAction, DEFAULT_MODEL, isModelId} from './lab/agents.js';
 import {rngFor} from './lab/game.js';
 
@@ -227,7 +227,7 @@ export class HostSession {
         lastSeat: latest?.lastSeat ?? null, lastDelta: latest?.lastDelta ?? null});
     }
     members.sort((a, b) => (a.seat ?? BOT_NAMES.length) - (b.seat ?? BOT_NAMES.length));
-    return {rounds: this.#completedRounds, members};
+    return {scoringVersion: TABLE_SCORING_VERSION, rounds: this.#completedRounds, members};
   }
 
   view(seat) {
