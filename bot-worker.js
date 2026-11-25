@@ -1,7 +1,5 @@
-import {chooseModelAction, DEFAULT_MODEL} from './lab/agents.js';
-import {rngFor} from './lab/game.js';
+import {decideTableTurn, DEFAULT_MODEL} from './lab/table-agents.js';
 
-self.onmessage = ({data: {revision, seed, view, modelId = DEFAULT_MODEL}}) => {
-  const rng = rngFor(seed ?? crypto.getRandomValues(new Uint32Array(1))[0]);
-  self.postMessage({revision, modelId, action: chooseModelAction(modelId, view, rng)});
+self.onmessage = ({data}) => {
+  self.postMessage({revision:data.revision, modelId:data.modelId ?? DEFAULT_MODEL, ...decideTableTurn(data)});
 };

@@ -3,7 +3,7 @@ import {AUCTION_BEAT_MS, FRIEND_ANNOUNCEMENT_MS} from './table-timing.js';
 import {hostRoom, joinRoom, normalizeRoomCode} from './network.js';
 import {HostSession} from './session.js';
 import {chatText, setupChat} from './chat.js';
-import {botObservation, DEFAULT_RULES} from './engine.js';
+import {DEFAULT_RULES} from './engine.js';
 import {scoreTable, seatStanding} from './score-ui.js';
 import {bindModelSettings, modelLabel, modelSettings, modelSummary, readModelSettings} from './model-picker.js';
 
@@ -375,14 +375,12 @@ function takeBotTurn() {
   const session = authority;
   if (!session?.botTurn) return;
   const revision = session.revision;
-  const seat = session.round.turn;
-  const modelId = session.players[seat].modelId;
   // Each decision has its own random stream, including when the worker must retry locally.
   const seed = crypto.getRandomValues(new Uint32Array(1))[0];
-  function finish(action) {
+  function finish(action, memory) {
     // The room can change while the worker is thinking, for example when a guest leaves.
     if (authority !== session || session.revision !== revision || !session.botTurn) return;
-    session.runBot(action, seed);
+    session.runBot(action, seed, memory);
     publish();
   }
   if (workerUnavailable) {
@@ -398,17 +396,18 @@ function takeBotTurn() {
     finish();
   }
   try {
+    const request = session.botRequest(seed);
     botWorker ??= new Worker(new URL('./bot-worker.js', import.meta.url), {type:'module'});
     botWorker.onmessage = event => {
       const {data} = event;
       if (data?.revision !== revision) return;
       // Older cached workers compute every turn using the original search model.
-      if (data.modelId !== modelId) { fallback(event); return; }
-      finish(data.action);
+      if (data.modelId !== request.modelId || ('memory' in request && data.memory == null)) { fallback(event); return; }
+      finish(data.action, data.memory);
     };
     botWorker.onerror = fallback;
     botWorker.onmessageerror = fallback;
-    botWorker.postMessage({revision, seed, modelId, view:botObservation(session.round, seat)});
+    botWorker.postMessage(request);
   } catch {
     fallback();
   }

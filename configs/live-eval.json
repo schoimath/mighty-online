@@ -1,0 +1,39 @@
+{
+  "reference": "legacy",
+  "agents": ["heuristic", "legacy", "contract_search", "win", "score", "balanced", "recurrent_win", "recurrent_score", "recurrent_balanced", "belief_uniform", "belief_learned", "gru_belief_uniform", "gru_belief_learned"],
+  "referenceByAgent": {
+    "contract_search": "legacy", "recurrent_win": "win", "recurrent_score": "score",
+    "recurrent_balanced": "balanced", "belief_uniform": "heuristic", "belief_learned": "belief_uniform",
+    "gru_belief_uniform": "recurrent_balanced", "gru_belief_learned": "gru_belief_uniform"
+  },
+  "objectives": {
+    "contract_search": "score", "recurrent_win": "win", "recurrent_score": "score",
+    "recurrent_balanced": "balanced", "belief_uniform": "balanced", "belief_learned": "balanced",
+    "gru_belief_uniform": "balanced", "gru_belief_learned": "balanced"
+  },
+  "reward": {"alpha": 0.7, "scoreScale": 640},
+  "belief": {"model": "lab/artifacts/belief/ownership.json", "selectN": 6, "confirmN": 8},
+  "actionLoss": {"startSeed": 7990100, "positions": 18, "selectN": 12, "confirmN": 20},
+  "splits": {
+    "smoke": {"startSeed": 6250000, "scenarios": 4},
+    "validation": {"startSeed": 6310000, "scenarios": 32},
+    "final_test": {"startSeed": 7410000, "scenarios": 64},
+    "crossplay": {"startSeed": 7920000, "scenarios": 16}
+  },
+  "backgrounds": {
+    "mixed": ["random", "heuristic", "aggressive", "conservative"],
+    "partnership": ["heuristic", "balanced", "conservative", "win"],
+    "pressure": ["aggressive", "heuristic", "score", "conservative"],
+    "search": ["legacy", "heuristic", "aggressive", "balanced"],
+    "recurrent_mix": ["recurrent_win", "recurrent_score", "recurrent_balanced", "heuristic"],
+    "recurrent_search": ["recurrent_balanced", "legacy", "recurrent_win", "aggressive"]
+  },
+  "backgroundCycle": {
+    "smoke": ["mixed", "partnership", "pressure", "search"],
+    "validation": ["mixed", "partnership", "pressure", "search"],
+    "final_test": ["mixed", "partnership", "pressure", "search"],
+    "crossplay": ["recurrent_mix", "recurrent_search"]
+  },
+  "blockSize": 4, "ridge": 0.2, "bootstrapDraws": 512, "bootstrapSeed": 6310741,
+  "workers": 3
+}

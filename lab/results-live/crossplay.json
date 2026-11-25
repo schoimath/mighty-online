@@ -1,0 +1,3466 @@
+{
+  "split": "crossplay",
+  "config": {
+    "reference": "legacy",
+    "agents": [
+      "heuristic",
+      "legacy",
+      "contract_search",
+      "win",
+      "score",
+      "balanced",
+      "recurrent_win",
+      "recurrent_score",
+      "recurrent_balanced",
+      "belief_uniform",
+      "belief_learned",
+      "gru_belief_uniform",
+      "gru_belief_learned"
+    ],
+    "referenceByAgent": {
+      "contract_search": "legacy",
+      "recurrent_win": "win",
+      "recurrent_score": "score",
+      "recurrent_balanced": "balanced",
+      "belief_uniform": "heuristic",
+      "belief_learned": "belief_uniform",
+      "gru_belief_uniform": "recurrent_balanced",
+      "gru_belief_learned": "gru_belief_uniform"
+    },
+    "objectives": {
+      "contract_search": "score",
+      "recurrent_win": "win",
+      "recurrent_score": "score",
+      "recurrent_balanced": "balanced",
+      "belief_uniform": "balanced",
+      "belief_learned": "balanced",
+      "gru_belief_uniform": "balanced",
+      "gru_belief_learned": "balanced"
+    },
+    "reward": {
+      "alpha": 0.7,
+      "scoreScale": 640
+    },
+    "belief": {
+      "model": "lab/artifacts/belief/ownership.json",
+      "selectN": 6,
+      "confirmN": 8
+    },
+    "actionLoss": {
+      "startSeed": 7990100,
+      "positions": 18,
+      "selectN": 12,
+      "confirmN": 20
+    },
+    "splits": {
+      "smoke": {
+        "startSeed": 6250000,
+        "scenarios": 4
+      },
+      "validation": {
+        "startSeed": 6310000,
+        "scenarios": 32
+      },
+      "final_test": {
+        "startSeed": 7410000,
+        "scenarios": 64
+      },
+      "crossplay": {
+        "startSeed": 7920000,
+        "scenarios": 16
+      }
+    },
+    "backgrounds": {
+      "mixed": [
+        "random",
+        "heuristic",
+        "aggressive",
+        "conservative"
+      ],
+      "partnership": [
+        "heuristic",
+        "balanced",
+        "conservative",
+        "win"
+      ],
+      "pressure": [
+        "aggressive",
+        "heuristic",
+        "score",
+        "conservative"
+      ],
+      "search": [
+        "legacy",
+        "heuristic",
+        "aggressive",
+        "balanced"
+      ],
+      "recurrent_mix": [
+        "recurrent_win",
+        "recurrent_score",
+        "recurrent_balanced",
+        "heuristic"
+      ],
+      "recurrent_search": [
+        "recurrent_balanced",
+        "legacy",
+        "recurrent_win",
+        "aggressive"
+      ]
+    },
+    "backgroundCycle": {
+      "smoke": [
+        "mixed",
+        "partnership",
+        "pressure",
+        "search"
+      ],
+      "validation": [
+        "mixed",
+        "partnership",
+        "pressure",
+        "search"
+      ],
+      "final_test": [
+        "mixed",
+        "partnership",
+        "pressure",
+        "search"
+      ],
+      "crossplay": [
+        "recurrent_mix",
+        "recurrent_search"
+      ]
+    },
+    "blockSize": 4,
+    "ridge": 0.2,
+    "bootstrapDraws": 512,
+    "bootstrapSeed": 6310741,
+    "workers": 3,
+    "mode": "full"
+  },
+  "hashes": {
+    "heuristic": "656112765a742673dc7e76c6681db3344525e0515806514d938f119c2c0e04bb",
+    "legacy": "8245e5e785cb4dc5a96e43f45bc3b71f4e7741ab9de4d9e1d9f7d350d5d148ce",
+    "win": "7ab9ee8ff352c8509217de7737e08b5b9007fd7d5efbb69aac0a67dac3d47fc4",
+    "score": "c7ccd2e2346e2a1c6605f4166d9e0db43a2a167511a582e025027f249ce1bba5",
+    "balanced": "0fdd162aedc3f1c0efd4ba329db5e82e04ca63f284f5f10d401340eded0c1df2",
+    "aggressive": "10f4b52bcbdeff68d91b3c046965f09973cc60fb4de0f20c2dede19c6513e0d3",
+    "contract_search": "1a58ac766f0d51894180f4b28f048d5aed9142887393134c6d361a50dfff6abf",
+    "recurrent_win": "f2fdcbd1891a30e65f0d4e8f0a0d07fef2424337e2fae02375ec7f9550291cf5",
+    "recurrent_score": "d51e7f4f0d4e8420f6e5c96f239ee05c031f1aab86d11a65af9b7f4aff22736d",
+    "recurrent_balanced": "0eefa94b9ec4562467745bff49f77973d483a5305bd99c6b90bb9b07631026d4",
+    "belief_uniform": "6ca00c9b6de0c639726e746cc98e31aa4233f1c4804e46e7977b97f1f62861fa",
+    "belief_learned": "fa27582025e7b1cdeb8d54b90618007d1eb73153c57eb598a29d10f777ad5e1f",
+    "gru_belief_uniform": "535690b0bbb4000da473839a32f6330ce5f419f2c1ad47332965e2e00e311da9",
+    "gru_belief_learned": "2795d89a3aa28320d85928088f091ba843a6e2e62d8fa9ae1943946ac4f39d4a"
+  },
+  "rules": {
+    "minBid": 14,
+    "allowFirstFriend": true,
+    "allowFirstJokerCall": false,
+    "allowLastJoker": false
+  },
+  "scoringVersion": "contract-reward-13-v2",
+  "codeHash": "b2d67f6a4e65ea1644e802c6fccd8d625d07893694f36778710363738ca4e888",
+  "node": "v24.15.0",
+  "deals": 16,
+  "games": 1040,
+  "elapsedSeconds": 89.4994276,
+  "rawSHA256": "ad47e4d89c64c8df3004139c7d36e1553d4278c4a801e6dad297f6cd1d531bab",
+  "agents": {
+    "heuristic": {
+      "games": 80,
+      "utilities": {
+        "win": {
+          "value": {
+            "mean": 0.525,
+            "ci95": [
+              0.42500000000000004,
+              0.6125
+            ]
+          },
+          "paired": {
+            "legacy": {
+              "mean": -0.024999999999999994,
+              "ci95": [
+                -0.09999999999999998,
+                0.037500000000000006
+              ]
+            }
+          }
+        },
+        "score": {
+          "value": {
+            "mean": 0.00064453125,
+            "ci95": [
+              -0.001892578125,
+              0.002864746093749998
+            ]
+          },
+          "paired": {
+            "legacy": {
+              "mean": -0.00251953125,
+              "ci95": [
+                -0.00414501953125,
+                -0.0007421875
+              ]
+            }
+          }
+        },
+        "balanced": {
+          "value": {
+            "mean": 0.367693359375,
+            "ci95": [
+              0.29707915039062494,
+              0.42935659179687496
+            ]
+          },
+          "paired": {
+            "legacy": {
+              "mean": -0.01825585937500001,
+              "ci95": [
+                -0.07082880859375001,
+                0.02595805664062498
+              ]
+            }
+          }
+        }
+      },
+      "winElo": 1390.6763474313977,
+      "settlement": {
+        "mean": 0.4125,
+        "p05": -14.1,
+        "p50": 1,
+        "p95": 12
+      },
+      "role": {
+        "opposition": {
+          "games": 45,
+          "win": 0.4888888888888889,
+          "settlement": 0.5777777777777777
+        },
+        "friend": {
+          "games": 15,
+          "win": 0.4666666666666667,
+          "settlement": -1.4
+        },
+        "declarer": {
+          "games": 20,
+          "win": 0.65,
+          "settlement": 1.4
+        }
+      },
+      "crossplay": {
+        "recurrent_mix": {
+          "games": 40,
+          "win": 0.45,
+          "settlement": -0.7
+        },
+        "recurrent_search": {
+          "games": 40,
+          "win": 0.6,
+          "settlement": 1.525
+        }
+      },
+      "realizedPartners": {
+        "recurrent_mix | recurrent_balanced+recurrent_score": {
+          "games": 8,
+          "win": 0.5,
+          "settlement": -0.5
+        },
+        "recurrent_mix | heuristic": {
+          "games": 9,
+          "win": 0.3333333333333333,
+          "settlement": -3.5555555555555554
+        },
+        "recurrent_mix | recurrent_balanced+recurrent_win": {
+          "games": 9,
+          "win": 0.4444444444444444,
+          "settlement": 1.2222222222222223
+        },
+        "recurrent_mix | recurrent_score": {
+          "games": 3,
+          "win": 0.3333333333333333,
+          "settlement": -8.666666666666666
+        },
+        "recurrent_search | recurrent_balanced+recurrent_win": {
+          "games": 7,
+          "win": 1,
+          "settlement": 3.857142857142857
+        },
+        "recurrent_search | aggressive": {
+          "games": 5,
+          "win": 0.4,
+          "settlement": -2.8
+        },
+        "recurrent_search | legacy+recurrent_balanced": {
+          "games": 5,
+          "win": 0.8,
+          "settlement": 6.4
+        },
+        "recurrent_search | aggressive+recurrent_win": {
+          "games": 4,
+          "win": 0,
+          "settlement": -5.5
+        },
+        "recurrent_search | legacy": {
+          "games": 5,
+          "win": 0.8,
+          "settlement": 5
+        },
+        "recurrent_mix | heuristic+recurrent_win": {
+          "games": 2,
+          "win": 0.5,
+          "settlement": 0
+        },
+        "recurrent_search | recurrent_win": {
+          "games": 5,
+          "win": 0.8,
+          "settlement": 6.6
+        },
+        "recurrent_search | recurrent_balanced": {
+          "games": 2,
+          "win": 0.5,
+          "settlement": -8
+        },
+        "recurrent_mix | recurrent_win": {
+          "games": 3,
+          "win": 1,
+          "settlement": 6
+        },
+        "recurrent_search | aggressive+recurrent_balanced": {
+          "games": 4,
+          "win": 0.25,
+          "settlement": -2
+        },
+        "recurrent_mix | recurrent_score+recurrent_win": {
+          "games": 2,
+          "win": 0,
+          "settlement": -5.5
+        },
+        "recurrent_mix | recurrent_balanced": {
+          "games": 3,
+          "win": 0.6666666666666666,
+          "settlement": 6.333333333333333
+        },
+        "recurrent_search | legacy+recurrent_win": {
+          "games": 1,
+          "win": 1,
+          "settlement": 14
+        },
+        "recurrent_mix | heuristic+recurrent_balanced": {
+          "games": 1,
+          "win": 0,
+          "settlement": -3
+        },
+        "recurrent_search | aggressive+legacy": {
+          "games": 2,
+          "win": 0,
+          "settlement": -5
+        }
+      },
+      "inference": {
+        "decisions": 932,
+        "p50ms": 0.031,
+        "p95ms": 0.09044999999999993,
+        "illegal": 0
+      }
+    },
+    "legacy": {
+      "games": 80,
+      "utilities": {
+        "win": {
+          "value": {
+            "mean": 0.5499999999999999,
+            "ci95": [
+              0.46249999999999997,
+              0.6375
+            ]
+          },
+          "paired": {}
+        },
+        "score": {
+          "value": {
+            "mean": 0.0031640625,
+            "ci95": [
+              0.00123046875,
+              0.00523876953125
+            ]
+          },
+          "paired": {}
+        },
+        "balanced": {
+          "value": {
+            "mean": 0.38594921874999993,
+            "ci95": [
+              0.324299755859375,
+              0.44748251953124996
+            ]
+          },
+          "paired": {}
+        }
+      },
+      "winElo": 1500,
+      "settlement": {
+        "mean": 2.025,
+        "p05": -8.1,
+        "p50": 2,
+        "p95": 14
+      },
+      "role": {
+        "opposition": {
+          "games": 45,
+          "win": 0.4666666666666667,
+          "settlement": 1
+        },
+        "friend": {
+          "games": 15,
+          "win": 0.6666666666666666,
+          "settlement": 1
+        },
+        "declarer": {
+          "games": 20,
+          "win": 0.65,
+          "settlement": 5.1
+        }
+      },
+      "crossplay": {
+        "recurrent_mix": {
+          "games": 40,
+          "win": 0.525,
+          "settlement": 0.7
+        },
+        "recurrent_search": {
+          "games": 40,
+          "win": 0.575,
+          "settlement": 3.35
+        }
+      },
+      "realizedPartners": {
+        "recurrent_mix | recurrent_balanced+recurrent_score": {
+          "games": 8,
+          "win": 0.5,
+          "settlement": 0.125
+        },
+        "recurrent_mix | heuristic": {
+          "games": 9,
+          "win": 0.5555555555555556,
+          "settlement": -2.111111111111111
+        },
+        "recurrent_mix | recurrent_balanced+recurrent_win": {
+          "games": 9,
+          "win": 0.5555555555555556,
+          "settlement": 1.2222222222222223
+        },
+        "recurrent_mix | recurrent_score": {
+          "games": 3,
+          "win": 0.6666666666666666,
+          "settlement": 6
+        },
+        "recurrent_search | recurrent_balanced+recurrent_win": {
+          "games": 7,
+          "win": 0.7142857142857143,
+          "settlement": 3.142857142857143
+        },
+        "recurrent_search | aggressive": {
+          "games": 5,
+          "win": 0.4,
+          "settlement": -1.4
+        },
+        "recurrent_search | legacy+recurrent_balanced": {
+          "games": 5,
+          "win": 0.8,
+          "settlement": 9.2
+        },
+        "recurrent_search | aggressive+recurrent_win": {
+          "games": 4,
+          "win": 0,
+          "settlement": -4.5
+        },
+        "recurrent_search | legacy": {
+          "games": 5,
+          "win": 1,
+          "settlement": 7.8
+        },
+        "recurrent_mix | heuristic+recurrent_win": {
+          "games": 2,
+          "win": 0.5,
+          "settlement": 0
+        },
+        "recurrent_search | recurrent_win": {
+          "games": 5,
+          "win": 0.8,
+          "settlement": 10.4
+        },
+        "recurrent_search | recurrent_balanced": {
+          "games": 2,
+          "win": 0.5,
+          "settlement": 2
+        },
+        "recurrent_mix | recurrent_win": {
+          "games": 3,
+          "win": 1,
+          "settlement": 8
+        },
+        "recurrent_search | aggressive+recurrent_balanced": {
+          "games": 4,
+          "win": 0.25,
+          "settlement": -2
+        },
+        "recurrent_mix | recurrent_score+recurrent_win": {
+          "games": 2,
+          "win": 0,
+          "settlement": -5
+        },
+        "recurrent_mix | recurrent_balanced": {
+          "games": 3,
+          "win": 0.3333333333333333,
+          "settlement": 2
+        },
+        "recurrent_search | legacy+recurrent_win": {
+          "games": 1,
+          "win": 1,
+          "settlement": 14
+        },
+        "recurrent_mix | heuristic+recurrent_balanced": {
+          "games": 1,
+          "win": 0,
+          "settlement": -3
+        },
+        "recurrent_search | aggressive+legacy": {
+          "games": 2,
+          "win": 0,
+          "settlement": -5
+        }
+      },
+      "inference": {
+        "decisions": 932,
+        "p50ms": 4.0725,
+        "p95ms": 43.953399999999945,
+        "illegal": 0
+      }
+    },
+    "contract_search": {
+      "games": 80,
+      "utilities": {
+        "win": {
+          "value": {
+            "mean": 0.5499999999999999,
+            "ci95": [
+              0.46249999999999997,
+              0.6375
+            ]
+          },
+          "paired": {
+            "legacy": {
+              "mean": 0,
+              "ci95": [
+                0,
+                0
+              ]
+            }
+          }
+        },
+        "score": {
+          "value": {
+            "mean": 0.0031640625,
+            "ci95": [
+              0.00123046875,
+              0.00523876953125
+            ]
+          },
+          "paired": {
+            "legacy": {
+              "mean": 0,
+              "ci95": [
+                0,
+                0
+              ]
+            }
+          }
+        },
+        "balanced": {
+          "value": {
+            "mean": 0.38594921874999993,
+            "ci95": [
+              0.324299755859375,
+              0.44748251953124996
+            ]
+          },
+          "paired": {
+            "legacy": {
+              "mean": 0,
+              "ci95": [
+                0,
+                0
+              ]
+            }
+          }
+        }
+      },
+      "winElo": 1500,
+      "settlement": {
+        "mean": 2.025,
+        "p05": -8.1,
+        "p50": 2,
+        "p95": 14
+      },
+      "role": {
+        "opposition": {
+          "games": 45,
+          "win": 0.4666666666666667,
+          "settlement": 1
+        },
+        "friend": {
+          "games": 15,
+          "win": 0.6666666666666666,
+          "settlement": 1
+        },
+        "declarer": {
+          "games": 20,
+          "win": 0.65,
+          "settlement": 5.1
+        }
+      },
+      "crossplay": {
+        "recurrent_mix": {
+          "games": 40,
+          "win": 0.525,
+          "settlement": 0.7
+        },
+        "recurrent_search": {
+          "games": 40,
+          "win": 0.575,
+          "settlement": 3.35
+        }
+      },
+      "realizedPartners": {
+        "recurrent_mix | recurrent_balanced+recurrent_score": {
+          "games": 8,
+          "win": 0.5,
+          "settlement": 0.125
+        },
+        "recurrent_mix | heuristic": {
+          "games": 9,
+          "win": 0.5555555555555556,
+          "settlement": -2.111111111111111
+        },
+        "recurrent_mix | recurrent_balanced+recurrent_win": {
+          "games": 9,
+          "win": 0.5555555555555556,
+          "settlement": 1.2222222222222223
+        },
+        "recurrent_mix | recurrent_score": {
+          "games": 3,
+          "win": 0.6666666666666666,
+          "settlement": 6
+        },
+        "recurrent_search | recurrent_balanced+recurrent_win": {
+          "games": 7,
+          "win": 0.7142857142857143,
+          "settlement": 3.142857142857143
+        },
+        "recurrent_search | aggressive": {
+          "games": 5,
+          "win": 0.4,
+          "settlement": -1.4
+        },
+        "recurrent_search | legacy+recurrent_balanced": {
+          "games": 5,
+          "win": 0.8,
+          "settlement": 9.2
+        },
+        "recurrent_search | aggressive+recurrent_win": {
+          "games": 4,
+          "win": 0,
+          "settlement": -4.5
+        },
+        "recurrent_search | legacy": {
+          "games": 5,
+          "win": 1,
+          "settlement": 7.8
+        },
+        "recurrent_mix | heuristic+recurrent_win": {
+          "games": 2,
+          "win": 0.5,
+          "settlement": 0
+        },
+        "recurrent_search | recurrent_win": {
+          "games": 5,
+          "win": 0.8,
+          "settlement": 10.4
+        },
+        "recurrent_search | recurrent_balanced": {
+          "games": 2,
+          "win": 0.5,
+          "settlement": 2
+        },
+        "recurrent_mix | recurrent_win": {
+          "games": 3,
+          "win": 1,
+          "settlement": 8
+        },
+        "recurrent_search | aggressive+recurrent_balanced": {
+          "games": 4,
+          "win": 0.25,
+          "settlement": -2
+        },
+        "recurrent_mix | recurrent_score+recurrent_win": {
+          "games": 2,
+          "win": 0,
+          "settlement": -5
+        },
+        "recurrent_mix | recurrent_balanced": {
+          "games": 3,
+          "win": 0.3333333333333333,
+          "settlement": 2
+        },
+        "recurrent_search | legacy+recurrent_win": {
+          "games": 1,
+          "win": 1,
+          "settlement": 14
+        },
+        "recurrent_mix | heuristic+recurrent_balanced": {
+          "games": 1,
+          "win": 0,
+          "settlement": -3
+        },
+        "recurrent_search | aggressive+legacy": {
+          "games": 2,
+          "win": 0,
+          "settlement": -5
+        }
+      },
+      "inference": {
+        "decisions": 932,
+        "p50ms": 5.062,
+        "p95ms": 49.26884999999992,
+        "illegal": 0
+      }
+    },
+    "win": {
+      "games": 80,
+      "utilities": {
+        "win": {
+          "value": {
+            "mean": 0.525,
+            "ci95": [
+              0.42500000000000004,
+              0.6124999999999999
+            ]
+          },
+          "paired": {
+            "legacy": {
+              "mean": -0.024999999999999994,
+              "ci95": [
+                -0.11249999999999999,
+                0.05
+              ]
+            }
+          }
+        },
+        "score": {
+          "value": {
+            "mean": 0.0006640624999999996,
+            "ci95": [
+              -0.0018945312500000006,
+              0.0031533203124999984
+            ]
+          },
+          "paired": {
+            "legacy": {
+              "mean": -0.0025,
+              "ci95": [
+                -0.0045986328125,
+                -0.0004296875000000004
+              ]
+            }
+          }
+        },
+        "balanced": {
+          "value": {
+            "mean": 0.3676992187499999,
+            "ci95": [
+              0.2977046386718749,
+              0.42922534179687494
+            ]
+          },
+          "paired": {
+            "legacy": {
+              "mean": -0.018250000000000016,
+              "ci95": [
+                -0.07993447265624999,
+                0.034694726562499965
+              ]
+            }
+          }
+        }
+      },
+      "winElo": 1404.731960870937,
+      "settlement": {
+        "mean": 0.425,
+        "p05": -14.1,
+        "p50": 1,
+        "p95": 12.099999999999994
+      },
+      "role": {
+        "opposition": {
+          "games": 45,
+          "win": 0.4888888888888889,
+          "settlement": 0.6444444444444445
+        },
+        "friend": {
+          "games": 15,
+          "win": 0.4666666666666667,
+          "settlement": -1.4
+        },
+        "declarer": {
+          "games": 20,
+          "win": 0.65,
+          "settlement": 1.3
+        }
+      },
+      "crossplay": {
+        "recurrent_mix": {
+          "games": 40,
+          "win": 0.45,
+          "settlement": -0.775
+        },
+        "recurrent_search": {
+          "games": 40,
+          "win": 0.6,
+          "settlement": 1.625
+        }
+      },
+      "realizedPartners": {
+        "recurrent_mix | recurrent_balanced+recurrent_score": {
+          "games": 8,
+          "win": 0.5,
+          "settlement": -0.625
+        },
+        "recurrent_mix | heuristic": {
+          "games": 9,
+          "win": 0.3333333333333333,
+          "settlement": -4.222222222222222
+        },
+        "recurrent_mix | recurrent_balanced+recurrent_win": {
+          "games": 9,
+          "win": 0.4444444444444444,
+          "settlement": 1.2222222222222223
+        },
+        "recurrent_mix | recurrent_score": {
+          "games": 3,
+          "win": 0.3333333333333333,
+          "settlement": -7.333333333333333
+        },
+        "recurrent_search | recurrent_balanced+recurrent_win": {
+          "games": 7,
+          "win": 1,
+          "settlement": 3.857142857142857
+        },
+        "recurrent_search | aggressive": {
+          "games": 5,
+          "win": 0.4,
+          "settlement": -2.8
+        },
+        "recurrent_search | legacy+recurrent_balanced": {
+          "games": 5,
+          "win": 0.8,
+          "settlement": 7.2
+        },
+        "recurrent_search | aggressive+recurrent_win": {
+          "games": 4,
+          "win": 0,
+          "settlement": -5.5
+        },
+        "recurrent_search | legacy": {
+          "games": 5,
+          "win": 0.8,
+          "settlement": 5
+        },
+        "recurrent_mix | heuristic+recurrent_win": {
+          "games": 2,
+          "win": 0.5,
+          "settlement": 0
+        },
+        "recurrent_search | recurrent_win": {
+          "games": 5,
+          "win": 0.8,
+          "settlement": 6.6
+        },
+        "recurrent_search | recurrent_balanced": {
+          "games": 2,
+          "win": 0.5,
+          "settlement": -8
+        },
+        "recurrent_mix | recurrent_win": {
+          "games": 3,
+          "win": 1,
+          "settlement": 6
+        },
+        "recurrent_search | aggressive+recurrent_balanced": {
+          "games": 4,
+          "win": 0.25,
+          "settlement": -2
+        },
+        "recurrent_mix | recurrent_score+recurrent_win": {
+          "games": 2,
+          "win": 0,
+          "settlement": -5.5
+        },
+        "recurrent_mix | recurrent_balanced": {
+          "games": 3,
+          "win": 0.6666666666666666,
+          "settlement": 6.333333333333333
+        },
+        "recurrent_search | legacy+recurrent_win": {
+          "games": 1,
+          "win": 1,
+          "settlement": 14
+        },
+        "recurrent_mix | heuristic+recurrent_balanced": {
+          "games": 1,
+          "win": 0,
+          "settlement": -3
+        },
+        "recurrent_search | aggressive+legacy": {
+          "games": 2,
+          "win": 0,
+          "settlement": -5
+        }
+      },
+      "inference": {
+        "decisions": 932,
+        "p50ms": 0.097,
+        "p95ms": 0.5327999999999997,
+        "illegal": 0
+      }
+    },
+    "score": {
+      "games": 80,
+      "utilities": {
+        "win": {
+          "value": {
+            "mean": 0.5375,
+            "ci95": [
+              0.45000000000000007,
+              0.6125
+            ]
+          },
+          "paired": {
+            "legacy": {
+              "mean": -0.012499999999999997,
+              "ci95": [
+                -0.0875,
+                0.05281249999999958
+              ]
+            }
+          }
+        },
+        "score": {
+          "value": {
+            "mean": 0.0011914062499999998,
+            "ci95": [
+              -0.0009267578125000003,
+              0.003274902343749998
+            ]
+          },
+          "paired": {
+            "legacy": {
+              "mean": -0.00197265625,
+              "ci95": [
+                -0.00410595703125,
+                -0.00005419921875000086
+              ]
+            }
+          }
+        },
+        "balanced": {
+          "value": {
+            "mean": 0.37660742187499996,
+            "ci95": [
+              0.3147632812499999,
+              0.42971430664062493
+            ]
+          },
+          "paired": {
+            "legacy": {
+              "mean": -0.009341796875000018,
+              "ci95": [
+                -0.06221782226562501,
+                0.03691015624999968
+              ]
+            }
+          }
+        }
+      },
+      "winElo": 1462.1917961711827,
+      "settlement": {
+        "mean": 0.7625,
+        "p05": -14.1,
+        "p50": 1,
+        "p95": 12
+      },
+      "role": {
+        "opposition": {
+          "games": 45,
+          "win": 0.4888888888888889,
+          "settlement": 0.6
+        },
+        "friend": {
+          "games": 15,
+          "win": 0.5333333333333333,
+          "settlement": 0.26666666666666666
+        },
+        "declarer": {
+          "games": 20,
+          "win": 0.65,
+          "settlement": 1.5
+        }
+      },
+      "crossplay": {
+        "recurrent_mix": {
+          "games": 40,
+          "win": 0.475,
+          "settlement": -0.175
+        },
+        "recurrent_search": {
+          "games": 40,
+          "win": 0.6,
+          "settlement": 1.7
+        }
+      },
+      "realizedPartners": {
+        "recurrent_mix | recurrent_balanced+recurrent_score": {
+          "games": 8,
+          "win": 0.5,
+          "settlement": -0.625
+        },
+        "recurrent_mix | heuristic": {
+          "games": 9,
+          "win": 0.4444444444444444,
+          "settlement": -1.3333333333333333
+        },
+        "recurrent_mix | recurrent_balanced+recurrent_win": {
+          "games": 9,
+          "win": 0.4444444444444444,
+          "settlement": 1.2222222222222223
+        },
+        "recurrent_mix | recurrent_score": {
+          "games": 3,
+          "win": 0.3333333333333333,
+          "settlement": -8.666666666666666
+        },
+        "recurrent_search | recurrent_balanced+recurrent_win": {
+          "games": 7,
+          "win": 1,
+          "settlement": 3.857142857142857
+        },
+        "recurrent_search | aggressive": {
+          "games": 5,
+          "win": 0.4,
+          "settlement": -1.8
+        },
+        "recurrent_search | legacy+recurrent_balanced": {
+          "games": 5,
+          "win": 0.8,
+          "settlement": 6.4
+        },
+        "recurrent_search | aggressive+recurrent_win": {
+          "games": 4,
+          "win": 0,
+          "settlement": -5.5
+        },
+        "recurrent_search | legacy": {
+          "games": 5,
+          "win": 0.8,
+          "settlement": 5.4
+        },
+        "recurrent_mix | heuristic+recurrent_win": {
+          "games": 2,
+          "win": 0.5,
+          "settlement": 0
+        },
+        "recurrent_search | recurrent_win": {
+          "games": 5,
+          "win": 0.8,
+          "settlement": 6.6
+        },
+        "recurrent_search | recurrent_balanced": {
+          "games": 2,
+          "win": 0.5,
+          "settlement": -8
+        },
+        "recurrent_mix | recurrent_win": {
+          "games": 3,
+          "win": 1,
+          "settlement": 6
+        },
+        "recurrent_search | aggressive+recurrent_balanced": {
+          "games": 4,
+          "win": 0.25,
+          "settlement": -2
+        },
+        "recurrent_mix | recurrent_score+recurrent_win": {
+          "games": 2,
+          "win": 0,
+          "settlement": -4.5
+        },
+        "recurrent_mix | recurrent_balanced": {
+          "games": 3,
+          "win": 0.6666666666666666,
+          "settlement": 6.333333333333333
+        },
+        "recurrent_search | legacy+recurrent_win": {
+          "games": 1,
+          "win": 1,
+          "settlement": 14
+        },
+        "recurrent_mix | heuristic+recurrent_balanced": {
+          "games": 1,
+          "win": 0,
+          "settlement": -3
+        },
+        "recurrent_search | aggressive+legacy": {
+          "games": 2,
+          "win": 0,
+          "settlement": -5
+        }
+      },
+      "inference": {
+        "decisions": 932,
+        "p50ms": 0.094,
+        "p95ms": 0.3276999999999996,
+        "illegal": 0
+      }
+    },
+    "balanced": {
+      "games": 80,
+      "utilities": {
+        "win": {
+          "value": {
+            "mean": 0.4875000000000001,
+            "ci95": [
+              0.4,
+              0.5625
+            ]
+          },
+          "paired": {
+            "legacy": {
+              "mean": -0.0625,
+              "ci95": [
+                -0.15000000000000002,
+                0.012500000000000004
+              ]
+            }
+          }
+        },
+        "score": {
+          "value": {
+            "mean": -0.000019531250000000017,
+            "ci95": [
+              -0.00195751953125,
+              0.0021962890624999984
+            ]
+          },
+          "paired": {
+            "legacy": {
+              "mean": -0.00318359375,
+              "ci95": [
+                -0.00545361328125,
+                -0.000963378906250002
+              ]
+            }
+          }
+        },
+        "balanced": {
+          "value": {
+            "mean": 0.34124414062499997,
+            "ci95": [
+              0.27937685546874996,
+              0.39417934570312496
+            ]
+          },
+          "paired": {
+            "legacy": {
+              "mean": -0.044705078125000006,
+              "ci95": [
+                -0.10652021484374999,
+                0.008532763671874962
+              ]
+            }
+          }
+        }
+      },
+      "winElo": 1198.2764603747107,
+      "settlement": {
+        "mean": -0.0125,
+        "p05": -14,
+        "p50": -1.5,
+        "p95": 12
+      },
+      "role": {
+        "opposition": {
+          "games": 45,
+          "win": 0.4666666666666667,
+          "settlement": 0.35555555555555557
+        },
+        "friend": {
+          "games": 18,
+          "win": 0.5,
+          "settlement": -1.3888888888888888
+        },
+        "declarer": {
+          "games": 17,
+          "win": 0.5294117647058824,
+          "settlement": 0.47058823529411764
+        }
+      },
+      "crossplay": {
+        "recurrent_mix": {
+          "games": 40,
+          "win": 0.425,
+          "settlement": -1.05
+        },
+        "recurrent_search": {
+          "games": 40,
+          "win": 0.55,
+          "settlement": 1.025
+        }
+      },
+      "realizedPartners": {
+        "recurrent_mix | recurrent_balanced+recurrent_score": {
+          "games": 8,
+          "win": 0.5,
+          "settlement": -0.875
+        },
+        "recurrent_mix | heuristic": {
+          "games": 10,
+          "win": 0.4,
+          "settlement": -1
+        },
+        "recurrent_mix | recurrent_balanced+recurrent_win": {
+          "games": 9,
+          "win": 0.4444444444444444,
+          "settlement": 0.6666666666666666
+        },
+        "recurrent_mix | recurrent_score": {
+          "games": 4,
+          "win": 0.25,
+          "settlement": -9
+        },
+        "recurrent_search | recurrent_balanced+recurrent_win": {
+          "games": 7,
+          "win": 0.8571428571428571,
+          "settlement": 2.7142857142857144
+        },
+        "recurrent_search | aggressive": {
+          "games": 5,
+          "win": 0.2,
+          "settlement": -6
+        },
+        "recurrent_search | legacy+recurrent_balanced": {
+          "games": 5,
+          "win": 0.8,
+          "settlement": 7.2
+        },
+        "recurrent_search | aggressive+recurrent_win": {
+          "games": 4,
+          "win": 0,
+          "settlement": -5.5
+        },
+        "recurrent_search | legacy": {
+          "games": 5,
+          "win": 0.8,
+          "settlement": 5
+        },
+        "recurrent_mix | heuristic+recurrent_win": {
+          "games": 2,
+          "win": 0.5,
+          "settlement": 0
+        },
+        "recurrent_search | recurrent_win": {
+          "games": 5,
+          "win": 0.8,
+          "settlement": 6.6
+        },
+        "recurrent_search | recurrent_balanced": {
+          "games": 2,
+          "win": 0.5,
+          "settlement": -8
+        },
+        "recurrent_search | aggressive+recurrent_balanced": {
+          "games": 4,
+          "win": 0.25,
+          "settlement": -2
+        },
+        "recurrent_mix | recurrent_score+recurrent_win": {
+          "games": 2,
+          "win": 0,
+          "settlement": -4.5
+        },
+        "recurrent_search | legacy+recurrent_win": {
+          "games": 1,
+          "win": 1,
+          "settlement": 14
+        },
+        "recurrent_mix | recurrent_win": {
+          "games": 2,
+          "win": 1,
+          "settlement": 5
+        },
+        "recurrent_mix | heuristic+recurrent_balanced": {
+          "games": 1,
+          "win": 0,
+          "settlement": -3
+        },
+        "recurrent_mix | recurrent_balanced": {
+          "games": 2,
+          "win": 0.5,
+          "settlement": 3.5
+        },
+        "recurrent_search | aggressive+legacy": {
+          "games": 2,
+          "win": 0,
+          "settlement": -5
+        }
+      },
+      "inference": {
+        "decisions": 926,
+        "p50ms": 0.092,
+        "p95ms": 0.36324999999999996,
+        "illegal": 0
+      }
+    },
+    "recurrent_win": {
+      "games": 80,
+      "utilities": {
+        "win": {
+          "value": {
+            "mean": 0.5125,
+            "ci95": [
+              0.43749999999999994,
+              0.575
+            ]
+          },
+          "paired": {
+            "legacy": {
+              "mean": -0.037500000000000006,
+              "ci95": [
+                -0.1,
+                0.012499999999999997
+              ]
+            },
+            "win": {
+              "mean": -0.012500000000000008,
+              "ci95": [
+                -0.07781250000000003,
+                0.06249999999999999
+              ]
+            }
+          }
+        },
+        "score": {
+          "value": {
+            "mean": 0.0016015625000000001,
+            "ci95": [
+              -0.00007812500000000004,
+              0.0034223632812499993
+            ]
+          },
+          "paired": {
+            "legacy": {
+              "mean": -0.0015625,
+              "ci95": [
+                -0.0033139648437499995,
+                -0.000015136718750000505
+              ]
+            },
+            "win": {
+              "mean": 0.0009375000000000002,
+              "ci95": [
+                -0.0015322265625,
+                0.0037890625000000008
+              ]
+            }
+          }
+        },
+        "balanced": {
+          "value": {
+            "mean": 0.3592304687499999,
+            "ci95": [
+              0.30634960937499994,
+              0.40340952148437487
+            ]
+          },
+          "paired": {
+            "legacy": {
+              "mean": -0.026718750000000003,
+              "ci95": [
+                -0.07101044921874998,
+                0.008478271484374994
+              ]
+            },
+            "win": {
+              "mean": -0.008468749999999988,
+              "ci95": [
+                -0.055070068359374974,
+                0.044460302734375
+              ]
+            }
+          }
+        }
+      },
+      "winElo": 1327.5017388343633,
+      "settlement": {
+        "mean": 1.025,
+        "p05": -8.1,
+        "p50": 1,
+        "p95": 12
+      },
+      "role": {
+        "opposition": {
+          "games": 53,
+          "win": 0.4716981132075472,
+          "settlement": 1.0377358490566038
+        },
+        "friend": {
+          "games": 23,
+          "win": 0.6086956521739131,
+          "settlement": 0.043478260869565216
+        },
+        "declarer": {
+          "games": 4,
+          "win": 0.5,
+          "settlement": 6.5
+        }
+      },
+      "crossplay": {
+        "recurrent_mix": {
+          "games": 40,
+          "win": 0.475,
+          "settlement": 0.1
+        },
+        "recurrent_search": {
+          "games": 40,
+          "win": 0.55,
+          "settlement": 1.95
+        }
+      },
+      "realizedPartners": {
+        "recurrent_mix | recurrent_balanced+recurrent_score": {
+          "games": 10,
+          "win": 0.4,
+          "settlement": -0.4
+        },
+        "recurrent_mix | heuristic": {
+          "games": 9,
+          "win": 0.4444444444444444,
+          "settlement": -0.7777777777777778
+        },
+        "recurrent_mix | recurrent_balanced+recurrent_win": {
+          "games": 10,
+          "win": 0.5,
+          "settlement": 1
+        },
+        "recurrent_mix | recurrent_score": {
+          "games": 2,
+          "win": 1,
+          "settlement": 3.5
+        },
+        "recurrent_search | recurrent_balanced+recurrent_win": {
+          "games": 8,
+          "win": 1,
+          "settlement": 6.5
+        },
+        "recurrent_search | aggressive": {
+          "games": 4,
+          "win": 0,
+          "settlement": -8.75
+        },
+        "recurrent_search | legacy+recurrent_balanced": {
+          "games": 5,
+          "win": 0.8,
+          "settlement": 7.2
+        },
+        "recurrent_search | aggressive+recurrent_win": {
+          "games": 4,
+          "win": 0,
+          "settlement": -5.25
+        },
+        "recurrent_search | legacy": {
+          "games": 6,
+          "win": 0.8333333333333334,
+          "settlement": 2.3333333333333335
+        },
+        "recurrent_mix | heuristic+recurrent_win": {
+          "games": 3,
+          "win": 0.6666666666666666,
+          "settlement": 1
+        },
+        "recurrent_search | recurrent_win": {
+          "games": 2,
+          "win": 1,
+          "settlement": 18.5
+        },
+        "recurrent_search | aggressive+legacy": {
+          "games": 4,
+          "win": 0,
+          "settlement": -4.75
+        },
+        "recurrent_search | aggressive+recurrent_balanced": {
+          "games": 5,
+          "win": 0.2,
+          "settlement": -1
+        },
+        "recurrent_mix | recurrent_score+recurrent_win": {
+          "games": 2,
+          "win": 0,
+          "settlement": -4
+        },
+        "recurrent_search | legacy+recurrent_win": {
+          "games": 1,
+          "win": 1,
+          "settlement": 14
+        },
+        "recurrent_mix | recurrent_win": {
+          "games": 2,
+          "win": 1,
+          "settlement": 4.5
+        },
+        "recurrent_mix | heuristic+recurrent_balanced": {
+          "games": 1,
+          "win": 0,
+          "settlement": -3
+        },
+        "recurrent_mix | recurrent_balanced": {
+          "games": 1,
+          "win": 0,
+          "settlement": -3
+        },
+        "recurrent_search | recurrent_balanced": {
+          "games": 1,
+          "win": 1,
+          "settlement": 5
+        }
+      },
+      "inference": {
+        "decisions": 898,
+        "p50ms": 0.138,
+        "p95ms": 0.41349999999999976,
+        "illegal": 0
+      }
+    },
+    "recurrent_score": {
+      "games": 80,
+      "utilities": {
+        "win": {
+          "value": {
+            "mean": 0.55,
+            "ci95": [
+              0.475,
+              0.6125
+            ]
+          },
+          "paired": {
+            "legacy": {
+              "mean": -3.469446951953614e-18,
+              "ci95": [
+                -0.06250000000000001,
+                0.062499999999999986
+              ]
+            },
+            "score": {
+              "mean": 0.012499999999999994,
+              "ci95": [
+                -0.025000000000000015,
+                0.05
+              ]
+            }
+          }
+        },
+        "score": {
+          "value": {
+            "mean": 0.0020898437500000006,
+            "ci95": [
+              0.0006987304687499998,
+              0.0036025390624999988
+            ]
+          },
+          "paired": {
+            "legacy": {
+              "mean": -0.0010742187499999997,
+              "ci95": [
+                -0.0026757812500000006,
+                0.00039501953124999943
+              ]
+            },
+            "score": {
+              "mean": 0.0008984375000000001,
+              "ci95": [
+                -0.00047753906249999983,
+                0.002450195312499999
+              ]
+            }
+          }
+        },
+        "balanced": {
+          "value": {
+            "mean": 0.385626953125,
+            "ci95": [
+              0.332660693359375,
+              0.429852294921875
+            ]
+          },
+          "paired": {
+            "legacy": {
+              "mean": -0.0003222656250000157,
+              "ci95": [
+                -0.04455537109375001,
+                0.043523681640624964
+              ]
+            },
+            "score": {
+              "mean": 0.009019531250000002,
+              "ci95": [
+                -0.017577490234374993,
+                0.035709130859375
+              ]
+            }
+          }
+        }
+      },
+      "winElo": 1469.5998646767894,
+      "settlement": {
+        "mean": 1.3375,
+        "p05": -7.05,
+        "p50": 1.5,
+        "p95": 12
+      },
+      "role": {
+        "opposition": {
+          "games": 45,
+          "win": 0.4888888888888889,
+          "settlement": 0.6666666666666666
+        },
+        "friend": {
+          "games": 17,
+          "win": 0.5882352941176471,
+          "settlement": 0.29411764705882354
+        },
+        "declarer": {
+          "games": 18,
+          "win": 0.6666666666666666,
+          "settlement": 4
+        }
+      },
+      "crossplay": {
+        "recurrent_mix": {
+          "games": 40,
+          "win": 0.5,
+          "settlement": 0.575
+        },
+        "recurrent_search": {
+          "games": 40,
+          "win": 0.6,
+          "settlement": 2.1
+        }
+      },
+      "realizedPartners": {
+        "recurrent_mix | recurrent_balanced+recurrent_score": {
+          "games": 8,
+          "win": 0.625,
+          "settlement": 0.875
+        },
+        "recurrent_mix | heuristic": {
+          "games": 8,
+          "win": 0.625,
+          "settlement": 1.625
+        },
+        "recurrent_mix | recurrent_balanced+recurrent_win": {
+          "games": 9,
+          "win": 0.4444444444444444,
+          "settlement": 1.2222222222222223
+        },
+        "recurrent_mix | recurrent_score": {
+          "games": 3,
+          "win": 0.3333333333333333,
+          "settlement": -5.333333333333333
+        },
+        "recurrent_search | recurrent_balanced+recurrent_win": {
+          "games": 7,
+          "win": 1,
+          "settlement": 3.857142857142857
+        },
+        "recurrent_search | aggressive": {
+          "games": 5,
+          "win": 0.2,
+          "settlement": -3.2
+        },
+        "recurrent_search | legacy+recurrent_balanced": {
+          "games": 5,
+          "win": 0.8,
+          "settlement": 5.6
+        },
+        "recurrent_search | aggressive+recurrent_win": {
+          "games": 4,
+          "win": 0,
+          "settlement": -5.5
+        },
+        "recurrent_search | legacy": {
+          "games": 5,
+          "win": 1,
+          "settlement": 5
+        },
+        "recurrent_mix | heuristic+recurrent_win": {
+          "games": 2,
+          "win": 0.5,
+          "settlement": 0
+        },
+        "recurrent_mix | recurrent_win": {
+          "games": 3,
+          "win": 0.6666666666666666,
+          "settlement": 2.3333333333333335
+        },
+        "recurrent_search | recurrent_win": {
+          "games": 5,
+          "win": 0.8,
+          "settlement": 6.6
+        },
+        "recurrent_search | recurrent_balanced": {
+          "games": 2,
+          "win": 1,
+          "settlement": 9
+        },
+        "recurrent_search | aggressive+recurrent_balanced": {
+          "games": 4,
+          "win": 0,
+          "settlement": -3.25
+        },
+        "recurrent_mix | recurrent_score+recurrent_win": {
+          "games": 2,
+          "win": 0,
+          "settlement": -4.5
+        },
+        "recurrent_mix | recurrent_balanced": {
+          "games": 4,
+          "win": 0.5,
+          "settlement": 3.25
+        },
+        "recurrent_search | legacy+recurrent_win": {
+          "games": 1,
+          "win": 1,
+          "settlement": 14
+        },
+        "recurrent_mix | heuristic+recurrent_balanced": {
+          "games": 1,
+          "win": 0,
+          "settlement": -3
+        },
+        "recurrent_search | aggressive+legacy": {
+          "games": 2,
+          "win": 0,
+          "settlement": -5
+        }
+      },
+      "inference": {
+        "decisions": 928,
+        "p50ms": 0.139,
+        "p95ms": 0.37789999999999985,
+        "illegal": 0
+      }
+    },
+    "recurrent_balanced": {
+      "games": 80,
+      "utilities": {
+        "win": {
+          "value": {
+            "mean": 0.5000000000000001,
+            "ci95": [
+              0.42500000000000004,
+              0.575
+            ]
+          },
+          "paired": {
+            "legacy": {
+              "mean": -0.05,
+              "ci95": [
+                -0.13749999999999998,
+                0.02499999999999999
+              ]
+            },
+            "balanced": {
+              "mean": 0.012500000000000004,
+              "ci95": [
+                -0.05,
+                0.07500000000000001
+              ]
+            }
+          }
+        },
+        "score": {
+          "value": {
+            "mean": 0.0009765625000000004,
+            "ci95": [
+              -0.0007705078124999999,
+              0.0030971679687499956
+            ]
+          },
+          "paired": {
+            "legacy": {
+              "mean": -0.0021875,
+              "ci95": [
+                -0.00406689453125,
+                -0.0002929687499999998
+              ]
+            },
+            "balanced": {
+              "mean": 0.0009960937500000002,
+              "ci95": [
+                -0.0008486328125,
+                0.0028125000000000003
+              ]
+            }
+          }
+        },
+        "balanced": {
+          "value": {
+            "mean": 0.35029296874999993,
+            "ci95": [
+              0.29744067382812495,
+              0.403339208984375
+            ]
+          },
+          "paired": {
+            "legacy": {
+              "mean": -0.035656250000000014,
+              "ci95": [
+                -0.09737382812500002,
+                0.01723193359374999
+              ]
+            },
+            "balanced": {
+              "mean": 0.009048828124999997,
+              "ci95": [
+                -0.03522529296875,
+                0.05338286132812499
+              ]
+            }
+          }
+        }
+      },
+      "winElo": 1254.3473143933777,
+      "settlement": {
+        "mean": 0.625,
+        "p05": -8.1,
+        "p50": 0,
+        "p95": 12
+      },
+      "role": {
+        "opposition": {
+          "games": 53,
+          "win": 0.4528301886792453,
+          "settlement": 0.8867924528301887
+        },
+        "friend": {
+          "games": 23,
+          "win": 0.6086956521739131,
+          "settlement": 0.043478260869565216
+        },
+        "declarer": {
+          "games": 4,
+          "win": 0.5,
+          "settlement": 0.5
+        }
+      },
+      "crossplay": {
+        "recurrent_mix": {
+          "games": 40,
+          "win": 0.475,
+          "settlement": 0.025
+        },
+        "recurrent_search": {
+          "games": 40,
+          "win": 0.525,
+          "settlement": 1.225
+        }
+      },
+      "realizedPartners": {
+        "recurrent_mix | recurrent_balanced+recurrent_score": {
+          "games": 10,
+          "win": 0.4,
+          "settlement": -1
+        },
+        "recurrent_mix | heuristic": {
+          "games": 8,
+          "win": 0.5,
+          "settlement": -0.375
+        },
+        "recurrent_mix | recurrent_balanced+recurrent_win": {
+          "games": 10,
+          "win": 0.5,
+          "settlement": 1
+        },
+        "recurrent_mix | recurrent_score": {
+          "games": 2,
+          "win": 1,
+          "settlement": 3.5
+        },
+        "recurrent_search | recurrent_balanced+recurrent_win": {
+          "games": 8,
+          "win": 0.875,
+          "settlement": 5.5
+        },
+        "recurrent_search | aggressive": {
+          "games": 4,
+          "win": 0,
+          "settlement": -8.75
+        },
+        "recurrent_search | legacy+recurrent_balanced": {
+          "games": 5,
+          "win": 0.8,
+          "settlement": 7.6
+        },
+        "recurrent_search | aggressive+recurrent_win": {
+          "games": 4,
+          "win": 0,
+          "settlement": -5.5
+        },
+        "recurrent_search | legacy": {
+          "games": 6,
+          "win": 0.8333333333333334,
+          "settlement": 2.3333333333333335
+        },
+        "recurrent_mix | heuristic+recurrent_win": {
+          "games": 3,
+          "win": 0.6666666666666666,
+          "settlement": 2.6666666666666665
+        },
+        "recurrent_search | recurrent_win": {
+          "games": 2,
+          "win": 1,
+          "settlement": 7.5
+        },
+        "recurrent_search | aggressive+legacy": {
+          "games": 4,
+          "win": 0,
+          "settlement": -4.75
+        },
+        "recurrent_search | aggressive+recurrent_balanced": {
+          "games": 5,
+          "win": 0.2,
+          "settlement": -1
+        },
+        "recurrent_mix | recurrent_score+recurrent_win": {
+          "games": 2,
+          "win": 0,
+          "settlement": -4
+        },
+        "recurrent_search | legacy+recurrent_win": {
+          "games": 1,
+          "win": 1,
+          "settlement": 14
+        },
+        "recurrent_mix | recurrent_win": {
+          "games": 2,
+          "win": 1,
+          "settlement": 4.5
+        },
+        "recurrent_mix | heuristic+recurrent_balanced": {
+          "games": 1,
+          "win": 0,
+          "settlement": -3
+        },
+        "recurrent_mix | recurrent_balanced": {
+          "games": 2,
+          "win": 0,
+          "settlement": -4.5
+        },
+        "recurrent_search | recurrent_balanced": {
+          "games": 1,
+          "win": 1,
+          "settlement": 5
+        }
+      },
+      "inference": {
+        "decisions": 899,
+        "p50ms": 0.136,
+        "p95ms": 0.3563999999999996,
+        "illegal": 0
+      }
+    },
+    "belief_uniform": {
+      "games": 80,
+      "utilities": {
+        "win": {
+          "value": {
+            "mean": 0.525,
+            "ci95": [
+              0.42500000000000004,
+              0.6125
+            ]
+          },
+          "paired": {
+            "legacy": {
+              "mean": -0.024999999999999994,
+              "ci95": [
+                -0.09999999999999998,
+                0.037500000000000006
+              ]
+            },
+            "heuristic": {
+              "mean": 0,
+              "ci95": [
+                0,
+                0
+              ]
+            }
+          }
+        },
+        "score": {
+          "value": {
+            "mean": 0.0006250000000000001,
+            "ci95": [
+              -0.0019619140625,
+              0.002864746093749998
+            ]
+          },
+          "paired": {
+            "legacy": {
+              "mean": -0.0025390624999999997,
+              "ci95": [
+                -0.00418408203125,
+                -0.0007421875
+              ]
+            },
+            "heuristic": {
+              "mean": -0.00001953124999999991,
+              "ci95": [
+                -0.00005859374999999973,
+                0
+              ]
+            }
+          }
+        },
+        "balanced": {
+          "value": {
+            "mean": 0.3676875,
+            "ci95": [
+              0.29706420898437497,
+              0.42935659179687496
+            ]
+          },
+          "paired": {
+            "legacy": {
+              "mean": -0.01826171875000001,
+              "ci95": [
+                -0.07082880859375001,
+                0.025953515624999982
+              ]
+            },
+            "heuristic": {
+              "mean": -0.000005859375000000222,
+              "ci95": [
+                -0.000017578125000000666,
+                0
+              ]
+            }
+          }
+        }
+      },
+      "winElo": 1390.6763474313977,
+      "settlement": {
+        "mean": 0.4,
+        "p05": -14.1,
+        "p50": 1,
+        "p95": 12
+      },
+      "role": {
+        "opposition": {
+          "games": 45,
+          "win": 0.4888888888888889,
+          "settlement": 0.5555555555555556
+        },
+        "friend": {
+          "games": 15,
+          "win": 0.4666666666666667,
+          "settlement": -1.4
+        },
+        "declarer": {
+          "games": 20,
+          "win": 0.65,
+          "settlement": 1.4
+        }
+      },
+      "crossplay": {
+        "recurrent_mix": {
+          "games": 40,
+          "win": 0.45,
+          "settlement": -0.7
+        },
+        "recurrent_search": {
+          "games": 40,
+          "win": 0.6,
+          "settlement": 1.5
+        }
+      },
+      "realizedPartners": {
+        "recurrent_mix | recurrent_balanced+recurrent_score": {
+          "games": 8,
+          "win": 0.5,
+          "settlement": -0.5
+        },
+        "recurrent_mix | heuristic": {
+          "games": 9,
+          "win": 0.3333333333333333,
+          "settlement": -3.5555555555555554
+        },
+        "recurrent_mix | recurrent_balanced+recurrent_win": {
+          "games": 9,
+          "win": 0.4444444444444444,
+          "settlement": 1.2222222222222223
+        },
+        "recurrent_mix | recurrent_score": {
+          "games": 3,
+          "win": 0.3333333333333333,
+          "settlement": -8.666666666666666
+        },
+        "recurrent_search | recurrent_balanced+recurrent_win": {
+          "games": 7,
+          "win": 1,
+          "settlement": 3.857142857142857
+        },
+        "recurrent_search | aggressive": {
+          "games": 5,
+          "win": 0.4,
+          "settlement": -2.8
+        },
+        "recurrent_search | legacy+recurrent_balanced": {
+          "games": 5,
+          "win": 0.8,
+          "settlement": 6.2
+        },
+        "recurrent_search | aggressive+recurrent_win": {
+          "games": 4,
+          "win": 0,
+          "settlement": -5.5
+        },
+        "recurrent_search | legacy": {
+          "games": 5,
+          "win": 0.8,
+          "settlement": 5
+        },
+        "recurrent_mix | heuristic+recurrent_win": {
+          "games": 2,
+          "win": 0.5,
+          "settlement": 0
+        },
+        "recurrent_search | recurrent_win": {
+          "games": 5,
+          "win": 0.8,
+          "settlement": 6.6
+        },
+        "recurrent_search | recurrent_balanced": {
+          "games": 2,
+          "win": 0.5,
+          "settlement": -8
+        },
+        "recurrent_mix | recurrent_win": {
+          "games": 3,
+          "win": 1,
+          "settlement": 6
+        },
+        "recurrent_search | aggressive+recurrent_balanced": {
+          "games": 4,
+          "win": 0.25,
+          "settlement": -2
+        },
+        "recurrent_mix | recurrent_score+recurrent_win": {
+          "games": 2,
+          "win": 0,
+          "settlement": -5.5
+        },
+        "recurrent_mix | recurrent_balanced": {
+          "games": 3,
+          "win": 0.6666666666666666,
+          "settlement": 6.333333333333333
+        },
+        "recurrent_search | legacy+recurrent_win": {
+          "games": 1,
+          "win": 1,
+          "settlement": 14
+        },
+        "recurrent_mix | heuristic+recurrent_balanced": {
+          "games": 1,
+          "win": 0,
+          "settlement": -3
+        },
+        "recurrent_search | aggressive+legacy": {
+          "games": 2,
+          "win": 0,
+          "settlement": -5
+        }
+      },
+      "inference": {
+        "decisions": 932,
+        "p50ms": 0.033,
+        "p95ms": 53.594299999999926,
+        "illegal": 0
+      }
+    },
+    "belief_learned": {
+      "games": 80,
+      "utilities": {
+        "win": {
+          "value": {
+            "mean": 0.525,
+            "ci95": [
+              0.42500000000000004,
+              0.6125
+            ]
+          },
+          "paired": {
+            "legacy": {
+              "mean": -0.024999999999999994,
+              "ci95": [
+                -0.09999999999999998,
+                0.037500000000000006
+              ]
+            },
+            "belief_uniform": {
+              "mean": 0,
+              "ci95": [
+                0,
+                0
+              ]
+            }
+          }
+        },
+        "score": {
+          "value": {
+            "mean": 0.0006250000000000001,
+            "ci95": [
+              -0.0019619140625,
+              0.002864746093749998
+            ]
+          },
+          "paired": {
+            "legacy": {
+              "mean": -0.0025390624999999997,
+              "ci95": [
+                -0.00418408203125,
+                -0.0007421875
+              ]
+            },
+            "belief_uniform": {
+              "mean": 0,
+              "ci95": [
+                0,
+                0
+              ]
+            }
+          }
+        },
+        "balanced": {
+          "value": {
+            "mean": 0.3676875,
+            "ci95": [
+              0.29706420898437497,
+              0.42935659179687496
+            ]
+          },
+          "paired": {
+            "legacy": {
+              "mean": -0.01826171875000001,
+              "ci95": [
+                -0.07082880859375001,
+                0.025953515624999982
+              ]
+            },
+            "belief_uniform": {
+              "mean": 0,
+              "ci95": [
+                0,
+                0
+              ]
+            }
+          }
+        }
+      },
+      "winElo": 1390.6763474313977,
+      "settlement": {
+        "mean": 0.4,
+        "p05": -14.1,
+        "p50": 1,
+        "p95": 12
+      },
+      "role": {
+        "opposition": {
+          "games": 45,
+          "win": 0.4888888888888889,
+          "settlement": 0.5555555555555556
+        },
+        "friend": {
+          "games": 15,
+          "win": 0.4666666666666667,
+          "settlement": -1.4
+        },
+        "declarer": {
+          "games": 20,
+          "win": 0.65,
+          "settlement": 1.4
+        }
+      },
+      "crossplay": {
+        "recurrent_mix": {
+          "games": 40,
+          "win": 0.45,
+          "settlement": -0.7
+        },
+        "recurrent_search": {
+          "games": 40,
+          "win": 0.6,
+          "settlement": 1.5
+        }
+      },
+      "realizedPartners": {
+        "recurrent_mix | recurrent_balanced+recurrent_score": {
+          "games": 8,
+          "win": 0.5,
+          "settlement": -0.5
+        },
+        "recurrent_mix | heuristic": {
+          "games": 9,
+          "win": 0.3333333333333333,
+          "settlement": -3.5555555555555554
+        },
+        "recurrent_mix | recurrent_balanced+recurrent_win": {
+          "games": 9,
+          "win": 0.4444444444444444,
+          "settlement": 1.2222222222222223
+        },
+        "recurrent_mix | recurrent_score": {
+          "games": 3,
+          "win": 0.3333333333333333,
+          "settlement": -8.666666666666666
+        },
+        "recurrent_search | recurrent_balanced+recurrent_win": {
+          "games": 7,
+          "win": 1,
+          "settlement": 3.857142857142857
+        },
+        "recurrent_search | aggressive": {
+          "games": 5,
+          "win": 0.4,
+          "settlement": -2.8
+        },
+        "recurrent_search | legacy+recurrent_balanced": {
+          "games": 5,
+          "win": 0.8,
+          "settlement": 6.2
+        },
+        "recurrent_search | aggressive+recurrent_win": {
+          "games": 4,
+          "win": 0,
+          "settlement": -5.5
+        },
+        "recurrent_search | legacy": {
+          "games": 5,
+          "win": 0.8,
+          "settlement": 5
+        },
+        "recurrent_mix | heuristic+recurrent_win": {
+          "games": 2,
+          "win": 0.5,
+          "settlement": 0
+        },
+        "recurrent_search | recurrent_win": {
+          "games": 5,
+          "win": 0.8,
+          "settlement": 6.6
+        },
+        "recurrent_search | recurrent_balanced": {
+          "games": 2,
+          "win": 0.5,
+          "settlement": -8
+        },
+        "recurrent_mix | recurrent_win": {
+          "games": 3,
+          "win": 1,
+          "settlement": 6
+        },
+        "recurrent_search | aggressive+recurrent_balanced": {
+          "games": 4,
+          "win": 0.25,
+          "settlement": -2
+        },
+        "recurrent_mix | recurrent_score+recurrent_win": {
+          "games": 2,
+          "win": 0,
+          "settlement": -5.5
+        },
+        "recurrent_mix | recurrent_balanced": {
+          "games": 3,
+          "win": 0.6666666666666666,
+          "settlement": 6.333333333333333
+        },
+        "recurrent_search | legacy+recurrent_win": {
+          "games": 1,
+          "win": 1,
+          "settlement": 14
+        },
+        "recurrent_mix | heuristic+recurrent_balanced": {
+          "games": 1,
+          "win": 0,
+          "settlement": -3
+        },
+        "recurrent_search | aggressive+legacy": {
+          "games": 2,
+          "win": 0,
+          "settlement": -5
+        }
+      },
+      "inference": {
+        "decisions": 932,
+        "p50ms": 0.033,
+        "p95ms": 52.65999999999999,
+        "illegal": 0
+      }
+    },
+    "gru_belief_uniform": {
+      "games": 80,
+      "utilities": {
+        "win": {
+          "value": {
+            "mean": 0.5000000000000001,
+            "ci95": [
+              0.42500000000000004,
+              0.575
+            ]
+          },
+          "paired": {
+            "legacy": {
+              "mean": -0.05,
+              "ci95": [
+                -0.13749999999999998,
+                0.02499999999999999
+              ]
+            },
+            "recurrent_balanced": {
+              "mean": 0,
+              "ci95": [
+                0,
+                0
+              ]
+            }
+          }
+        },
+        "score": {
+          "value": {
+            "mean": 0.0009570312500000004,
+            "ci95": [
+              -0.0007856445312499999,
+              0.003092773437499997
+            ]
+          },
+          "paired": {
+            "legacy": {
+              "mean": -0.0022070312500000002,
+              "ci95": [
+                -0.0040712890625000005,
+                -0.0002929687499999998
+              ]
+            },
+            "recurrent_balanced": {
+              "mean": -0.000019531249999999997,
+              "ci95": [
+                -0.00005859374999999999,
+                0
+              ]
+            }
+          }
+        },
+        "balanced": {
+          "value": {
+            "mean": 0.35028710937499996,
+            "ci95": [
+              0.29743935546874994,
+              0.403339208984375
+            ]
+          },
+          "paired": {
+            "legacy": {
+              "mean": -0.035662109375000015,
+              "ci95": [
+                -0.09737382812500002,
+                0.01721567382812499
+              ]
+            },
+            "recurrent_balanced": {
+              "mean": -0.000005859375000000222,
+              "ci95": [
+                -0.000017578125000000666,
+                0
+              ]
+            }
+          }
+        }
+      },
+      "winElo": 1254.3473143933777,
+      "settlement": {
+        "mean": 0.6125,
+        "p05": -8.1,
+        "p50": 0,
+        "p95": 12
+      },
+      "role": {
+        "opposition": {
+          "games": 53,
+          "win": 0.4528301886792453,
+          "settlement": 0.8679245283018868
+        },
+        "friend": {
+          "games": 23,
+          "win": 0.6086956521739131,
+          "settlement": 0.043478260869565216
+        },
+        "declarer": {
+          "games": 4,
+          "win": 0.5,
+          "settlement": 0.5
+        }
+      },
+      "crossplay": {
+        "recurrent_mix": {
+          "games": 40,
+          "win": 0.475,
+          "settlement": 0.025
+        },
+        "recurrent_search": {
+          "games": 40,
+          "win": 0.525,
+          "settlement": 1.2
+        }
+      },
+      "realizedPartners": {
+        "recurrent_mix | recurrent_balanced+recurrent_score": {
+          "games": 10,
+          "win": 0.4,
+          "settlement": -1
+        },
+        "recurrent_mix | heuristic": {
+          "games": 8,
+          "win": 0.5,
+          "settlement": -0.375
+        },
+        "recurrent_mix | recurrent_balanced+recurrent_win": {
+          "games": 10,
+          "win": 0.5,
+          "settlement": 1
+        },
+        "recurrent_mix | recurrent_score": {
+          "games": 2,
+          "win": 1,
+          "settlement": 3.5
+        },
+        "recurrent_search | recurrent_balanced+recurrent_win": {
+          "games": 8,
+          "win": 0.875,
+          "settlement": 5.5
+        },
+        "recurrent_search | aggressive": {
+          "games": 4,
+          "win": 0,
+          "settlement": -8.75
+        },
+        "recurrent_search | legacy+recurrent_balanced": {
+          "games": 5,
+          "win": 0.8,
+          "settlement": 7.4
+        },
+        "recurrent_search | aggressive+recurrent_win": {
+          "games": 4,
+          "win": 0,
+          "settlement": -5.5
+        },
+        "recurrent_search | legacy": {
+          "games": 6,
+          "win": 0.8333333333333334,
+          "settlement": 2.3333333333333335
+        },
+        "recurrent_mix | heuristic+recurrent_win": {
+          "games": 3,
+          "win": 0.6666666666666666,
+          "settlement": 2.6666666666666665
+        },
+        "recurrent_search | recurrent_win": {
+          "games": 2,
+          "win": 1,
+          "settlement": 7.5
+        },
+        "recurrent_search | aggressive+legacy": {
+          "games": 4,
+          "win": 0,
+          "settlement": -4.75
+        },
+        "recurrent_search | aggressive+recurrent_balanced": {
+          "games": 5,
+          "win": 0.2,
+          "settlement": -1
+        },
+        "recurrent_mix | recurrent_score+recurrent_win": {
+          "games": 2,
+          "win": 0,
+          "settlement": -4
+        },
+        "recurrent_search | legacy+recurrent_win": {
+          "games": 1,
+          "win": 1,
+          "settlement": 14
+        },
+        "recurrent_mix | recurrent_win": {
+          "games": 2,
+          "win": 1,
+          "settlement": 4.5
+        },
+        "recurrent_mix | heuristic+recurrent_balanced": {
+          "games": 1,
+          "win": 0,
+          "settlement": -3
+        },
+        "recurrent_mix | recurrent_balanced": {
+          "games": 2,
+          "win": 0,
+          "settlement": -4.5
+        },
+        "recurrent_search | recurrent_balanced": {
+          "games": 1,
+          "win": 1,
+          "settlement": 5
+        }
+      },
+      "inference": {
+        "decisions": 899,
+        "p50ms": 0.145,
+        "p95ms": 52.416099999999986,
+        "illegal": 0
+      }
+    },
+    "gru_belief_learned": {
+      "games": 80,
+      "utilities": {
+        "win": {
+          "value": {
+            "mean": 0.5000000000000001,
+            "ci95": [
+              0.42500000000000004,
+              0.575
+            ]
+          },
+          "paired": {
+            "legacy": {
+              "mean": -0.05,
+              "ci95": [
+                -0.13749999999999998,
+                0.02499999999999999
+              ]
+            },
+            "gru_belief_uniform": {
+              "mean": 0,
+              "ci95": [
+                0,
+                0
+              ]
+            }
+          }
+        },
+        "score": {
+          "value": {
+            "mean": 0.0009570312500000004,
+            "ci95": [
+              -0.0007856445312499999,
+              0.003092773437499997
+            ]
+          },
+          "paired": {
+            "legacy": {
+              "mean": -0.0022070312500000002,
+              "ci95": [
+                -0.0040712890625000005,
+                -0.0002929687499999998
+              ]
+            },
+            "gru_belief_uniform": {
+              "mean": 0,
+              "ci95": [
+                0,
+                0
+              ]
+            }
+          }
+        },
+        "balanced": {
+          "value": {
+            "mean": 0.35028710937499996,
+            "ci95": [
+              0.29743935546874994,
+              0.403339208984375
+            ]
+          },
+          "paired": {
+            "legacy": {
+              "mean": -0.035662109375000015,
+              "ci95": [
+                -0.09737382812500002,
+                0.01721567382812499
+              ]
+            },
+            "gru_belief_uniform": {
+              "mean": 0,
+              "ci95": [
+                0,
+                0
+              ]
+            }
+          }
+        }
+      },
+      "winElo": 1254.3473143933777,
+      "settlement": {
+        "mean": 0.6125,
+        "p05": -8.1,
+        "p50": 0,
+        "p95": 12
+      },
+      "role": {
+        "opposition": {
+          "games": 53,
+          "win": 0.4528301886792453,
+          "settlement": 0.8679245283018868
+        },
+        "friend": {
+          "games": 23,
+          "win": 0.6086956521739131,
+          "settlement": 0.043478260869565216
+        },
+        "declarer": {
+          "games": 4,
+          "win": 0.5,
+          "settlement": 0.5
+        }
+      },
+      "crossplay": {
+        "recurrent_mix": {
+          "games": 40,
+          "win": 0.475,
+          "settlement": 0.025
+        },
+        "recurrent_search": {
+          "games": 40,
+          "win": 0.525,
+          "settlement": 1.2
+        }
+      },
+      "realizedPartners": {
+        "recurrent_mix | recurrent_balanced+recurrent_score": {
+          "games": 10,
+          "win": 0.4,
+          "settlement": -1
+        },
+        "recurrent_mix | heuristic": {
+          "games": 8,
+          "win": 0.5,
+          "settlement": -0.375
+        },
+        "recurrent_mix | recurrent_balanced+recurrent_win": {
+          "games": 10,
+          "win": 0.5,
+          "settlement": 1
+        },
+        "recurrent_mix | recurrent_score": {
+          "games": 2,
+          "win": 1,
+          "settlement": 3.5
+        },
+        "recurrent_search | recurrent_balanced+recurrent_win": {
+          "games": 8,
+          "win": 0.875,
+          "settlement": 5.5
+        },
+        "recurrent_search | aggressive": {
+          "games": 4,
+          "win": 0,
+          "settlement": -8.75
+        },
+        "recurrent_search | legacy+recurrent_balanced": {
+          "games": 5,
+          "win": 0.8,
+          "settlement": 7.4
+        },
+        "recurrent_search | aggressive+recurrent_win": {
+          "games": 4,
+          "win": 0,
+          "settlement": -5.5
+        },
+        "recurrent_search | legacy": {
+          "games": 6,
+          "win": 0.8333333333333334,
+          "settlement": 2.3333333333333335
+        },
+        "recurrent_mix | heuristic+recurrent_win": {
+          "games": 3,
+          "win": 0.6666666666666666,
+          "settlement": 2.6666666666666665
+        },
+        "recurrent_search | recurrent_win": {
+          "games": 2,
+          "win": 1,
+          "settlement": 7.5
+        },
+        "recurrent_search | aggressive+legacy": {
+          "games": 4,
+          "win": 0,
+          "settlement": -4.75
+        },
+        "recurrent_search | aggressive+recurrent_balanced": {
+          "games": 5,
+          "win": 0.2,
+          "settlement": -1
+        },
+        "recurrent_mix | recurrent_score+recurrent_win": {
+          "games": 2,
+          "win": 0,
+          "settlement": -4
+        },
+        "recurrent_search | legacy+recurrent_win": {
+          "games": 1,
+          "win": 1,
+          "settlement": 14
+        },
+        "recurrent_mix | recurrent_win": {
+          "games": 2,
+          "win": 1,
+          "settlement": 4.5
+        },
+        "recurrent_mix | heuristic+recurrent_balanced": {
+          "games": 1,
+          "win": 0,
+          "settlement": -3
+        },
+        "recurrent_mix | recurrent_balanced": {
+          "games": 2,
+          "win": 0,
+          "settlement": -4.5
+        },
+        "recurrent_search | recurrent_balanced": {
+          "games": 1,
+          "win": 1,
+          "settlement": 5
+        }
+      },
+      "inference": {
+        "decisions": 899,
+        "p50ms": 0.147,
+        "p95ms": 53.428399999999996,
+        "illegal": 0
+      }
+    }
+  },
+  "ranking": {
+    "win": [
+      "recurrent_score",
+      "legacy",
+      "contract_search",
+      "score",
+      "heuristic",
+      "win",
+      "belief_uniform",
+      "belief_learned",
+      "recurrent_win",
+      "recurrent_balanced",
+      "gru_belief_uniform",
+      "gru_belief_learned",
+      "balanced"
+    ],
+    "score": [
+      "legacy",
+      "contract_search",
+      "recurrent_score",
+      "recurrent_win",
+      "score",
+      "recurrent_balanced",
+      "gru_belief_uniform",
+      "gru_belief_learned",
+      "win",
+      "heuristic",
+      "belief_uniform",
+      "belief_learned",
+      "balanced"
+    ],
+    "balanced": [
+      "legacy",
+      "contract_search",
+      "recurrent_score",
+      "score",
+      "win",
+      "heuristic",
+      "belief_uniform",
+      "belief_learned",
+      "recurrent_win",
+      "recurrent_balanced",
+      "gru_belief_uniform",
+      "gru_belief_learned",
+      "balanced"
+    ]
+  },
+  "winEloMatches": [
+    {
+      "a": "heuristic",
+      "b": "legacy",
+      "wins": 0,
+      "ties": 2,
+      "losses": 2
+    },
+    {
+      "a": "heuristic",
+      "b": "contract_search",
+      "wins": 0,
+      "ties": 2,
+      "losses": 2
+    },
+    {
+      "a": "heuristic",
+      "b": "win",
+      "wins": 1,
+      "ties": 2,
+      "losses": 1
+    },
+    {
+      "a": "heuristic",
+      "b": "score",
+      "wins": 1,
+      "ties": 1,
+      "losses": 2
+    },
+    {
+      "a": "heuristic",
+      "b": "balanced",
+      "wins": 3,
+      "ties": 0,
+      "losses": 1
+    },
+    {
+      "a": "heuristic",
+      "b": "recurrent_win",
+      "wins": 1,
+      "ties": 3,
+      "losses": 0
+    },
+    {
+      "a": "heuristic",
+      "b": "recurrent_score",
+      "wins": 1,
+      "ties": 1,
+      "losses": 2
+    },
+    {
+      "a": "heuristic",
+      "b": "recurrent_balanced",
+      "wins": 2,
+      "ties": 2,
+      "losses": 0
+    },
+    {
+      "a": "heuristic",
+      "b": "belief_uniform",
+      "wins": 0,
+      "ties": 4,
+      "losses": 0
+    },
+    {
+      "a": "heuristic",
+      "b": "belief_learned",
+      "wins": 0,
+      "ties": 4,
+      "losses": 0
+    },
+    {
+      "a": "heuristic",
+      "b": "gru_belief_uniform",
+      "wins": 2,
+      "ties": 2,
+      "losses": 0
+    },
+    {
+      "a": "heuristic",
+      "b": "gru_belief_learned",
+      "wins": 2,
+      "ties": 2,
+      "losses": 0
+    },
+    {
+      "a": "legacy",
+      "b": "contract_search",
+      "wins": 0,
+      "ties": 4,
+      "losses": 0
+    },
+    {
+      "a": "legacy",
+      "b": "win",
+      "wins": 2,
+      "ties": 1,
+      "losses": 1
+    },
+    {
+      "a": "legacy",
+      "b": "score",
+      "wins": 1,
+      "ties": 2,
+      "losses": 1
+    },
+    {
+      "a": "legacy",
+      "b": "balanced",
+      "wins": 3,
+      "ties": 0,
+      "losses": 1
+    },
+    {
+      "a": "legacy",
+      "b": "recurrent_win",
+      "wins": 2,
+      "ties": 2,
+      "losses": 0
+    },
+    {
+      "a": "legacy",
+      "b": "recurrent_score",
+      "wins": 2,
+      "ties": 1,
+      "losses": 1
+    },
+    {
+      "a": "legacy",
+      "b": "recurrent_balanced",
+      "wins": 2,
+      "ties": 2,
+      "losses": 0
+    },
+    {
+      "a": "legacy",
+      "b": "belief_uniform",
+      "wins": 2,
+      "ties": 2,
+      "losses": 0
+    },
+    {
+      "a": "legacy",
+      "b": "belief_learned",
+      "wins": 2,
+      "ties": 2,
+      "losses": 0
+    },
+    {
+      "a": "legacy",
+      "b": "gru_belief_uniform",
+      "wins": 2,
+      "ties": 2,
+      "losses": 0
+    },
+    {
+      "a": "legacy",
+      "b": "gru_belief_learned",
+      "wins": 2,
+      "ties": 2,
+      "losses": 0
+    },
+    {
+      "a": "contract_search",
+      "b": "win",
+      "wins": 2,
+      "ties": 1,
+      "losses": 1
+    },
+    {
+      "a": "contract_search",
+      "b": "score",
+      "wins": 1,
+      "ties": 2,
+      "losses": 1
+    },
+    {
+      "a": "contract_search",
+      "b": "balanced",
+      "wins": 3,
+      "ties": 0,
+      "losses": 1
+    },
+    {
+      "a": "contract_search",
+      "b": "recurrent_win",
+      "wins": 2,
+      "ties": 2,
+      "losses": 0
+    },
+    {
+      "a": "contract_search",
+      "b": "recurrent_score",
+      "wins": 2,
+      "ties": 1,
+      "losses": 1
+    },
+    {
+      "a": "contract_search",
+      "b": "recurrent_balanced",
+      "wins": 2,
+      "ties": 2,
+      "losses": 0
+    },
+    {
+      "a": "contract_search",
+      "b": "belief_uniform",
+      "wins": 2,
+      "ties": 2,
+      "losses": 0
+    },
+    {
+      "a": "contract_search",
+      "b": "belief_learned",
+      "wins": 2,
+      "ties": 2,
+      "losses": 0
+    },
+    {
+      "a": "contract_search",
+      "b": "gru_belief_uniform",
+      "wins": 2,
+      "ties": 2,
+      "losses": 0
+    },
+    {
+      "a": "contract_search",
+      "b": "gru_belief_learned",
+      "wins": 2,
+      "ties": 2,
+      "losses": 0
+    },
+    {
+      "a": "win",
+      "b": "score",
+      "wins": 0,
+      "ties": 3,
+      "losses": 1
+    },
+    {
+      "a": "win",
+      "b": "balanced",
+      "wins": 3,
+      "ties": 1,
+      "losses": 0
+    },
+    {
+      "a": "win",
+      "b": "recurrent_win",
+      "wins": 2,
+      "ties": 1,
+      "losses": 1
+    },
+    {
+      "a": "win",
+      "b": "recurrent_score",
+      "wins": 1,
+      "ties": 0,
+      "losses": 3
+    },
+    {
+      "a": "win",
+      "b": "recurrent_balanced",
+      "wins": 2,
+      "ties": 2,
+      "losses": 0
+    },
+    {
+      "a": "win",
+      "b": "belief_uniform",
+      "wins": 1,
+      "ties": 2,
+      "losses": 1
+    },
+    {
+      "a": "win",
+      "b": "belief_learned",
+      "wins": 1,
+      "ties": 2,
+      "losses": 1
+    },
+    {
+      "a": "win",
+      "b": "gru_belief_uniform",
+      "wins": 2,
+      "ties": 2,
+      "losses": 0
+    },
+    {
+      "a": "win",
+      "b": "gru_belief_learned",
+      "wins": 2,
+      "ties": 2,
+      "losses": 0
+    },
+    {
+      "a": "score",
+      "b": "balanced",
+      "wins": 3,
+      "ties": 1,
+      "losses": 0
+    },
+    {
+      "a": "score",
+      "b": "recurrent_win",
+      "wins": 2,
+      "ties": 1,
+      "losses": 1
+    },
+    {
+      "a": "score",
+      "b": "recurrent_score",
+      "wins": 1,
+      "ties": 1,
+      "losses": 2
+    },
+    {
+      "a": "score",
+      "b": "recurrent_balanced",
+      "wins": 2,
+      "ties": 2,
+      "losses": 0
+    },
+    {
+      "a": "score",
+      "b": "belief_uniform",
+      "wins": 2,
+      "ties": 1,
+      "losses": 1
+    },
+    {
+      "a": "score",
+      "b": "belief_learned",
+      "wins": 2,
+      "ties": 1,
+      "losses": 1
+    },
+    {
+      "a": "score",
+      "b": "gru_belief_uniform",
+      "wins": 2,
+      "ties": 2,
+      "losses": 0
+    },
+    {
+      "a": "score",
+      "b": "gru_belief_learned",
+      "wins": 2,
+      "ties": 2,
+      "losses": 0
+    },
+    {
+      "a": "balanced",
+      "b": "recurrent_win",
+      "wins": 1,
+      "ties": 1,
+      "losses": 2
+    },
+    {
+      "a": "balanced",
+      "b": "recurrent_score",
+      "wins": 0,
+      "ties": 1,
+      "losses": 3
+    },
+    {
+      "a": "balanced",
+      "b": "recurrent_balanced",
+      "wins": 1,
+      "ties": 1,
+      "losses": 2
+    },
+    {
+      "a": "balanced",
+      "b": "belief_uniform",
+      "wins": 1,
+      "ties": 0,
+      "losses": 3
+    },
+    {
+      "a": "balanced",
+      "b": "belief_learned",
+      "wins": 1,
+      "ties": 0,
+      "losses": 3
+    },
+    {
+      "a": "balanced",
+      "b": "gru_belief_uniform",
+      "wins": 1,
+      "ties": 1,
+      "losses": 2
+    },
+    {
+      "a": "balanced",
+      "b": "gru_belief_learned",
+      "wins": 1,
+      "ties": 1,
+      "losses": 2
+    },
+    {
+      "a": "recurrent_win",
+      "b": "recurrent_score",
+      "wins": 1,
+      "ties": 1,
+      "losses": 2
+    },
+    {
+      "a": "recurrent_win",
+      "b": "recurrent_balanced",
+      "wins": 1,
+      "ties": 3,
+      "losses": 0
+    },
+    {
+      "a": "recurrent_win",
+      "b": "belief_uniform",
+      "wins": 0,
+      "ties": 3,
+      "losses": 1
+    },
+    {
+      "a": "recurrent_win",
+      "b": "belief_learned",
+      "wins": 0,
+      "ties": 3,
+      "losses": 1
+    },
+    {
+      "a": "recurrent_win",
+      "b": "gru_belief_uniform",
+      "wins": 1,
+      "ties": 3,
+      "losses": 0
+    },
+    {
+      "a": "recurrent_win",
+      "b": "gru_belief_learned",
+      "wins": 1,
+      "ties": 3,
+      "losses": 0
+    },
+    {
+      "a": "recurrent_score",
+      "b": "recurrent_balanced",
+      "wins": 3,
+      "ties": 0,
+      "losses": 1
+    },
+    {
+      "a": "recurrent_score",
+      "b": "belief_uniform",
+      "wins": 2,
+      "ties": 1,
+      "losses": 1
+    },
+    {
+      "a": "recurrent_score",
+      "b": "belief_learned",
+      "wins": 2,
+      "ties": 1,
+      "losses": 1
+    },
+    {
+      "a": "recurrent_score",
+      "b": "gru_belief_uniform",
+      "wins": 3,
+      "ties": 0,
+      "losses": 1
+    },
+    {
+      "a": "recurrent_score",
+      "b": "gru_belief_learned",
+      "wins": 3,
+      "ties": 0,
+      "losses": 1
+    },
+    {
+      "a": "recurrent_balanced",
+      "b": "belief_uniform",
+      "wins": 0,
+      "ties": 2,
+      "losses": 2
+    },
+    {
+      "a": "recurrent_balanced",
+      "b": "belief_learned",
+      "wins": 0,
+      "ties": 2,
+      "losses": 2
+    },
+    {
+      "a": "recurrent_balanced",
+      "b": "gru_belief_uniform",
+      "wins": 0,
+      "ties": 4,
+      "losses": 0
+    },
+    {
+      "a": "recurrent_balanced",
+      "b": "gru_belief_learned",
+      "wins": 0,
+      "ties": 4,
+      "losses": 0
+    },
+    {
+      "a": "belief_uniform",
+      "b": "belief_learned",
+      "wins": 0,
+      "ties": 4,
+      "losses": 0
+    },
+    {
+      "a": "belief_uniform",
+      "b": "gru_belief_uniform",
+      "wins": 2,
+      "ties": 2,
+      "losses": 0
+    },
+    {
+      "a": "belief_uniform",
+      "b": "gru_belief_learned",
+      "wins": 2,
+      "ties": 2,
+      "losses": 0
+    },
+    {
+      "a": "belief_learned",
+      "b": "gru_belief_uniform",
+      "wins": 2,
+      "ties": 2,
+      "losses": 0
+    },
+    {
+      "a": "belief_learned",
+      "b": "gru_belief_learned",
+      "wins": 2,
+      "ties": 2,
+      "losses": 0
+    },
+    {
+      "a": "gru_belief_uniform",
+      "b": "gru_belief_learned",
+      "wins": 0,
+      "ties": 4,
+      "losses": 0
+    }
+  ],
+  "summaryCodeHash": "4e2b6ed6fcbfb0d9f27569e21424a53cb793576962dc8c41b40f4db3532a9f4b"
+}

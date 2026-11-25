@@ -10,6 +10,10 @@ import {rulesHash,scoringHash} from './version.mjs';
 const root=fileURLToPath(new URL('../',import.meta.url));
 const [command,...args]=process.argv.slice(2);
 const help=`Mighty AI lab (run from the repository root)
+  node lab/cli.mjs train-recurrent --config configs/recurrent-smoke.json --out lab/local-runs/gru-smoke
+  node lab/cli.mjs train-recurrent --config configs/recurrent.json --out lab/local-runs/gru
+  node lab/cli.mjs evaluate-live --config configs/live-eval.json --split validation --out lab/local-runs/eval
+  node lab/cli.mjs analyze-move --input examples/observation.json --checkpoint lab/artifacts/recurrent-aux/best-balanced.json --objective balanced
   node lab/cli.mjs validate-rules [--config configs/rules.json]
   node lab/cli.mjs smoke [--device cpu] [--seed 1] [--out DIRECTORY]
   node lab/cli.mjs train [--objective win|score|balanced|downside_averse|all] [--seed 731]
@@ -52,7 +56,10 @@ else if(command==='validate-rules'){
   run(python(),['lab/test_training.py']);
   run(python(),['lab/train.py','--smoke','--objective','win','--device',get('--device','cpu'),'--seed',get('--seed','1'),'--out',resolve(out)]);
   console.log('Smoke checkpoint and logs:',resolve(out));
-} else if(command==='train') run(python(),['lab/train.py',...args]);
+} else if(command==='train-recurrent') run(python(),['lab/recurrent_train.py',...args]);
+else if(command==='evaluate-live') run(process.execPath,['lab/live-evaluate.mjs',...args]);
+else if(command==='analyze-move') run(process.execPath,['lab/analyze-move.mjs',...args]);
+else if(command==='train') run(python(),['lab/train.py',...args]);
 else if(['evaluate','rate'].includes(command))run(process.execPath,['lab/'+command+'.mjs',...args]);
 else if(command==='diagnose')run(process.execPath,['lab/diagnostic.mjs',...args]);
 else {console.error(help);process.exitCode=2;}

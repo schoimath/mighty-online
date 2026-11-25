@@ -1,0 +1,31 @@
+{
+  "positions": 80,
+  "seed": 249000,
+  "selectN": 12,
+  "confirmN": 20,
+  "extraConfirm": 12,
+  "temperature": 0.12,
+  "objectives": {
+    "win": {
+      "analyzed": 80,
+      "kept": 9,
+      "confirmedMistakes": 6,
+      "meanEstimatedLoss": 0.057291666666666664,
+      "abstentionFraction": 0.925
+    },
+    "score": {
+      "analyzed": 80,
+      "kept": 29,
+      "confirmedMistakes": 19,
+      "meanEstimatedLoss": 0.0016243489583333333,
+      "abstentionFraction": 0.7625
+    },
+    "balanced": {
+      "analyzed": 80,
+      "kept": 20,
+      "confirmedMistakes": 14,
+      "meanEstimatedLoss": 0.04057145182291667,
+      "abstentionFraction": 0.825
+    }
+  }
+}

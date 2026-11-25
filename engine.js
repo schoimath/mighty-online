@@ -502,4 +502,4 @@ export function botAction(state, seat = state.turn) {
   return botDecision(botObservation(state, seat));
 }
 
-export {DECK, jokerActive, legalPlays, pointsIn, strength, winningPlay};
+export {DECK, jokerActive, legalPlays, pointsIn, sortHand, strength, winningPlay};

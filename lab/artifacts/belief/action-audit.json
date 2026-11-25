@@ -1,0 +1,3490 @@
+{
+  "split": "held-out action diagnostics only",
+  "seed": 3050071,
+  "selectN": 12,
+  "confirmN": 20,
+  "checkpointDir": "lab/artifacts/recurrent-aux",
+  "warning": "Monte Carlo action loss under the learned joint proposal and the same frozen heuristic continuation.",
+  "objectives": {
+    "win": {
+      "positions": 24,
+      "scored": 24,
+      "meanEstimatedActionLoss": 0.03819444444444444,
+      "abstentionFraction": 1,
+      "rows": [
+        {
+          "seed": 3050071,
+          "trick": 5,
+          "role": "opposition",
+          "actor": "sha256:f744249746e42da8e59b78954714dc9c3af6015033770c0b5035ce9509b79e02",
+          "chosen": {
+            "type": "play",
+            "card": "S3"
+          },
+          "nominee": {
+            "type": "play",
+            "card": "S9"
+          },
+          "loss": 0,
+          "confirmed": false,
+          "gap": {
+            "n": 20,
+            "mean": 0,
+            "se": 0,
+            "ci95": [
+              0,
+              0
+            ]
+          },
+          "sampler": {
+            "selection": {
+              "attempts": 12,
+              "accepted": 12,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 12
+            },
+            "confirmation": {
+              "attempts": 20,
+              "accepted": 20,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 20
+            }
+          },
+          "continuation": "heuristic/engine.policyPlay/protect-partner-v3"
+        },
+        {
+          "seed": 3050072,
+          "trick": 6,
+          "role": "declarer",
+          "actor": "sha256:f744249746e42da8e59b78954714dc9c3af6015033770c0b5035ce9509b79e02",
+          "chosen": {
+            "type": "play",
+            "card": "C7"
+          },
+          "nominee": {
+            "type": "play",
+            "card": "HA"
+          },
+          "loss": 0,
+          "confirmed": false,
+          "gap": {
+            "n": 20,
+            "mean": 0.05,
+            "se": 0.05,
+            "ci95": [
+              -0.05660000000000001,
+              0.15660000000000002
+            ]
+          },
+          "sampler": {
+            "selection": {
+              "attempts": 12,
+              "accepted": 12,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 12
+            },
+            "confirmation": {
+              "attempts": 20,
+              "accepted": 20,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 20
+            }
+          },
+          "continuation": "heuristic/engine.policyPlay/protect-partner-v3"
+        },
+        {
+          "seed": 3050073,
+          "trick": 7,
+          "role": "friend",
+          "actor": "sha256:f744249746e42da8e59b78954714dc9c3af6015033770c0b5035ce9509b79e02",
+          "chosen": {
+            "type": "play",
+            "card": "SQ"
+          },
+          "nominee": {
+            "type": "play",
+            "card": "H7"
+          },
+          "loss": 0.08333333333333333,
+          "confirmed": false,
+          "gap": {
+            "n": 20,
+            "mean": 0.15,
+            "se": 0.0819178021909125,
+            "ci95": [
+              -0.024648754271025475,
+              0.32464875427102546
+            ]
+          },
+          "sampler": {
+            "selection": {
+              "attempts": 12,
+              "accepted": 12,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 12
+            },
+            "confirmation": {
+              "attempts": 21,
+              "accepted": 20,
+              "assignmentRejected": 0,
+              "replayRejected": 1,
+              "exhausted": 0,
+              "proposalRejectionRate": 0.04761904761904767,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 20
+            }
+          },
+          "continuation": "heuristic/engine.policyPlay/protect-partner-v3"
+        },
+        {
+          "seed": 3050074,
+          "trick": 8,
+          "role": "declarer",
+          "actor": "sha256:f744249746e42da8e59b78954714dc9c3af6015033770c0b5035ce9509b79e02",
+          "chosen": {
+            "type": "play",
+            "card": "C3"
+          },
+          "nominee": {
+            "type": "play",
+            "card": "CQ"
+          },
+          "loss": 0,
+          "confirmed": false,
+          "gap": {
+            "n": 20,
+            "mean": 0,
+            "se": 0,
+            "ci95": [
+              0,
+              0
+            ]
+          },
+          "sampler": {
+            "selection": {
+              "attempts": 12,
+              "accepted": 12,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 12
+            },
+            "confirmation": {
+              "attempts": 20,
+              "accepted": 20,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 20
+            }
+          },
+          "continuation": "heuristic/engine.policyPlay/protect-partner-v3"
+        },
+        {
+          "seed": 3050075,
+          "trick": 9,
+          "role": "friend",
+          "actor": "sha256:f744249746e42da8e59b78954714dc9c3af6015033770c0b5035ce9509b79e02",
+          "chosen": {
+            "type": "play",
+            "card": "H8"
+          },
+          "nominee": {
+            "type": "play",
+            "card": "H8"
+          },
+          "loss": 0,
+          "confirmed": false,
+          "gap": {
+            "n": 20,
+            "mean": 0,
+            "se": 0,
+            "ci95": [
+              0,
+              0
+            ]
+          },
+          "sampler": {
+            "selection": {
+              "attempts": 12,
+              "accepted": 12,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 12
+            },
+            "confirmation": {
+              "attempts": 20,
+              "accepted": 20,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 20
+            }
+          },
+          "continuation": "heuristic/engine.policyPlay/protect-partner-v3"
+        },
+        {
+          "seed": 3050076,
+          "trick": 5,
+          "role": "friend",
+          "actor": "sha256:f744249746e42da8e59b78954714dc9c3af6015033770c0b5035ce9509b79e02",
+          "chosen": {
+            "type": "play",
+            "card": "DQ"
+          },
+          "nominee": {
+            "type": "play",
+            "card": "S2"
+          },
+          "loss": 0.08333333333333333,
+          "confirmed": false,
+          "gap": {
+            "n": 20,
+            "mean": 0.05,
+            "se": 0.05,
+            "ci95": [
+              -0.05660000000000001,
+              0.15660000000000002
+            ]
+          },
+          "sampler": {
+            "selection": {
+              "attempts": 12,
+              "accepted": 12,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 12
+            },
+            "confirmation": {
+              "attempts": 20,
+              "accepted": 20,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 20
+            }
+          },
+          "continuation": "heuristic/engine.policyPlay/protect-partner-v3"
+        },
+        {
+          "seed": 3050077,
+          "trick": 6,
+          "role": "declarer",
+          "actor": "sha256:f744249746e42da8e59b78954714dc9c3af6015033770c0b5035ce9509b79e02",
+          "chosen": {
+            "type": "play",
+            "card": "S8"
+          },
+          "nominee": {
+            "type": "play",
+            "card": "S8"
+          },
+          "loss": 0,
+          "confirmed": false,
+          "gap": {
+            "n": 20,
+            "mean": 0,
+            "se": 0,
+            "ci95": [
+              0,
+              0
+            ]
+          },
+          "sampler": {
+            "selection": {
+              "attempts": 12,
+              "accepted": 12,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 12
+            },
+            "confirmation": {
+              "attempts": 20,
+              "accepted": 20,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 20
+            }
+          },
+          "continuation": "heuristic/engine.policyPlay/protect-partner-v3"
+        },
+        {
+          "seed": 3050078,
+          "trick": 7,
+          "role": "friend",
+          "actor": "sha256:f744249746e42da8e59b78954714dc9c3af6015033770c0b5035ce9509b79e02",
+          "chosen": {
+            "type": "play",
+            "card": "DK"
+          },
+          "nominee": {
+            "type": "play",
+            "card": "DK"
+          },
+          "loss": 0,
+          "confirmed": false,
+          "gap": {
+            "n": 20,
+            "mean": 0,
+            "se": 0,
+            "ci95": [
+              0,
+              0
+            ]
+          },
+          "sampler": {
+            "selection": {
+              "attempts": 12,
+              "accepted": 12,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 12
+            },
+            "confirmation": {
+              "attempts": 20,
+              "accepted": 20,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 20
+            }
+          },
+          "continuation": "heuristic/engine.policyPlay/protect-partner-v3"
+        },
+        {
+          "seed": 3050079,
+          "trick": 8,
+          "role": "declarer",
+          "actor": "sha256:f744249746e42da8e59b78954714dc9c3af6015033770c0b5035ce9509b79e02",
+          "chosen": {
+            "type": "play",
+            "card": "HA"
+          },
+          "nominee": {
+            "type": "play",
+            "card": "HA"
+          },
+          "loss": 0,
+          "confirmed": false,
+          "gap": {
+            "n": 20,
+            "mean": 0,
+            "se": 0,
+            "ci95": [
+              0,
+              0
+            ]
+          },
+          "sampler": {
+            "selection": {
+              "attempts": 12,
+              "accepted": 12,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 12
+            },
+            "confirmation": {
+              "attempts": 20,
+              "accepted": 20,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 20
+            }
+          },
+          "continuation": "heuristic/engine.policyPlay/protect-partner-v3"
+        },
+        {
+          "seed": 3050080,
+          "trick": 9,
+          "role": "opposition",
+          "actor": "sha256:f744249746e42da8e59b78954714dc9c3af6015033770c0b5035ce9509b79e02",
+          "chosen": {
+            "type": "play",
+            "card": "D8"
+          },
+          "nominee": {
+            "type": "play",
+            "card": "C7"
+          },
+          "loss": 0.08333333333333337,
+          "confirmed": false,
+          "gap": {
+            "n": 20,
+            "mean": -0.05,
+            "se": 0.08810878443570107,
+            "ci95": [
+              -0.2378479284169147,
+              0.13784792841691468
+            ]
+          },
+          "sampler": {
+            "selection": {
+              "attempts": 12,
+              "accepted": 12,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 12
+            },
+            "confirmation": {
+              "attempts": 20,
+              "accepted": 20,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 20
+            }
+          },
+          "continuation": "heuristic/engine.policyPlay/protect-partner-v3"
+        },
+        {
+          "seed": 3050081,
+          "trick": 5,
+          "role": "opposition",
+          "actor": "sha256:f744249746e42da8e59b78954714dc9c3af6015033770c0b5035ce9509b79e02",
+          "chosen": {
+            "type": "play",
+            "card": "SK"
+          },
+          "nominee": {
+            "type": "play",
+            "card": "SK"
+          },
+          "loss": 0,
+          "confirmed": false,
+          "gap": {
+            "n": 20,
+            "mean": 0,
+            "se": 0,
+            "ci95": [
+              0,
+              0
+            ]
+          },
+          "sampler": {
+            "selection": {
+              "attempts": 12,
+              "accepted": 12,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 12
+            },
+            "confirmation": {
+              "attempts": 20,
+              "accepted": 20,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 20
+            }
+          },
+          "continuation": "heuristic/engine.policyPlay/protect-partner-v3"
+        },
+        {
+          "seed": 3050082,
+          "trick": 6,
+          "role": "opposition",
+          "actor": "sha256:f744249746e42da8e59b78954714dc9c3af6015033770c0b5035ce9509b79e02",
+          "chosen": {
+            "type": "play",
+            "card": "CK"
+          },
+          "nominee": {
+            "type": "play",
+            "card": "HQ"
+          },
+          "loss": 0.08333333333333337,
+          "confirmed": false,
+          "gap": {
+            "n": 20,
+            "mean": 0.1,
+            "se": 0.06882472016116853,
+            "ci95": [
+              -0.046734303383611314,
+              0.24673430338361133
+            ]
+          },
+          "sampler": {
+            "selection": {
+              "attempts": 13,
+              "accepted": 12,
+              "assignmentRejected": 0,
+              "replayRejected": 1,
+              "exhausted": 0,
+              "proposalRejectionRate": 0.07692307692307687,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 12
+            },
+            "confirmation": {
+              "attempts": 22,
+              "accepted": 20,
+              "assignmentRejected": 0,
+              "replayRejected": 2,
+              "exhausted": 0,
+              "proposalRejectionRate": 0.09090909090909094,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 20
+            }
+          },
+          "continuation": "heuristic/engine.policyPlay/protect-partner-v3"
+        },
+        {
+          "seed": 3050083,
+          "trick": 7,
+          "role": "opposition",
+          "actor": "sha256:f744249746e42da8e59b78954714dc9c3af6015033770c0b5035ce9509b79e02",
+          "chosen": {
+            "type": "play",
+            "card": "H9"
+          },
+          "nominee": {
+            "type": "play",
+            "card": "S9"
+          },
+          "loss": 0,
+          "confirmed": false,
+          "gap": {
+            "n": 20,
+            "mean": 0,
+            "se": 0,
+            "ci95": [
+              0,
+              0
+            ]
+          },
+          "sampler": {
+            "selection": {
+              "attempts": 12,
+              "accepted": 12,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 12
+            },
+            "confirmation": {
+              "attempts": 20,
+              "accepted": 20,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 20
+            }
+          },
+          "continuation": "heuristic/engine.policyPlay/protect-partner-v3"
+        },
+        {
+          "seed": 3050084,
+          "trick": 8,
+          "role": "declarer",
+          "actor": "sha256:f744249746e42da8e59b78954714dc9c3af6015033770c0b5035ce9509b79e02",
+          "chosen": {
+            "type": "play",
+            "card": "S6"
+          },
+          "nominee": {
+            "type": "play",
+            "card": "S7"
+          },
+          "loss": 0,
+          "confirmed": false,
+          "gap": {
+            "n": 20,
+            "mean": 0,
+            "se": 0,
+            "ci95": [
+              0,
+              0
+            ]
+          },
+          "sampler": {
+            "selection": {
+              "attempts": 12,
+              "accepted": 12,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 12
+            },
+            "confirmation": {
+              "attempts": 20,
+              "accepted": 20,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 20
+            }
+          },
+          "continuation": "heuristic/engine.policyPlay/protect-partner-v3"
+        },
+        {
+          "seed": 3050085,
+          "trick": 9,
+          "role": "friend",
+          "actor": "sha256:f744249746e42da8e59b78954714dc9c3af6015033770c0b5035ce9509b79e02",
+          "chosen": {
+            "type": "play",
+            "card": "C6"
+          },
+          "nominee": {
+            "type": "play",
+            "card": "S9"
+          },
+          "loss": 0,
+          "confirmed": false,
+          "gap": {
+            "n": 20,
+            "mean": 0,
+            "se": 0,
+            "ci95": [
+              0,
+              0
+            ]
+          },
+          "sampler": {
+            "selection": {
+              "attempts": 12,
+              "accepted": 12,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 12
+            },
+            "confirmation": {
+              "attempts": 20,
+              "accepted": 20,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 20
+            }
+          },
+          "continuation": "heuristic/engine.policyPlay/protect-partner-v3"
+        },
+        {
+          "seed": 3050086,
+          "trick": 5,
+          "role": "opposition",
+          "actor": "sha256:f744249746e42da8e59b78954714dc9c3af6015033770c0b5035ce9509b79e02",
+          "chosen": {
+            "type": "play",
+            "card": "C9"
+          },
+          "nominee": {
+            "type": "play",
+            "card": "C9"
+          },
+          "loss": 0,
+          "confirmed": false,
+          "gap": {
+            "n": 20,
+            "mean": 0,
+            "se": 0,
+            "ci95": [
+              0,
+              0
+            ]
+          },
+          "sampler": {
+            "selection": {
+              "attempts": 12,
+              "accepted": 12,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 12
+            },
+            "confirmation": {
+              "attempts": 20,
+              "accepted": 20,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 20
+            }
+          },
+          "continuation": "heuristic/engine.policyPlay/protect-partner-v3"
+        },
+        {
+          "seed": 3050087,
+          "trick": 6,
+          "role": "declarer",
+          "actor": "sha256:f744249746e42da8e59b78954714dc9c3af6015033770c0b5035ce9509b79e02",
+          "chosen": {
+            "type": "play",
+            "card": "C4"
+          },
+          "nominee": {
+            "type": "play",
+            "card": "CA"
+          },
+          "loss": 0,
+          "confirmed": false,
+          "gap": {
+            "n": 20,
+            "mean": 0,
+            "se": 0,
+            "ci95": [
+              0,
+              0
+            ]
+          },
+          "sampler": {
+            "selection": {
+              "attempts": 16,
+              "accepted": 12,
+              "assignmentRejected": 0,
+              "replayRejected": 4,
+              "exhausted": 0,
+              "proposalRejectionRate": 0.25,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 12
+            },
+            "confirmation": {
+              "attempts": 25,
+              "accepted": 20,
+              "assignmentRejected": 0,
+              "replayRejected": 5,
+              "exhausted": 0,
+              "proposalRejectionRate": 0.19999999999999996,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 20
+            }
+          },
+          "continuation": "heuristic/engine.policyPlay/protect-partner-v3"
+        },
+        {
+          "seed": 3050088,
+          "trick": 7,
+          "role": "declarer",
+          "actor": "sha256:f744249746e42da8e59b78954714dc9c3af6015033770c0b5035ce9509b79e02",
+          "chosen": {
+            "type": "play",
+            "card": "S10"
+          },
+          "nominee": {
+            "type": "play",
+            "card": "S10"
+          },
+          "loss": 0,
+          "confirmed": false,
+          "gap": {
+            "n": 20,
+            "mean": 0,
+            "se": 0,
+            "ci95": [
+              0,
+              0
+            ]
+          },
+          "sampler": {
+            "selection": {
+              "attempts": 12,
+              "accepted": 12,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 12
+            },
+            "confirmation": {
+              "attempts": 20,
+              "accepted": 20,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 20
+            }
+          },
+          "continuation": "heuristic/engine.policyPlay/protect-partner-v3"
+        },
+        {
+          "seed": 3050089,
+          "trick": 8,
+          "role": "opposition",
+          "actor": "sha256:f744249746e42da8e59b78954714dc9c3af6015033770c0b5035ce9509b79e02",
+          "chosen": {
+            "type": "play",
+            "card": "D6"
+          },
+          "nominee": {
+            "type": "play",
+            "card": "H4"
+          },
+          "loss": 0,
+          "confirmed": false,
+          "gap": {
+            "n": 20,
+            "mean": 0,
+            "se": 0,
+            "ci95": [
+              0,
+              0
+            ]
+          },
+          "sampler": {
+            "selection": {
+              "attempts": 12,
+              "accepted": 12,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 12
+            },
+            "confirmation": {
+              "attempts": 21,
+              "accepted": 20,
+              "assignmentRejected": 0,
+              "replayRejected": 1,
+              "exhausted": 0,
+              "proposalRejectionRate": 0.04761904761904767,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 20
+            }
+          },
+          "continuation": "heuristic/engine.policyPlay/protect-partner-v3"
+        },
+        {
+          "seed": 3050090,
+          "trick": 9,
+          "role": "declarer",
+          "actor": "sha256:f744249746e42da8e59b78954714dc9c3af6015033770c0b5035ce9509b79e02",
+          "chosen": {
+            "type": "play",
+            "card": "H8"
+          },
+          "nominee": {
+            "type": "play",
+            "card": "H8"
+          },
+          "loss": 0,
+          "confirmed": false,
+          "gap": {
+            "n": 20,
+            "mean": 0,
+            "se": 0,
+            "ci95": [
+              0,
+              0
+            ]
+          },
+          "sampler": {
+            "selection": {
+              "attempts": 15,
+              "accepted": 12,
+              "assignmentRejected": 0,
+              "replayRejected": 3,
+              "exhausted": 0,
+              "proposalRejectionRate": 0.19999999999999996,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 12
+            },
+            "confirmation": {
+              "attempts": 29,
+              "accepted": 20,
+              "assignmentRejected": 0,
+              "replayRejected": 9,
+              "exhausted": 0,
+              "proposalRejectionRate": 0.31034482758620685,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 20
+            }
+          },
+          "continuation": "heuristic/engine.policyPlay/protect-partner-v3"
+        },
+        {
+          "seed": 3050091,
+          "trick": 5,
+          "role": "declarer",
+          "actor": "sha256:f744249746e42da8e59b78954714dc9c3af6015033770c0b5035ce9509b79e02",
+          "chosen": {
+            "type": "play",
+            "card": "S2"
+          },
+          "nominee": {
+            "type": "play",
+            "card": "D4"
+          },
+          "loss": 0.41666666666666663,
+          "confirmed": false,
+          "gap": {
+            "n": 20,
+            "mean": 0.2,
+            "se": 0.11697953037312037,
+            "ci95": [
+              -0.04940035875549262,
+              0.44940035875549267
+            ]
+          },
+          "sampler": {
+            "selection": {
+              "attempts": 12,
+              "accepted": 12,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 12
+            },
+            "confirmation": {
+              "attempts": 20,
+              "accepted": 20,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 20
+            }
+          },
+          "continuation": "heuristic/engine.policyPlay/protect-partner-v3"
+        },
+        {
+          "seed": 3050092,
+          "trick": 6,
+          "role": "friend",
+          "actor": "sha256:f744249746e42da8e59b78954714dc9c3af6015033770c0b5035ce9509b79e02",
+          "chosen": {
+            "type": "play",
+            "card": "S9"
+          },
+          "nominee": {
+            "type": "play",
+            "card": "CK"
+          },
+          "loss": 0.08333333333333326,
+          "confirmed": false,
+          "gap": {
+            "n": 20,
+            "mean": -0.05,
+            "se": 0.11413288653790231,
+            "ci95": [
+              -0.29333131409880775,
+              0.19333131409880772
+            ]
+          },
+          "sampler": {
+            "selection": {
+              "attempts": 12,
+              "accepted": 12,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 12
+            },
+            "confirmation": {
+              "attempts": 20,
+              "accepted": 20,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 20
+            }
+          },
+          "continuation": "heuristic/engine.policyPlay/protect-partner-v3"
+        },
+        {
+          "seed": 3050093,
+          "trick": 7,
+          "role": "opposition",
+          "actor": "sha256:f744249746e42da8e59b78954714dc9c3af6015033770c0b5035ce9509b79e02",
+          "chosen": {
+            "type": "play",
+            "card": "C8"
+          },
+          "nominee": {
+            "type": "play",
+            "card": "D6"
+          },
+          "loss": 0.08333333333333337,
+          "confirmed": false,
+          "gap": {
+            "n": 20,
+            "mean": -0.05,
+            "se": 0.05,
+            "ci95": [
+              -0.15660000000000002,
+              0.05660000000000001
+            ]
+          },
+          "sampler": {
+            "selection": {
+              "attempts": 12,
+              "accepted": 12,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 12
+            },
+            "confirmation": {
+              "attempts": 20,
+              "accepted": 20,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 20
+            }
+          },
+          "continuation": "heuristic/engine.policyPlay/protect-partner-v3"
+        },
+        {
+          "seed": 3050094,
+          "trick": 8,
+          "role": "declarer",
+          "actor": "sha256:f744249746e42da8e59b78954714dc9c3af6015033770c0b5035ce9509b79e02",
+          "chosen": {
+            "type": "play",
+            "card": "S3"
+          },
+          "nominee": {
+            "type": "play",
+            "card": "S9"
+          },
+          "loss": 0,
+          "confirmed": false,
+          "gap": {
+            "n": 20,
+            "mean": 0,
+            "se": 0,
+            "ci95": [
+              0,
+              0
+            ]
+          },
+          "sampler": {
+            "selection": {
+              "attempts": 12,
+              "accepted": 12,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 12
+            },
+            "confirmation": {
+              "attempts": 20,
+              "accepted": 20,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 20
+            }
+          },
+          "continuation": "heuristic/engine.policyPlay/protect-partner-v3"
+        }
+      ]
+    },
+    "score": {
+      "positions": 24,
+      "scored": 24,
+      "meanEstimatedActionLoss": 0.001128472222222222,
+      "abstentionFraction": 0.9583333333333334,
+      "rows": [
+        {
+          "seed": 3050071,
+          "trick": 5,
+          "role": "opposition",
+          "actor": "sha256:f61687b6c4f98eab10b87c55d94b655b017bfcefe006b26768cb9d632b37dbb3",
+          "chosen": {
+            "type": "play",
+            "card": "H2"
+          },
+          "nominee": {
+            "type": "play",
+            "card": "S9"
+          },
+          "loss": 0.0010416666666666682,
+          "confirmed": false,
+          "gap": {
+            "n": 20,
+            "mean": -0.0020312499999999996,
+            "se": 0.0010017716625138633,
+            "ci95": [
+              -0.004167027184479557,
+              0.00010452718447955716
+            ]
+          },
+          "sampler": {
+            "selection": {
+              "attempts": 12,
+              "accepted": 12,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 12
+            },
+            "confirmation": {
+              "attempts": 20,
+              "accepted": 20,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 20
+            }
+          },
+          "continuation": "heuristic/engine.policyPlay/protect-partner-v3"
+        },
+        {
+          "seed": 3050072,
+          "trick": 6,
+          "role": "declarer",
+          "actor": "sha256:f61687b6c4f98eab10b87c55d94b655b017bfcefe006b26768cb9d632b37dbb3",
+          "chosen": {
+            "type": "play",
+            "card": "C7"
+          },
+          "nominee": {
+            "type": "play",
+            "card": "HA"
+          },
+          "loss": 0.000520833333333335,
+          "confirmed": false,
+          "gap": {
+            "n": 20,
+            "mean": 0.0012499999999999998,
+            "se": 0.0010487696425611748,
+            "ci95": [
+              -0.0009859768779404252,
+              0.003485976877940425
+            ]
+          },
+          "sampler": {
+            "selection": {
+              "attempts": 12,
+              "accepted": 12,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 12
+            },
+            "confirmation": {
+              "attempts": 20,
+              "accepted": 20,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 20
+            }
+          },
+          "continuation": "heuristic/engine.policyPlay/protect-partner-v3"
+        },
+        {
+          "seed": 3050073,
+          "trick": 7,
+          "role": "friend",
+          "actor": "sha256:f61687b6c4f98eab10b87c55d94b655b017bfcefe006b26768cb9d632b37dbb3",
+          "chosen": {
+            "type": "play",
+            "card": "H7"
+          },
+          "nominee": {
+            "type": "play",
+            "card": "CA"
+          },
+          "loss": 0.0006510416666666678,
+          "confirmed": false,
+          "gap": {
+            "n": 20,
+            "mean": -0.001953125,
+            "se": 0.0016421906689713527,
+            "ci95": [
+              -0.005454275506246924,
+              0.001548025506246924
+            ]
+          },
+          "sampler": {
+            "selection": {
+              "attempts": 12,
+              "accepted": 12,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 12
+            },
+            "confirmation": {
+              "attempts": 21,
+              "accepted": 20,
+              "assignmentRejected": 0,
+              "replayRejected": 1,
+              "exhausted": 0,
+              "proposalRejectionRate": 0.04761904761904767,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 20
+            }
+          },
+          "continuation": "heuristic/engine.policyPlay/protect-partner-v3"
+        },
+        {
+          "seed": 3050074,
+          "trick": 8,
+          "role": "declarer",
+          "actor": "sha256:f61687b6c4f98eab10b87c55d94b655b017bfcefe006b26768cb9d632b37dbb3",
+          "chosen": {
+            "type": "play",
+            "card": "C3"
+          },
+          "nominee": {
+            "type": "play",
+            "card": "C3"
+          },
+          "loss": 0,
+          "confirmed": false,
+          "gap": {
+            "n": 20,
+            "mean": 0,
+            "se": 0,
+            "ci95": [
+              0,
+              0
+            ]
+          },
+          "sampler": {
+            "selection": {
+              "attempts": 12,
+              "accepted": 12,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 12
+            },
+            "confirmation": {
+              "attempts": 20,
+              "accepted": 20,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 20
+            }
+          },
+          "continuation": "heuristic/engine.policyPlay/protect-partner-v3"
+        },
+        {
+          "seed": 3050075,
+          "trick": 9,
+          "role": "friend",
+          "actor": "sha256:f61687b6c4f98eab10b87c55d94b655b017bfcefe006b26768cb9d632b37dbb3",
+          "chosen": {
+            "type": "play",
+            "card": "H8"
+          },
+          "nominee": {
+            "type": "play",
+            "card": "H8"
+          },
+          "loss": 0,
+          "confirmed": false,
+          "gap": {
+            "n": 20,
+            "mean": 0,
+            "se": 0,
+            "ci95": [
+              0,
+              0
+            ]
+          },
+          "sampler": {
+            "selection": {
+              "attempts": 12,
+              "accepted": 12,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 12
+            },
+            "confirmation": {
+              "attempts": 20,
+              "accepted": 20,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 20
+            }
+          },
+          "continuation": "heuristic/engine.policyPlay/protect-partner-v3"
+        },
+        {
+          "seed": 3050076,
+          "trick": 5,
+          "role": "friend",
+          "actor": "sha256:f61687b6c4f98eab10b87c55d94b655b017bfcefe006b26768cb9d632b37dbb3",
+          "chosen": {
+            "type": "play",
+            "card": "DQ"
+          },
+          "nominee": {
+            "type": "play",
+            "card": "S2"
+          },
+          "loss": 0.0011718749999999993,
+          "confirmed": false,
+          "gap": {
+            "n": 20,
+            "mean": 0.0012499999999999998,
+            "se": 0.001358377394076051,
+            "ci95": [
+              -0.001646060604170141,
+              0.004146060604170141
+            ]
+          },
+          "sampler": {
+            "selection": {
+              "attempts": 12,
+              "accepted": 12,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 12
+            },
+            "confirmation": {
+              "attempts": 20,
+              "accepted": 20,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 20
+            }
+          },
+          "continuation": "heuristic/engine.policyPlay/protect-partner-v3"
+        },
+        {
+          "seed": 3050077,
+          "trick": 6,
+          "role": "declarer",
+          "actor": "sha256:f61687b6c4f98eab10b87c55d94b655b017bfcefe006b26768cb9d632b37dbb3",
+          "chosen": {
+            "type": "play",
+            "card": "S8"
+          },
+          "nominee": {
+            "type": "play",
+            "card": "H8"
+          },
+          "loss": 0.0018229166666666706,
+          "confirmed": false,
+          "gap": {
+            "n": 20,
+            "mean": -0.0009374999999999997,
+            "se": 0.003190916641524485,
+            "ci95": [
+              -0.007740534279730202,
+              0.005865534279730202
+            ]
+          },
+          "sampler": {
+            "selection": {
+              "attempts": 12,
+              "accepted": 12,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 12
+            },
+            "confirmation": {
+              "attempts": 20,
+              "accepted": 20,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 20
+            }
+          },
+          "continuation": "heuristic/engine.policyPlay/protect-partner-v3"
+        },
+        {
+          "seed": 3050078,
+          "trick": 7,
+          "role": "friend",
+          "actor": "sha256:f61687b6c4f98eab10b87c55d94b655b017bfcefe006b26768cb9d632b37dbb3",
+          "chosen": {
+            "type": "play",
+            "card": "DK"
+          },
+          "nominee": {
+            "type": "play",
+            "card": "DK"
+          },
+          "loss": 0,
+          "confirmed": false,
+          "gap": {
+            "n": 20,
+            "mean": 0,
+            "se": 0,
+            "ci95": [
+              0,
+              0
+            ]
+          },
+          "sampler": {
+            "selection": {
+              "attempts": 12,
+              "accepted": 12,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 12
+            },
+            "confirmation": {
+              "attempts": 20,
+              "accepted": 20,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 20
+            }
+          },
+          "continuation": "heuristic/engine.policyPlay/protect-partner-v3"
+        },
+        {
+          "seed": 3050079,
+          "trick": 8,
+          "role": "declarer",
+          "actor": "sha256:f61687b6c4f98eab10b87c55d94b655b017bfcefe006b26768cb9d632b37dbb3",
+          "chosen": {
+            "type": "play",
+            "card": "HA"
+          },
+          "nominee": {
+            "type": "play",
+            "card": "HA"
+          },
+          "loss": 0,
+          "confirmed": false,
+          "gap": {
+            "n": 20,
+            "mean": 0,
+            "se": 0,
+            "ci95": [
+              0,
+              0
+            ]
+          },
+          "sampler": {
+            "selection": {
+              "attempts": 12,
+              "accepted": 12,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 12
+            },
+            "confirmation": {
+              "attempts": 20,
+              "accepted": 20,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 20
+            }
+          },
+          "continuation": "heuristic/engine.policyPlay/protect-partner-v3"
+        },
+        {
+          "seed": 3050080,
+          "trick": 9,
+          "role": "opposition",
+          "actor": "sha256:f61687b6c4f98eab10b87c55d94b655b017bfcefe006b26768cb9d632b37dbb3",
+          "chosen": {
+            "type": "play",
+            "card": "C7"
+          },
+          "nominee": {
+            "type": "play",
+            "card": "C7"
+          },
+          "loss": 0,
+          "confirmed": false,
+          "gap": {
+            "n": 20,
+            "mean": 0,
+            "se": 0,
+            "ci95": [
+              0,
+              0
+            ]
+          },
+          "sampler": {
+            "selection": {
+              "attempts": 12,
+              "accepted": 12,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 12
+            },
+            "confirmation": {
+              "attempts": 20,
+              "accepted": 20,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 20
+            }
+          },
+          "continuation": "heuristic/engine.policyPlay/protect-partner-v3"
+        },
+        {
+          "seed": 3050081,
+          "trick": 5,
+          "role": "opposition",
+          "actor": "sha256:f61687b6c4f98eab10b87c55d94b655b017bfcefe006b26768cb9d632b37dbb3",
+          "chosen": {
+            "type": "play",
+            "card": "SK"
+          },
+          "nominee": {
+            "type": "play",
+            "card": "C7"
+          },
+          "loss": 0.0015624999999999997,
+          "confirmed": false,
+          "gap": {
+            "n": 20,
+            "mean": 0.0009374999999999997,
+            "se": 0.0013762329997993954,
+            "ci95": [
+              -0.0019966287555723116,
+              0.0038716287555723107
+            ]
+          },
+          "sampler": {
+            "selection": {
+              "attempts": 12,
+              "accepted": 12,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 12
+            },
+            "confirmation": {
+              "attempts": 20,
+              "accepted": 20,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 20
+            }
+          },
+          "continuation": "heuristic/engine.policyPlay/protect-partner-v3"
+        },
+        {
+          "seed": 3050082,
+          "trick": 6,
+          "role": "opposition",
+          "actor": "sha256:f61687b6c4f98eab10b87c55d94b655b017bfcefe006b26768cb9d632b37dbb3",
+          "chosen": {
+            "type": "play",
+            "card": "CK"
+          },
+          "nominee": {
+            "type": "play",
+            "card": "H6"
+          },
+          "loss": 0.0019531249999999965,
+          "confirmed": false,
+          "gap": {
+            "n": 20,
+            "mean": 0.001015625000000001,
+            "se": 0.002834514989579578,
+            "ci95": [
+              -0.005027560957783659,
+              0.007058810957783661
+            ]
+          },
+          "sampler": {
+            "selection": {
+              "attempts": 13,
+              "accepted": 12,
+              "assignmentRejected": 0,
+              "replayRejected": 1,
+              "exhausted": 0,
+              "proposalRejectionRate": 0.07692307692307687,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 12
+            },
+            "confirmation": {
+              "attempts": 22,
+              "accepted": 20,
+              "assignmentRejected": 0,
+              "replayRejected": 2,
+              "exhausted": 0,
+              "proposalRejectionRate": 0.09090909090909094,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 20
+            }
+          },
+          "continuation": "heuristic/engine.policyPlay/protect-partner-v3"
+        },
+        {
+          "seed": 3050083,
+          "trick": 7,
+          "role": "opposition",
+          "actor": "sha256:f61687b6c4f98eab10b87c55d94b655b017bfcefe006b26768cb9d632b37dbb3",
+          "chosen": {
+            "type": "play",
+            "card": "H9"
+          },
+          "nominee": {
+            "type": "play",
+            "card": "S9"
+          },
+          "loss": 0.0016927083333333343,
+          "confirmed": false,
+          "gap": {
+            "n": 20,
+            "mean": -0.0003906249999999998,
+            "se": 0.0010194134806703159,
+            "ci95": [
+              -0.0025640145407891135,
+              0.0017827645407891136
+            ]
+          },
+          "sampler": {
+            "selection": {
+              "attempts": 12,
+              "accepted": 12,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 12
+            },
+            "confirmation": {
+              "attempts": 20,
+              "accepted": 20,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 20
+            }
+          },
+          "continuation": "heuristic/engine.policyPlay/protect-partner-v3"
+        },
+        {
+          "seed": 3050084,
+          "trick": 8,
+          "role": "declarer",
+          "actor": "sha256:f61687b6c4f98eab10b87c55d94b655b017bfcefe006b26768cb9d632b37dbb3",
+          "chosen": {
+            "type": "play",
+            "card": "S6"
+          },
+          "nominee": {
+            "type": "play",
+            "card": "S7"
+          },
+          "loss": 0,
+          "confirmed": false,
+          "gap": {
+            "n": 20,
+            "mean": 0,
+            "se": 0,
+            "ci95": [
+              0,
+              0
+            ]
+          },
+          "sampler": {
+            "selection": {
+              "attempts": 12,
+              "accepted": 12,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 12
+            },
+            "confirmation": {
+              "attempts": 20,
+              "accepted": 20,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 20
+            }
+          },
+          "continuation": "heuristic/engine.policyPlay/protect-partner-v3"
+        },
+        {
+          "seed": 3050085,
+          "trick": 9,
+          "role": "friend",
+          "actor": "sha256:f61687b6c4f98eab10b87c55d94b655b017bfcefe006b26768cb9d632b37dbb3",
+          "chosen": {
+            "type": "play",
+            "card": "C6"
+          },
+          "nominee": {
+            "type": "play",
+            "card": "S9"
+          },
+          "loss": 0.0007812500000000003,
+          "confirmed": false,
+          "gap": {
+            "n": 20,
+            "mean": 0.0004687499999999999,
+            "se": 0.000394308292590028,
+            "ci95": [
+              -0.00037191527980193987,
+              0.0013094152798019396
+            ]
+          },
+          "sampler": {
+            "selection": {
+              "attempts": 12,
+              "accepted": 12,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 12
+            },
+            "confirmation": {
+              "attempts": 20,
+              "accepted": 20,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 20
+            }
+          },
+          "continuation": "heuristic/engine.policyPlay/protect-partner-v3"
+        },
+        {
+          "seed": 3050086,
+          "trick": 5,
+          "role": "opposition",
+          "actor": "sha256:f61687b6c4f98eab10b87c55d94b655b017bfcefe006b26768cb9d632b37dbb3",
+          "chosen": {
+            "type": "play",
+            "card": "C9"
+          },
+          "nominee": {
+            "type": "play",
+            "card": "D3"
+          },
+          "loss": 0.000781249999999999,
+          "confirmed": false,
+          "gap": {
+            "n": 20,
+            "mean": -0.0017187500000000004,
+            "se": 0.0012617661689598352,
+            "ci95": [
+              -0.0044088354722223696,
+              0.0009713354722223685
+            ]
+          },
+          "sampler": {
+            "selection": {
+              "attempts": 12,
+              "accepted": 12,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 12
+            },
+            "confirmation": {
+              "attempts": 20,
+              "accepted": 20,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 20
+            }
+          },
+          "continuation": "heuristic/engine.policyPlay/protect-partner-v3"
+        },
+        {
+          "seed": 3050087,
+          "trick": 6,
+          "role": "declarer",
+          "actor": "sha256:f61687b6c4f98eab10b87c55d94b655b017bfcefe006b26768cb9d632b37dbb3",
+          "chosen": {
+            "type": "play",
+            "card": "C4"
+          },
+          "nominee": {
+            "type": "play",
+            "card": "CA"
+          },
+          "loss": 0,
+          "confirmed": false,
+          "gap": {
+            "n": 20,
+            "mean": 0,
+            "se": 0,
+            "ci95": [
+              0,
+              0
+            ]
+          },
+          "sampler": {
+            "selection": {
+              "attempts": 16,
+              "accepted": 12,
+              "assignmentRejected": 0,
+              "replayRejected": 4,
+              "exhausted": 0,
+              "proposalRejectionRate": 0.25,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 12
+            },
+            "confirmation": {
+              "attempts": 25,
+              "accepted": 20,
+              "assignmentRejected": 0,
+              "replayRejected": 5,
+              "exhausted": 0,
+              "proposalRejectionRate": 0.19999999999999996,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 20
+            }
+          },
+          "continuation": "heuristic/engine.policyPlay/protect-partner-v3"
+        },
+        {
+          "seed": 3050088,
+          "trick": 7,
+          "role": "declarer",
+          "actor": "sha256:f61687b6c4f98eab10b87c55d94b655b017bfcefe006b26768cb9d632b37dbb3",
+          "chosen": {
+            "type": "play",
+            "card": "S10"
+          },
+          "nominee": {
+            "type": "play",
+            "card": "S10"
+          },
+          "loss": 0,
+          "confirmed": false,
+          "gap": {
+            "n": 20,
+            "mean": 0,
+            "se": 0,
+            "ci95": [
+              0,
+              0
+            ]
+          },
+          "sampler": {
+            "selection": {
+              "attempts": 12,
+              "accepted": 12,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 12
+            },
+            "confirmation": {
+              "attempts": 20,
+              "accepted": 20,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 20
+            }
+          },
+          "continuation": "heuristic/engine.policyPlay/protect-partner-v3"
+        },
+        {
+          "seed": 3050089,
+          "trick": 8,
+          "role": "opposition",
+          "actor": "sha256:f61687b6c4f98eab10b87c55d94b655b017bfcefe006b26768cb9d632b37dbb3",
+          "chosen": {
+            "type": "play",
+            "card": "H4"
+          },
+          "nominee": {
+            "type": "play",
+            "card": "H4"
+          },
+          "loss": 0,
+          "confirmed": false,
+          "gap": {
+            "n": 20,
+            "mean": 0,
+            "se": 0,
+            "ci95": [
+              0,
+              0
+            ]
+          },
+          "sampler": {
+            "selection": {
+              "attempts": 12,
+              "accepted": 12,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 12
+            },
+            "confirmation": {
+              "attempts": 21,
+              "accepted": 20,
+              "assignmentRejected": 0,
+              "replayRejected": 1,
+              "exhausted": 0,
+              "proposalRejectionRate": 0.04761904761904767,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 20
+            }
+          },
+          "continuation": "heuristic/engine.policyPlay/protect-partner-v3"
+        },
+        {
+          "seed": 3050090,
+          "trick": 9,
+          "role": "declarer",
+          "actor": "sha256:f61687b6c4f98eab10b87c55d94b655b017bfcefe006b26768cb9d632b37dbb3",
+          "chosen": {
+            "type": "play",
+            "card": "H6"
+          },
+          "nominee": {
+            "type": "play",
+            "card": "H8"
+          },
+          "loss": 0,
+          "confirmed": false,
+          "gap": {
+            "n": 20,
+            "mean": 0,
+            "se": 0,
+            "ci95": [
+              0,
+              0
+            ]
+          },
+          "sampler": {
+            "selection": {
+              "attempts": 15,
+              "accepted": 12,
+              "assignmentRejected": 0,
+              "replayRejected": 3,
+              "exhausted": 0,
+              "proposalRejectionRate": 0.19999999999999996,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 12
+            },
+            "confirmation": {
+              "attempts": 29,
+              "accepted": 20,
+              "assignmentRejected": 0,
+              "replayRejected": 9,
+              "exhausted": 0,
+              "proposalRejectionRate": 0.31034482758620685,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 20
+            }
+          },
+          "continuation": "heuristic/engine.policyPlay/protect-partner-v3"
+        },
+        {
+          "seed": 3050091,
+          "trick": 5,
+          "role": "declarer",
+          "actor": "sha256:f61687b6c4f98eab10b87c55d94b655b017bfcefe006b26768cb9d632b37dbb3",
+          "chosen": {
+            "type": "play",
+            "card": "S2"
+          },
+          "nominee": {
+            "type": "play",
+            "card": "C7"
+          },
+          "loss": 0.011718749999999997,
+          "confirmed": true,
+          "gap": {
+            "n": 20,
+            "mean": 0.009218750000000001,
+            "se": 0.0038838171652417317,
+            "ci95": [
+              0.0009384518037046288,
+              0.017499048196295372
+            ]
+          },
+          "sampler": {
+            "selection": {
+              "attempts": 12,
+              "accepted": 12,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 12
+            },
+            "confirmation": {
+              "attempts": 20,
+              "accepted": 20,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 20
+            }
+          },
+          "continuation": "heuristic/engine.policyPlay/protect-partner-v3"
+        },
+        {
+          "seed": 3050092,
+          "trick": 6,
+          "role": "friend",
+          "actor": "sha256:f61687b6c4f98eab10b87c55d94b655b017bfcefe006b26768cb9d632b37dbb3",
+          "chosen": {
+            "type": "play",
+            "card": "S9"
+          },
+          "nominee": {
+            "type": "play",
+            "card": "H6"
+          },
+          "loss": 0.0031249999999999976,
+          "confirmed": false,
+          "gap": {
+            "n": 20,
+            "mean": 0.0003125,
+            "se": 0.000904006979188243,
+            "ci95": [
+              -0.0016148428796293342,
+              0.0022398428796293344
+            ]
+          },
+          "sampler": {
+            "selection": {
+              "attempts": 12,
+              "accepted": 12,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 12
+            },
+            "confirmation": {
+              "attempts": 20,
+              "accepted": 20,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 20
+            }
+          },
+          "continuation": "heuristic/engine.policyPlay/protect-partner-v3"
+        },
+        {
+          "seed": 3050093,
+          "trick": 7,
+          "role": "opposition",
+          "actor": "sha256:f61687b6c4f98eab10b87c55d94b655b017bfcefe006b26768cb9d632b37dbb3",
+          "chosen": {
+            "type": "play",
+            "card": "C8"
+          },
+          "nominee": {
+            "type": "play",
+            "card": "D6"
+          },
+          "loss": 0.0002604166666666666,
+          "confirmed": false,
+          "gap": {
+            "n": 20,
+            "mean": -0.000703125,
+            "se": 0.0006751564603024679,
+            "ci95": [
+              -0.002142558573364862,
+              0.0007363085733648616
+            ]
+          },
+          "sampler": {
+            "selection": {
+              "attempts": 12,
+              "accepted": 12,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 12
+            },
+            "confirmation": {
+              "attempts": 20,
+              "accepted": 20,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 20
+            }
+          },
+          "continuation": "heuristic/engine.policyPlay/protect-partner-v3"
+        },
+        {
+          "seed": 3050094,
+          "trick": 8,
+          "role": "declarer",
+          "actor": "sha256:f61687b6c4f98eab10b87c55d94b655b017bfcefe006b26768cb9d632b37dbb3",
+          "chosen": {
+            "type": "play",
+            "card": "S3"
+          },
+          "nominee": {
+            "type": "play",
+            "card": "S9"
+          },
+          "loss": 0,
+          "confirmed": false,
+          "gap": {
+            "n": 20,
+            "mean": 0,
+            "se": 0,
+            "ci95": [
+              0,
+              0
+            ]
+          },
+          "sampler": {
+            "selection": {
+              "attempts": 12,
+              "accepted": 12,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 12
+            },
+            "confirmation": {
+              "attempts": 20,
+              "accepted": 20,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 20
+            }
+          },
+          "continuation": "heuristic/engine.policyPlay/protect-partner-v3"
+        }
+      ]
+    },
+    "balanced": {
+      "positions": 24,
+      "scored": 24,
+      "meanEstimatedActionLoss": 0.027116970486111103,
+      "abstentionFraction": 0.9166666666666666,
+      "rows": [
+        {
+          "seed": 3050071,
+          "trick": 5,
+          "role": "opposition",
+          "actor": "sha256:c13471b7362afb5671b2a4ca8c9d1fa1ced485e4cb43565eb33057b8acc8676a",
+          "chosen": {
+            "type": "play",
+            "card": "S3"
+          },
+          "nominee": {
+            "type": "play",
+            "card": "S9"
+          },
+          "loss": 0,
+          "confirmed": false,
+          "gap": {
+            "n": 20,
+            "mean": -0.00018750000000000155,
+            "se": 0.0001096683097248025,
+            "ci95": [
+              -0.0004213128363332805,
+              0.000046312836333277385
+            ]
+          },
+          "sampler": {
+            "selection": {
+              "attempts": 12,
+              "accepted": 12,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 12
+            },
+            "confirmation": {
+              "attempts": 20,
+              "accepted": 20,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 20
+            }
+          },
+          "continuation": "heuristic/engine.policyPlay/protect-partner-v3"
+        },
+        {
+          "seed": 3050072,
+          "trick": 6,
+          "role": "declarer",
+          "actor": "sha256:c13471b7362afb5671b2a4ca8c9d1fa1ced485e4cb43565eb33057b8acc8676a",
+          "chosen": {
+            "type": "play",
+            "card": "C7"
+          },
+          "nominee": {
+            "type": "play",
+            "card": "HA"
+          },
+          "loss": 0.0001562499999998579,
+          "confirmed": false,
+          "gap": {
+            "n": 20,
+            "mean": 0.035375000000000004,
+            "se": 0.03527663671414612,
+            "ci95": [
+              -0.039834789474559526,
+              0.11058478947455953
+            ]
+          },
+          "sampler": {
+            "selection": {
+              "attempts": 12,
+              "accepted": 12,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 12
+            },
+            "confirmation": {
+              "attempts": 20,
+              "accepted": 20,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 20
+            }
+          },
+          "continuation": "heuristic/engine.policyPlay/protect-partner-v3"
+        },
+        {
+          "seed": 3050073,
+          "trick": 7,
+          "role": "friend",
+          "actor": "sha256:c13471b7362afb5671b2a4ca8c9d1fa1ced485e4cb43565eb33057b8acc8676a",
+          "chosen": {
+            "type": "play",
+            "card": "H7"
+          },
+          "nominee": {
+            "type": "play",
+            "card": "H7"
+          },
+          "loss": 0,
+          "confirmed": false,
+          "gap": {
+            "n": 20,
+            "mean": 0,
+            "se": 0,
+            "ci95": [
+              0,
+              0
+            ]
+          },
+          "sampler": {
+            "selection": {
+              "attempts": 12,
+              "accepted": 12,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 12
+            },
+            "confirmation": {
+              "attempts": 21,
+              "accepted": 20,
+              "assignmentRejected": 0,
+              "replayRejected": 1,
+              "exhausted": 0,
+              "proposalRejectionRate": 0.04761904761904767,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 20
+            }
+          },
+          "continuation": "heuristic/engine.policyPlay/protect-partner-v3"
+        },
+        {
+          "seed": 3050074,
+          "trick": 8,
+          "role": "declarer",
+          "actor": "sha256:c13471b7362afb5671b2a4ca8c9d1fa1ced485e4cb43565eb33057b8acc8676a",
+          "chosen": {
+            "type": "play",
+            "card": "C3"
+          },
+          "nominee": {
+            "type": "play",
+            "card": "C3"
+          },
+          "loss": 0,
+          "confirmed": false,
+          "gap": {
+            "n": 20,
+            "mean": 0,
+            "se": 0,
+            "ci95": [
+              0,
+              0
+            ]
+          },
+          "sampler": {
+            "selection": {
+              "attempts": 12,
+              "accepted": 12,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 12
+            },
+            "confirmation": {
+              "attempts": 20,
+              "accepted": 20,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 20
+            }
+          },
+          "continuation": "heuristic/engine.policyPlay/protect-partner-v3"
+        },
+        {
+          "seed": 3050075,
+          "trick": 9,
+          "role": "friend",
+          "actor": "sha256:c13471b7362afb5671b2a4ca8c9d1fa1ced485e4cb43565eb33057b8acc8676a",
+          "chosen": {
+            "type": "play",
+            "card": "H6"
+          },
+          "nominee": {
+            "type": "play",
+            "card": "H8"
+          },
+          "loss": 0.00035156250000000053,
+          "confirmed": false,
+          "gap": {
+            "n": 20,
+            "mean": 0,
+            "se": 0.00011278746168416905,
+            "ci95": [
+              -0.00024046286831064842,
+              0.00024046286831064842
+            ]
+          },
+          "sampler": {
+            "selection": {
+              "attempts": 12,
+              "accepted": 12,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 12
+            },
+            "confirmation": {
+              "attempts": 20,
+              "accepted": 20,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 20
+            }
+          },
+          "continuation": "heuristic/engine.policyPlay/protect-partner-v3"
+        },
+        {
+          "seed": 3050076,
+          "trick": 5,
+          "role": "friend",
+          "actor": "sha256:c13471b7362afb5671b2a4ca8c9d1fa1ced485e4cb43565eb33057b8acc8676a",
+          "chosen": {
+            "type": "play",
+            "card": "DQ"
+          },
+          "nominee": {
+            "type": "play",
+            "card": "S2"
+          },
+          "loss": 0.05868489583333332,
+          "confirmed": false,
+          "gap": {
+            "n": 20,
+            "mean": 0.035375000000000004,
+            "se": 0.035179543452826985,
+            "ci95": [
+              -0.03962778664142713,
+              0.11037778664142714
+            ]
+          },
+          "sampler": {
+            "selection": {
+              "attempts": 12,
+              "accepted": 12,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 12
+            },
+            "confirmation": {
+              "attempts": 20,
+              "accepted": 20,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 20
+            }
+          },
+          "continuation": "heuristic/engine.policyPlay/protect-partner-v3"
+        },
+        {
+          "seed": 3050077,
+          "trick": 6,
+          "role": "declarer",
+          "actor": "sha256:c13471b7362afb5671b2a4ca8c9d1fa1ced485e4cb43565eb33057b8acc8676a",
+          "chosen": {
+            "type": "play",
+            "card": "C2"
+          },
+          "nominee": {
+            "type": "play",
+            "card": "S8"
+          },
+          "loss": 0.06138020833333324,
+          "confirmed": false,
+          "gap": {
+            "n": 20,
+            "mean": 0.03560937500000001,
+            "se": 0.035220109946365104,
+            "ci95": [
+              -0.03947989940565039,
+              0.11069864940565041
+            ]
+          },
+          "sampler": {
+            "selection": {
+              "attempts": 12,
+              "accepted": 12,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 12
+            },
+            "confirmation": {
+              "attempts": 20,
+              "accepted": 20,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 20
+            }
+          },
+          "continuation": "heuristic/engine.policyPlay/protect-partner-v3"
+        },
+        {
+          "seed": 3050078,
+          "trick": 7,
+          "role": "friend",
+          "actor": "sha256:c13471b7362afb5671b2a4ca8c9d1fa1ced485e4cb43565eb33057b8acc8676a",
+          "chosen": {
+            "type": "play",
+            "card": "DK"
+          },
+          "nominee": {
+            "type": "play",
+            "card": "DK"
+          },
+          "loss": 0,
+          "confirmed": false,
+          "gap": {
+            "n": 20,
+            "mean": 0,
+            "se": 0,
+            "ci95": [
+              0,
+              0
+            ]
+          },
+          "sampler": {
+            "selection": {
+              "attempts": 12,
+              "accepted": 12,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 12
+            },
+            "confirmation": {
+              "attempts": 20,
+              "accepted": 20,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 20
+            }
+          },
+          "continuation": "heuristic/engine.policyPlay/protect-partner-v3"
+        },
+        {
+          "seed": 3050079,
+          "trick": 8,
+          "role": "declarer",
+          "actor": "sha256:c13471b7362afb5671b2a4ca8c9d1fa1ced485e4cb43565eb33057b8acc8676a",
+          "chosen": {
+            "type": "play",
+            "card": "HA"
+          },
+          "nominee": {
+            "type": "play",
+            "card": "HA"
+          },
+          "loss": 0,
+          "confirmed": false,
+          "gap": {
+            "n": 20,
+            "mean": 0,
+            "se": 0,
+            "ci95": [
+              0,
+              0
+            ]
+          },
+          "sampler": {
+            "selection": {
+              "attempts": 12,
+              "accepted": 12,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 12
+            },
+            "confirmation": {
+              "attempts": 20,
+              "accepted": 20,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 20
+            }
+          },
+          "continuation": "heuristic/engine.policyPlay/protect-partner-v3"
+        },
+        {
+          "seed": 3050080,
+          "trick": 9,
+          "role": "opposition",
+          "actor": "sha256:c13471b7362afb5671b2a4ca8c9d1fa1ced485e4cb43565eb33057b8acc8676a",
+          "chosen": {
+            "type": "play",
+            "card": "D8"
+          },
+          "nominee": {
+            "type": "play",
+            "card": "C7"
+          },
+          "loss": 0.05848958333333337,
+          "confirmed": false,
+          "gap": {
+            "n": 20,
+            "mean": -0.0350234375,
+            "se": 0.06181548701585385,
+            "ci95": [
+              -0.16681405581780043,
+              0.09676718081780042
+            ]
+          },
+          "sampler": {
+            "selection": {
+              "attempts": 12,
+              "accepted": 12,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 12
+            },
+            "confirmation": {
+              "attempts": 20,
+              "accepted": 20,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 20
+            }
+          },
+          "continuation": "heuristic/engine.policyPlay/protect-partner-v3"
+        },
+        {
+          "seed": 3050081,
+          "trick": 5,
+          "role": "opposition",
+          "actor": "sha256:c13471b7362afb5671b2a4ca8c9d1fa1ced485e4cb43565eb33057b8acc8676a",
+          "chosen": {
+            "type": "play",
+            "card": "SK"
+          },
+          "nominee": {
+            "type": "play",
+            "card": "C7"
+          },
+          "loss": 0.0004687499999997957,
+          "confirmed": false,
+          "gap": {
+            "n": 20,
+            "mean": 0.00028125000000000513,
+            "se": 0.0004128698999398204,
+            "ci95": [
+              -0.000598988626671692,
+              0.0011614886266717024
+            ]
+          },
+          "sampler": {
+            "selection": {
+              "attempts": 12,
+              "accepted": 12,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 12
+            },
+            "confirmation": {
+              "attempts": 20,
+              "accepted": 20,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 20
+            }
+          },
+          "continuation": "heuristic/engine.policyPlay/protect-partner-v3"
+        },
+        {
+          "seed": 3050082,
+          "trick": 6,
+          "role": "opposition",
+          "actor": "sha256:c13471b7362afb5671b2a4ca8c9d1fa1ced485e4cb43565eb33057b8acc8676a",
+          "chosen": {
+            "type": "play",
+            "card": "CK"
+          },
+          "nominee": {
+            "type": "play",
+            "card": "H6"
+          },
+          "loss": 0.05891927083333337,
+          "confirmed": true,
+          "gap": {
+            "n": 20,
+            "mean": 0.14030468749999997,
+            "se": 0.06466270846421643,
+            "ci95": [
+              0.002443793054290544,
+              0.2781655819457094
+            ]
+          },
+          "sampler": {
+            "selection": {
+              "attempts": 13,
+              "accepted": 12,
+              "assignmentRejected": 0,
+              "replayRejected": 1,
+              "exhausted": 0,
+              "proposalRejectionRate": 0.07692307692307687,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 12
+            },
+            "confirmation": {
+              "attempts": 22,
+              "accepted": 20,
+              "assignmentRejected": 0,
+              "replayRejected": 2,
+              "exhausted": 0,
+              "proposalRejectionRate": 0.09090909090909094,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 20
+            }
+          },
+          "continuation": "heuristic/engine.policyPlay/protect-partner-v3"
+        },
+        {
+          "seed": 3050083,
+          "trick": 7,
+          "role": "opposition",
+          "actor": "sha256:c13471b7362afb5671b2a4ca8c9d1fa1ced485e4cb43565eb33057b8acc8676a",
+          "chosen": {
+            "type": "play",
+            "card": "H9"
+          },
+          "nominee": {
+            "type": "play",
+            "card": "S9"
+          },
+          "loss": 0.0005078125000000933,
+          "confirmed": false,
+          "gap": {
+            "n": 20,
+            "mean": -0.00011718750000000444,
+            "se": 0.0003058240442010916,
+            "ci95": [
+              -0.0007692043622367317,
+              0.0005348293622367228
+            ]
+          },
+          "sampler": {
+            "selection": {
+              "attempts": 12,
+              "accepted": 12,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 12
+            },
+            "confirmation": {
+              "attempts": 20,
+              "accepted": 20,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 20
+            }
+          },
+          "continuation": "heuristic/engine.policyPlay/protect-partner-v3"
+        },
+        {
+          "seed": 3050084,
+          "trick": 8,
+          "role": "declarer",
+          "actor": "sha256:c13471b7362afb5671b2a4ca8c9d1fa1ced485e4cb43565eb33057b8acc8676a",
+          "chosen": {
+            "type": "play",
+            "card": "S6"
+          },
+          "nominee": {
+            "type": "play",
+            "card": "S7"
+          },
+          "loss": 0,
+          "confirmed": false,
+          "gap": {
+            "n": 20,
+            "mean": 0,
+            "se": 0,
+            "ci95": [
+              0,
+              0
+            ]
+          },
+          "sampler": {
+            "selection": {
+              "attempts": 12,
+              "accepted": 12,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 12
+            },
+            "confirmation": {
+              "attempts": 20,
+              "accepted": 20,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 20
+            }
+          },
+          "continuation": "heuristic/engine.policyPlay/protect-partner-v3"
+        },
+        {
+          "seed": 3050085,
+          "trick": 9,
+          "role": "friend",
+          "actor": "sha256:c13471b7362afb5671b2a4ca8c9d1fa1ced485e4cb43565eb33057b8acc8676a",
+          "chosen": {
+            "type": "play",
+            "card": "C6"
+          },
+          "nominee": {
+            "type": "play",
+            "card": "S9"
+          },
+          "loss": 0.0002343750000000001,
+          "confirmed": false,
+          "gap": {
+            "n": 20,
+            "mean": 0.000140625,
+            "se": 0.00011829248777700843,
+            "ci95": [
+              -0.00011157458394058198,
+              0.00039282458394058193
+            ]
+          },
+          "sampler": {
+            "selection": {
+              "attempts": 12,
+              "accepted": 12,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 12
+            },
+            "confirmation": {
+              "attempts": 20,
+              "accepted": 20,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 20
+            }
+          },
+          "continuation": "heuristic/engine.policyPlay/protect-partner-v3"
+        },
+        {
+          "seed": 3050086,
+          "trick": 5,
+          "role": "opposition",
+          "actor": "sha256:c13471b7362afb5671b2a4ca8c9d1fa1ced485e4cb43565eb33057b8acc8676a",
+          "chosen": {
+            "type": "play",
+            "card": "C9"
+          },
+          "nominee": {
+            "type": "play",
+            "card": "C9"
+          },
+          "loss": 0,
+          "confirmed": false,
+          "gap": {
+            "n": 20,
+            "mean": 0,
+            "se": 0,
+            "ci95": [
+              0,
+              0
+            ]
+          },
+          "sampler": {
+            "selection": {
+              "attempts": 12,
+              "accepted": 12,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 12
+            },
+            "confirmation": {
+              "attempts": 20,
+              "accepted": 20,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 20
+            }
+          },
+          "continuation": "heuristic/engine.policyPlay/protect-partner-v3"
+        },
+        {
+          "seed": 3050087,
+          "trick": 6,
+          "role": "declarer",
+          "actor": "sha256:c13471b7362afb5671b2a4ca8c9d1fa1ced485e4cb43565eb33057b8acc8676a",
+          "chosen": {
+            "type": "play",
+            "card": "C4"
+          },
+          "nominee": {
+            "type": "play",
+            "card": "CA"
+          },
+          "loss": 0,
+          "confirmed": false,
+          "gap": {
+            "n": 20,
+            "mean": 0,
+            "se": 0,
+            "ci95": [
+              0,
+              0
+            ]
+          },
+          "sampler": {
+            "selection": {
+              "attempts": 16,
+              "accepted": 12,
+              "assignmentRejected": 0,
+              "replayRejected": 4,
+              "exhausted": 0,
+              "proposalRejectionRate": 0.25,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 12
+            },
+            "confirmation": {
+              "attempts": 25,
+              "accepted": 20,
+              "assignmentRejected": 0,
+              "replayRejected": 5,
+              "exhausted": 0,
+              "proposalRejectionRate": 0.19999999999999996,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 20
+            }
+          },
+          "continuation": "heuristic/engine.policyPlay/protect-partner-v3"
+        },
+        {
+          "seed": 3050088,
+          "trick": 7,
+          "role": "declarer",
+          "actor": "sha256:c13471b7362afb5671b2a4ca8c9d1fa1ced485e4cb43565eb33057b8acc8676a",
+          "chosen": {
+            "type": "play",
+            "card": "S10"
+          },
+          "nominee": {
+            "type": "play",
+            "card": "S10"
+          },
+          "loss": 0,
+          "confirmed": false,
+          "gap": {
+            "n": 20,
+            "mean": 0,
+            "se": 0,
+            "ci95": [
+              0,
+              0
+            ]
+          },
+          "sampler": {
+            "selection": {
+              "attempts": 12,
+              "accepted": 12,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 12
+            },
+            "confirmation": {
+              "attempts": 20,
+              "accepted": 20,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 20
+            }
+          },
+          "continuation": "heuristic/engine.policyPlay/protect-partner-v3"
+        },
+        {
+          "seed": 3050089,
+          "trick": 8,
+          "role": "opposition",
+          "actor": "sha256:c13471b7362afb5671b2a4ca8c9d1fa1ced485e4cb43565eb33057b8acc8676a",
+          "chosen": {
+            "type": "play",
+            "card": "D6"
+          },
+          "nominee": {
+            "type": "play",
+            "card": "H4"
+          },
+          "loss": 0.00023437500000000888,
+          "confirmed": true,
+          "gap": {
+            "n": 20,
+            "mean": 0.0003750000000000031,
+            "se": 0.00008047453830740072,
+            "ci95": [
+              0.00020342828432862476,
+              0.0005465717156713815
+            ]
+          },
+          "sampler": {
+            "selection": {
+              "attempts": 12,
+              "accepted": 12,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 12
+            },
+            "confirmation": {
+              "attempts": 21,
+              "accepted": 20,
+              "assignmentRejected": 0,
+              "replayRejected": 1,
+              "exhausted": 0,
+              "proposalRejectionRate": 0.04761904761904767,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 20
+            }
+          },
+          "continuation": "heuristic/engine.policyPlay/protect-partner-v3"
+        },
+        {
+          "seed": 3050090,
+          "trick": 9,
+          "role": "declarer",
+          "actor": "sha256:c13471b7362afb5671b2a4ca8c9d1fa1ced485e4cb43565eb33057b8acc8676a",
+          "chosen": {
+            "type": "play",
+            "card": "H6"
+          },
+          "nominee": {
+            "type": "play",
+            "card": "H8"
+          },
+          "loss": 0,
+          "confirmed": false,
+          "gap": {
+            "n": 20,
+            "mean": 0,
+            "se": 0,
+            "ci95": [
+              0,
+              0
+            ]
+          },
+          "sampler": {
+            "selection": {
+              "attempts": 15,
+              "accepted": 12,
+              "assignmentRejected": 0,
+              "replayRejected": 3,
+              "exhausted": 0,
+              "proposalRejectionRate": 0.19999999999999996,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 12
+            },
+            "confirmation": {
+              "attempts": 29,
+              "accepted": 20,
+              "assignmentRejected": 0,
+              "replayRejected": 9,
+              "exhausted": 0,
+              "proposalRejectionRate": 0.31034482758620685,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 20
+            }
+          },
+          "continuation": "heuristic/engine.policyPlay/protect-partner-v3"
+        },
+        {
+          "seed": 3050091,
+          "trick": 5,
+          "role": "declarer",
+          "actor": "sha256:c13471b7362afb5671b2a4ca8c9d1fa1ced485e4cb43565eb33057b8acc8676a",
+          "chosen": {
+            "type": "play",
+            "card": "S2"
+          },
+          "nominee": {
+            "type": "play",
+            "card": "D4"
+          },
+          "loss": 0.29393229166666673,
+          "confirmed": false,
+          "gap": {
+            "n": 20,
+            "mean": 0.14164062500000002,
+            "se": 0.0824157510508688,
+            "ci95": [
+              -0.034069756240452276,
+              0.3173510062404523
+            ]
+          },
+          "sampler": {
+            "selection": {
+              "attempts": 12,
+              "accepted": 12,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 12
+            },
+            "confirmation": {
+              "attempts": 20,
+              "accepted": 20,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 20
+            }
+          },
+          "continuation": "heuristic/engine.policyPlay/protect-partner-v3"
+        },
+        {
+          "seed": 3050092,
+          "trick": 6,
+          "role": "friend",
+          "actor": "sha256:c13471b7362afb5671b2a4ca8c9d1fa1ced485e4cb43565eb33057b8acc8676a",
+          "chosen": {
+            "type": "play",
+            "card": "S9"
+          },
+          "nominee": {
+            "type": "play",
+            "card": "CK"
+          },
+          "loss": 0.059036458333333264,
+          "confirmed": false,
+          "gap": {
+            "n": 20,
+            "mean": -0.03432031249999999,
+            "se": 0.08023393921161696,
+            "ci95": [
+              -0.20537907089916735,
+              0.1367384458991674
+            ]
+          },
+          "sampler": {
+            "selection": {
+              "attempts": 12,
+              "accepted": 12,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 12
+            },
+            "confirmation": {
+              "attempts": 20,
+              "accepted": 20,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 20
+            }
+          },
+          "continuation": "heuristic/engine.policyPlay/protect-partner-v3"
+        },
+        {
+          "seed": 3050093,
+          "trick": 7,
+          "role": "opposition",
+          "actor": "sha256:c13471b7362afb5671b2a4ca8c9d1fa1ced485e4cb43565eb33057b8acc8676a",
+          "chosen": {
+            "type": "play",
+            "card": "C8"
+          },
+          "nominee": {
+            "type": "play",
+            "card": "D6"
+          },
+          "loss": 0.05841145833333333,
+          "confirmed": false,
+          "gap": {
+            "n": 20,
+            "mean": -0.0352109375,
+            "se": 0.035112658052692154,
+            "ci95": [
+              -0.11007112446833968,
+              0.039649249468339684
+            ]
+          },
+          "sampler": {
+            "selection": {
+              "attempts": 12,
+              "accepted": 12,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 12
+            },
+            "confirmation": {
+              "attempts": 20,
+              "accepted": 20,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 20
+            }
+          },
+          "continuation": "heuristic/engine.policyPlay/protect-partner-v3"
+        },
+        {
+          "seed": 3050094,
+          "trick": 8,
+          "role": "declarer",
+          "actor": "sha256:c13471b7362afb5671b2a4ca8c9d1fa1ced485e4cb43565eb33057b8acc8676a",
+          "chosen": {
+            "type": "play",
+            "card": "S3"
+          },
+          "nominee": {
+            "type": "play",
+            "card": "S9"
+          },
+          "loss": 0,
+          "confirmed": false,
+          "gap": {
+            "n": 20,
+            "mean": 0,
+            "se": 0,
+            "ci95": [
+              0,
+              0
+            ]
+          },
+          "sampler": {
+            "selection": {
+              "attempts": 12,
+              "accepted": 12,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 12
+            },
+            "confirmation": {
+              "attempts": 20,
+              "accepted": 20,
+              "assignmentRejected": 0,
+              "replayRejected": 0,
+              "exhausted": 0,
+              "proposalRejectionRate": 0,
+              "exhaustionRate": 0,
+              "effectiveSampleSize": 20
+            }
+          },
+          "continuation": "heuristic/engine.policyPlay/protect-partner-v3"
+        }
+      ]
+    }
+  }
+}

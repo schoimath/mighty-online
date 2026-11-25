@@ -1,0 +1,11 @@
+{
+  "initial_win": {"objective":"win","file":"lab/artifacts/recurrent-ablation/seed95731/initial.json","reference":"heuristic"},
+  "initial_score": {"objective":"score","file":"lab/artifacts/recurrent-ablation/seed95731/initial.json","reference":"heuristic"},
+  "initial_balanced": {"objective":"balanced","file":"lab/artifacts/recurrent-ablation/seed95731/initial.json","reference":"heuristic"},
+  "ppo_win": {"objective":"win","file":"lab/artifacts/recurrent/best-win.json","reference":"initial_win"},
+  "ppo_score": {"objective":"score","file":"lab/artifacts/recurrent/best-score.json","reference":"initial_score"},
+  "ppo_balanced": {"objective":"balanced","file":"lab/artifacts/recurrent/best-balanced.json","reference":"initial_balanced"},
+  "teacher_win": {"objective":"win","file":"lab/artifacts/recurrent-ablation/teacher-win.json","reference":"ppo_win"},
+  "teacher_score": {"objective":"score","file":"lab/artifacts/recurrent-ablation/teacher-score.json","reference":"ppo_score"},
+  "teacher_balanced": {"objective":"balanced","file":"lab/artifacts/recurrent-ablation/teacher-balanced.json","reference":"ppo_balanced"}
+}

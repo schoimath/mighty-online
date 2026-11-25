@@ -1,0 +1,338 @@
+{
+  "seat": 2,
+  "phase": "play",
+  "turn": 2,
+  "dealNo": 1,
+  "rules": {
+    "minBid": 14,
+    "allowFirstFriend": true,
+    "allowFirstJokerCall": false,
+    "allowLastJoker": false
+  },
+  "hand": [
+    "S8",
+    "D7",
+    "D6"
+  ],
+  "counts": [
+    3,
+    3,
+    3,
+    3,
+    3
+  ],
+  "passed": [
+    true,
+    true,
+    true,
+    false,
+    true
+  ],
+  "bid": {
+    "seat": 3,
+    "points": 20,
+    "suit": "C"
+  },
+  "bidHistory": [
+    {
+      "seat": 1,
+      "pass": true
+    },
+    {
+      "seat": 2,
+      "points": 14,
+      "suit": "C"
+    },
+    {
+      "seat": 3,
+      "points": 20,
+      "suit": "C"
+    },
+    {
+      "seat": 4,
+      "pass": true
+    },
+    {
+      "seat": 0,
+      "pass": true
+    },
+    {
+      "seat": 2,
+      "pass": true
+    }
+  ],
+  "declarer": 3,
+  "friendKnown": true,
+  "friend": 0,
+  "call": {
+    "kind": "card",
+    "card": "DA"
+  },
+  "selfRole": "opposition",
+  "trick": [],
+  "trickNo": 8,
+  "lastTrick": {
+    "cards": [
+      {
+        "seat": 2,
+        "card": "CK"
+      },
+      {
+        "seat": 3,
+        "card": "H5"
+      },
+      {
+        "seat": 4,
+        "card": "D5"
+      },
+      {
+        "seat": 0,
+        "card": "C9"
+      },
+      {
+        "seat": 1,
+        "card": "HQ"
+      }
+    ],
+    "winner": 2,
+    "points": 2,
+    "number": 7
+  },
+  "result": null,
+  "scores": [
+    null,
+    0,
+    9,
+    null,
+    0
+  ],
+  "captured": [
+    [],
+    [],
+    [
+      "SJ",
+      "SK",
+      "SQ",
+      "CQ",
+      "H10",
+      "CJ",
+      "DJ",
+      "CK",
+      "HQ"
+    ],
+    [],
+    []
+  ],
+  "discarded": [],
+  "choices": {
+    "canPass": false,
+    "bids": [],
+    "discard": false,
+    "contracts": [],
+    "friends": [],
+    "plays": [
+      {
+        "card": "S8"
+      },
+      {
+        "card": "D7"
+      },
+      {
+        "card": "D6"
+      }
+    ]
+  },
+  "playedTricks": [
+    {
+      "cards": [
+        {
+          "seat": 3,
+          "card": "H8"
+        },
+        {
+          "seat": 4,
+          "card": "H2"
+        },
+        {
+          "seat": 0,
+          "card": "SA"
+        },
+        {
+          "seat": 1,
+          "card": "H7"
+        },
+        {
+          "seat": 2,
+          "card": "D10"
+        }
+      ],
+      "winner": 0,
+      "points": 2,
+      "number": 1
+    },
+    {
+      "cards": [
+        {
+          "seat": 0,
+          "card": "DA"
+        },
+        {
+          "seat": 1,
+          "card": "D3"
+        },
+        {
+          "seat": 2,
+          "card": "D2"
+        },
+        {
+          "seat": 3,
+          "card": "D8"
+        },
+        {
+          "seat": 4,
+          "card": "D4"
+        }
+      ],
+      "winner": 0,
+      "points": 1,
+      "number": 2
+    },
+    {
+      "cards": [
+        {
+          "seat": 0,
+          "card": "JK",
+          "suit": "C"
+        },
+        {
+          "seat": 1,
+          "card": "C5"
+        },
+        {
+          "seat": 2,
+          "card": "C6"
+        },
+        {
+          "seat": 3,
+          "card": "C3"
+        },
+        {
+          "seat": 4,
+          "card": "C2"
+        }
+      ],
+      "winner": 0,
+      "points": 0,
+      "number": 3
+    },
+    {
+      "cards": [
+        {
+          "seat": 0,
+          "card": "CA"
+        },
+        {
+          "seat": 1,
+          "card": "C8"
+        },
+        {
+          "seat": 2,
+          "card": "C10"
+        },
+        {
+          "seat": 3,
+          "card": "S10"
+        },
+        {
+          "seat": 4,
+          "card": "C4"
+        }
+      ],
+      "winner": 0,
+      "points": 3,
+      "number": 4
+    },
+    {
+      "cards": [
+        {
+          "seat": 0,
+          "card": "S9"
+        },
+        {
+          "seat": 1,
+          "card": "SJ"
+        },
+        {
+          "seat": 2,
+          "card": "SK"
+        },
+        {
+          "seat": 3,
+          "card": "S4"
+        },
+        {
+          "seat": 4,
+          "card": "SQ"
+        }
+      ],
+      "winner": 2,
+      "points": 3,
+      "number": 5
+    },
+    {
+      "cards": [
+        {
+          "seat": 2,
+          "card": "CQ"
+        },
+        {
+          "seat": 3,
+          "card": "H10"
+        },
+        {
+          "seat": 4,
+          "card": "CJ"
+        },
+        {
+          "seat": 0,
+          "card": "C7"
+        },
+        {
+          "seat": 1,
+          "card": "DJ"
+        }
+      ],
+      "winner": 2,
+      "points": 4,
+      "number": 6
+    },
+    {
+      "cards": [
+        {
+          "seat": 2,
+          "card": "CK"
+        },
+        {
+          "seat": 3,
+          "card": "H5"
+        },
+        {
+          "seat": 4,
+          "card": "D5"
+        },
+        {
+          "seat": 0,
+          "card": "C9"
+        },
+        {
+          "seat": 1,
+          "card": "HQ"
+        }
+      ],
+      "winner": 2,
+      "points": 2,
+      "number": 7
+    }
+  ],
+  "knownKitty": []
+}

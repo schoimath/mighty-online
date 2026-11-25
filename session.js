@@ -1,8 +1,7 @@
 import {botObservation, DEFAULT_RULES, validateRules} from './engine.js';
 import {applyAction, createGame, getView} from './table-deal.js';
 import {settlements, TABLE_SCORING_VERSION} from './table-scoring.js';
-import {chooseModelAction, DEFAULT_MODEL, isModelId} from './lab/agents.js';
-import {rngFor} from './lab/game.js';
+import {decideTableTurn, DEFAULT_MODEL, hasSeatMemory, isModelId, memoryForReplacement} from './lab/table-agents.js';
 
 const BOT_NAMES = ['솔', '달', '별', '구름', '바다'];
 const validSeat = seat => Number.isInteger(seat) && seat >= 0 && seat < BOT_NAMES.length;
@@ -22,6 +21,8 @@ export class HostSession {
   #roundMembers = null;
   #completedRounds = 0;
   #lastSettlement = new Map();
+  #botMemory = Array(5).fill(null);
+  #guestDecisions = Array.from({length:5}, () => []);
 
   constructor(hostName, rules = DEFAULT_RULES, botModels = BOT_NAMES.map(() => DEFAULT_MODEL)) {
     this.players = [this.#player('host', hostName, false), null, null, null, null];
@@ -66,6 +67,10 @@ export class HostSession {
     this.connections.delete(id);
     this.#clearSwapsAt(seat);
     this.players[seat] = this.round ? this.botPlayer(seat) : null;
+    if (this.round && this.round.phase !== 'result' && hasSeatMemory(this.botModels[seat])) {
+      this.#botMemory[seat] = memoryForReplacement(this.botModels[seat], this.#guestDecisions[seat]);
+      this.#guestDecisions[seat] = [];
+    }
     this.revision++;
   }
 
@@ -160,6 +165,7 @@ export class HostSession {
     const bidderSeat = players.indexOf(this.#nextBidder.player);
     const firstSeat = bidderSeat < 0 ? this.#nextBidder.seat : bidderSeat;
     this.round = createGame({firstSeat, rules: this.rules});
+    this.#resetBotMemory();
     this.players = players;
     // A substitute finishes on behalf of the member who received the original hand.
     this.#roundMembers = this.players.map(player => player.memberId);
@@ -184,18 +190,42 @@ export class HostSession {
     return Boolean(this.round && this.round.phase !== 'result' && this.players[this.round.turn]?.bot);
   }
 
-  runBot(action, seed) {
+  botRequest(seed) {
+    if (!this.botTurn) return null;
+    const seat = this.round.turn, modelId = this.players[seat].modelId;
+    const request = {revision:this.revision, seed, modelId, view:botObservation(this.round, seat)};
+    if (hasSeatMemory(modelId)) request.memory = structuredClone(this.#botMemory[seat]);
+    return request;
+  }
+
+  runBot(action, seed, memory) {
     if (!this.botTurn) return;
     const seat = this.round.turn;
     if (action == null) {
-      const rng = rngFor(seed ?? crypto.getRandomValues(new Uint32Array(1))[0]);
-      action = chooseModelAction(this.players[seat].modelId, botObservation(this.round, seat), rng);
+      ({action, memory} = decideTableTurn(this.botRequest(seed)));
     }
-    this.#applyTurn(seat, action);
+    this.#applyTurn(seat, action, memory);
   }
 
-  #applyTurn(seat, action) {
+  #resetBotMemory() {
+    this.#botMemory.fill(null);
+    this.#guestDecisions = Array.from({length:5}, () => []);
+  }
+
+  #applyTurn(seat, action, memory) {
+    const dealNo = this.round.dealNo;
+    // Keep only the departing guest's own decision history for a possible
+    // mid-round recurrent substitute. These records never enter a room view.
+    const track = seat !== this.hostSeat && !this.players[seat].bot && hasSeatMemory(this.botModels[seat]);
+    const observation = track ? botObservation(this.round, seat) : null;
     applyAction(this.round, seat, action);
+    if (this.round.dealNo !== dealNo) this.#resetBotMemory();
+    else if (track) {
+      const entry = {observation};
+      if (observation.phase === 'discard') entry.action = {contract:{...this.round.bid}};
+      this.#guestDecisions[seat].push(entry);
+    }
+    else if (memory != null) this.#botMemory[seat] = structuredClone(memory);
     if (this.round.result && this.#roundMembers) {
       const changes = settlements(this.round.result, this.round.bid.suit);
       this.#lastSettlement.clear();

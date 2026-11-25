@@ -1,0 +1,35 @@
+{
+  "deals": 60,
+  "samples": 32,
+  "seed": 1605000,
+  "uniformProposal": {
+    "accepted": 1920,
+    "attempts": 1953,
+    "exhausted": 0,
+    "excluded": 0,
+    "invalidAccepted": 0,
+    "scoredCards": 1614,
+    "multiclassBrier": 0.7950465168060719,
+    "proposalRejection": 0.016897081413210446,
+    "invalidAcceptedRate": 0
+  },
+  "learnedProposal": {
+    "accepted": 1920,
+    "attempts": 1956,
+    "exhausted": 0,
+    "excluded": 0,
+    "invalidAccepted": 0,
+    "scoredCards": 1614,
+    "multiclassBrier": 0.7856717588289963,
+    "proposalRejection": 0.018404907975460127,
+    "invalidAcceptedRate": 0
+  },
+  "pairedLearnedMinusUniform": {
+    "deals": 60,
+    "bootstrapReplicates": 2000,
+    "ci95": [
+      -0.014616309745499689,
+      -0.004420168928997614
+    ]
+  }
+}

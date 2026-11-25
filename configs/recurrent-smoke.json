@@ -1,0 +1,12 @@
+{
+  "seed": 90933, "device": "cpu", "threads": 1, "parallelEnvs": 1,
+  "hidden": 12, "updates": 1, "budgetSeconds": 100, "episodesPerGoal": 2,
+  "validationSeed": 1191000, "validationDeals": 1,
+  "validationBackground": ["heuristic", "conservative", "aggressive"],
+  "rules": {"minBid": 14, "allowFirstFriend": true, "allowFirstJokerCall": false, "allowLastJoker": false},
+  "scoreScale": 640, "alpha": 0.7, "gamma": 1, "lambda": 0.95, "historySize": 3,
+  "league": {"baseline": 0.3, "recent": 0.4, "history": 0.3, "rules": ["random", "heuristic"]},
+  "epochs": 2, "batchEpisodes": 3, "clip": 0.2, "learningRate": 0.002,
+  "gradClip": 0.5, "valueWeight": 0.35, "entropy": 0.008,
+  "teacherTemperature": 0.08, "teacherLR": 0.001
+}

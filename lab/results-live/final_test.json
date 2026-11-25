@@ -1,0 +1,4898 @@
+{
+  "split": "final_test",
+  "config": {
+    "reference": "legacy",
+    "agents": [
+      "heuristic",
+      "legacy",
+      "contract_search",
+      "win",
+      "score",
+      "balanced",
+      "recurrent_win",
+      "recurrent_score",
+      "recurrent_balanced",
+      "belief_uniform",
+      "belief_learned",
+      "gru_belief_uniform",
+      "gru_belief_learned"
+    ],
+    "referenceByAgent": {
+      "contract_search": "legacy",
+      "recurrent_win": "win",
+      "recurrent_score": "score",
+      "recurrent_balanced": "balanced",
+      "belief_uniform": "heuristic",
+      "belief_learned": "belief_uniform",
+      "gru_belief_uniform": "recurrent_balanced",
+      "gru_belief_learned": "gru_belief_uniform"
+    },
+    "objectives": {
+      "contract_search": "score",
+      "recurrent_win": "win",
+      "recurrent_score": "score",
+      "recurrent_balanced": "balanced",
+      "belief_uniform": "balanced",
+      "belief_learned": "balanced",
+      "gru_belief_uniform": "balanced",
+      "gru_belief_learned": "balanced"
+    },
+    "reward": {
+      "alpha": 0.7,
+      "scoreScale": 640
+    },
+    "belief": {
+      "model": "lab/artifacts/belief/ownership.json",
+      "selectN": 6,
+      "confirmN": 8
+    },
+    "actionLoss": {
+      "startSeed": 7990100,
+      "positions": 18,
+      "selectN": 12,
+      "confirmN": 20
+    },
+    "splits": {
+      "smoke": {
+        "startSeed": 6250000,
+        "scenarios": 4
+      },
+      "validation": {
+        "startSeed": 6310000,
+        "scenarios": 32
+      },
+      "final_test": {
+        "startSeed": 7410000,
+        "scenarios": 64
+      },
+      "crossplay": {
+        "startSeed": 7920000,
+        "scenarios": 16
+      }
+    },
+    "backgrounds": {
+      "mixed": [
+        "random",
+        "heuristic",
+        "aggressive",
+        "conservative"
+      ],
+      "partnership": [
+        "heuristic",
+        "balanced",
+        "conservative",
+        "win"
+      ],
+      "pressure": [
+        "aggressive",
+        "heuristic",
+        "score",
+        "conservative"
+      ],
+      "search": [
+        "legacy",
+        "heuristic",
+        "aggressive",
+        "balanced"
+      ],
+      "recurrent_mix": [
+        "recurrent_win",
+        "recurrent_score",
+        "recurrent_balanced",
+        "heuristic"
+      ],
+      "recurrent_search": [
+        "recurrent_balanced",
+        "legacy",
+        "recurrent_win",
+        "aggressive"
+      ]
+    },
+    "backgroundCycle": {
+      "smoke": [
+        "mixed",
+        "partnership",
+        "pressure",
+        "search"
+      ],
+      "validation": [
+        "mixed",
+        "partnership",
+        "pressure",
+        "search"
+      ],
+      "final_test": [
+        "mixed",
+        "partnership",
+        "pressure",
+        "search"
+      ],
+      "crossplay": [
+        "recurrent_mix",
+        "recurrent_search"
+      ]
+    },
+    "blockSize": 4,
+    "ridge": 0.2,
+    "bootstrapDraws": 512,
+    "bootstrapSeed": 6310741,
+    "workers": 3,
+    "mode": "full"
+  },
+  "hashes": {
+    "heuristic": "656112765a742673dc7e76c6681db3344525e0515806514d938f119c2c0e04bb",
+    "legacy": "8245e5e785cb4dc5a96e43f45bc3b71f4e7741ab9de4d9e1d9f7d350d5d148ce",
+    "win": "7ab9ee8ff352c8509217de7737e08b5b9007fd7d5efbb69aac0a67dac3d47fc4",
+    "score": "c7ccd2e2346e2a1c6605f4166d9e0db43a2a167511a582e025027f249ce1bba5",
+    "balanced": "0fdd162aedc3f1c0efd4ba329db5e82e04ca63f284f5f10d401340eded0c1df2",
+    "random": "8220f4ff47db85563e54b38b868282cd348197e8e4dff5b24582502a76dbcdf7",
+    "aggressive": "10f4b52bcbdeff68d91b3c046965f09973cc60fb4de0f20c2dede19c6513e0d3",
+    "conservative": "22206005f05a3e2ad85d91e5f4490bbca9dd2f23f5d1e4f5b4d39580994c17fd",
+    "contract_search": "1a58ac766f0d51894180f4b28f048d5aed9142887393134c6d361a50dfff6abf",
+    "recurrent_win": "f2fdcbd1891a30e65f0d4e8f0a0d07fef2424337e2fae02375ec7f9550291cf5",
+    "recurrent_score": "d51e7f4f0d4e8420f6e5c96f239ee05c031f1aab86d11a65af9b7f4aff22736d",
+    "recurrent_balanced": "0eefa94b9ec4562467745bff49f77973d483a5305bd99c6b90bb9b07631026d4",
+    "belief_uniform": "6ca00c9b6de0c639726e746cc98e31aa4233f1c4804e46e7977b97f1f62861fa",
+    "belief_learned": "fa27582025e7b1cdeb8d54b90618007d1eb73153c57eb598a29d10f777ad5e1f",
+    "gru_belief_uniform": "535690b0bbb4000da473839a32f6330ce5f419f2c1ad47332965e2e00e311da9",
+    "gru_belief_learned": "2795d89a3aa28320d85928088f091ba843a6e2e62d8fa9ae1943946ac4f39d4a"
+  },
+  "rules": {
+    "minBid": 14,
+    "allowFirstFriend": true,
+    "allowFirstJokerCall": false,
+    "allowLastJoker": false
+  },
+  "scoringVersion": "contract-reward-13-v2",
+  "codeHash": "b2d67f6a4e65ea1644e802c6fccd8d625d07893694f36778710363738ca4e888",
+  "node": "v24.15.0",
+  "deals": 64,
+  "games": 4160,
+  "elapsedSeconds": 80.16331600000001,
+  "rawSHA256": "2d940281d0380a79b707eb78115b0279e2e320cbe6244e5d04bf9d30bd50a5f9",
+  "agents": {
+    "heuristic": {
+      "games": 320,
+      "utilities": {
+        "win": {
+          "value": {
+            "mean": 0.5968750000000002,
+            "ci95": [
+              0.5524218750000002,
+              0.6406250000000002
+            ]
+          },
+          "paired": {
+            "legacy": {
+              "mean": -0.06250000000000001,
+              "ci95": [
+                -0.09687500000000003,
+                -0.03054687500000011
+              ]
+            }
+          }
+        },
+        "score": {
+          "value": {
+            "mean": 0.010332031249999998,
+            "ci95": [
+              0.006869018554687501,
+              0.013687622070312502
+            ]
+          },
+          "paired": {
+            "legacy": {
+              "mean": -0.0020166015624999995,
+              "ci95": [
+                -0.002962280273437501,
+                -0.0010747070312500007
+              ]
+            }
+          }
+        },
+        "balanced": {
+          "value": {
+            "mean": 0.4209121093749999,
+            "ci95": [
+              0.3888088623046875,
+              0.45179078369140624
+            ]
+          },
+          "paired": {
+            "legacy": {
+              "mean": -0.04435498046875,
+              "ci95": [
+                -0.06853562011718753,
+                -0.021717053222656303
+              ]
+            }
+          }
+        }
+      },
+      "winElo": 1271.4419998541252,
+      "settlement": {
+        "mean": 6.6125,
+        "p05": -18,
+        "p50": 2,
+        "p95": 56.200000000000045
+      },
+      "role": {
+        "opposition": {
+          "games": 207,
+          "win": 0.7004830917874396,
+          "settlement": 11.666666666666666
+        },
+        "declarer": {
+          "games": 48,
+          "win": 0.4375,
+          "settlement": 0.9166666666666666
+        },
+        "friend": {
+          "games": 65,
+          "win": 0.38461538461538464,
+          "settlement": -5.276923076923077
+        }
+      },
+      "crossplay": {
+        "mixed": {
+          "games": 80,
+          "win": 0.7875,
+          "settlement": 26.5125
+        },
+        "partnership": {
+          "games": 80,
+          "win": 0.4875,
+          "settlement": 0.0125
+        },
+        "pressure": {
+          "games": 80,
+          "win": 0.5625,
+          "settlement": 0.475
+        },
+        "search": {
+          "games": 80,
+          "win": 0.55,
+          "settlement": -0.55
+        }
+      },
+      "realizedPartners": {
+        "mixed | aggressive+conservative": {
+          "games": 21,
+          "win": 1,
+          "settlement": 31.714285714285715
+        },
+        "mixed | aggressive+conservative+heuristic": {
+          "games": 18,
+          "win": 1,
+          "settlement": 70.88888888888889
+        },
+        "partnership | win": {
+          "games": 11,
+          "win": 0.7272727272727273,
+          "settlement": 4.545454545454546
+        },
+        "partnership | balanced+conservative": {
+          "games": 8,
+          "win": 0.125,
+          "settlement": -4
+        },
+        "partnership | heuristic": {
+          "games": 6,
+          "win": 0.6666666666666666,
+          "settlement": 3.6666666666666665
+        },
+        "pressure | aggressive+score": {
+          "games": 4,
+          "win": 0.5,
+          "settlement": -0.5
+        },
+        "pressure | conservative": {
+          "games": 10,
+          "win": 0.5,
+          "settlement": 4.6
+        },
+        "pressure | aggressive+heuristic": {
+          "games": 9,
+          "win": 0.3333333333333333,
+          "settlement": -0.8888888888888888
+        },
+        "pressure | score": {
+          "games": 9,
+          "win": 0.6666666666666666,
+          "settlement": 1
+        },
+        "search | balanced+legacy": {
+          "games": 12,
+          "win": 0.75,
+          "settlement": 0.25
+        },
+        "search | aggressive": {
+          "games": 9,
+          "win": 0.1111111111111111,
+          "settlement": -1.8888888888888888
+        },
+        "search | heuristic+legacy": {
+          "games": 9,
+          "win": 1,
+          "settlement": 3.4444444444444446
+        },
+        "mixed | random": {
+          "games": 14,
+          "win": 0,
+          "settlement": -28.285714285714285
+        },
+        "mixed | conservative+heuristic": {
+          "games": 13,
+          "win": 1,
+          "settlement": 25.692307692307693
+        },
+        "partnership | conservative+heuristic": {
+          "games": 5,
+          "win": 0.6,
+          "settlement": -0.2
+        },
+        "partnership | balanced+heuristic": {
+          "games": 14,
+          "win": 0.07142857142857142,
+          "settlement": -4.142857142857143
+        },
+        "partnership | balanced": {
+          "games": 8,
+          "win": 0.75,
+          "settlement": 3
+        },
+        "partnership | conservative+win": {
+          "games": 10,
+          "win": 0.3,
+          "settlement": -3
+        },
+        "pressure | aggressive": {
+          "games": 7,
+          "win": 0.5714285714285714,
+          "settlement": 4.285714285714286
+        },
+        "pressure | conservative+score": {
+          "games": 11,
+          "win": 0.6363636363636364,
+          "settlement": 0.36363636363636365
+        },
+        "search | balanced": {
+          "games": 6,
+          "win": 0.16666666666666666,
+          "settlement": -6.333333333333333
+        },
+        "search | aggressive+legacy": {
+          "games": 11,
+          "win": 0.5454545454545454,
+          "settlement": -0.5454545454545454
+        },
+        "search | heuristic": {
+          "games": 10,
+          "win": 0.6,
+          "settlement": 1.5
+        },
+        "search | aggressive+balanced": {
+          "games": 6,
+          "win": 0.6666666666666666,
+          "settlement": 0.3333333333333333
+        },
+        "mixed | aggressive+heuristic": {
+          "games": 10,
+          "win": 1,
+          "settlement": 24.8
+        },
+        "partnership | conservative": {
+          "games": 8,
+          "win": 0.375,
+          "settlement": 0.625
+        },
+        "pressure | heuristic+score": {
+          "games": 7,
+          "win": 0.2857142857142857,
+          "settlement": -5.142857142857143
+        },
+        "search | legacy": {
+          "games": 7,
+          "win": 0.14285714285714285,
+          "settlement": -2.857142857142857
+        },
+        "mixed | heuristic+random": {
+          "games": 1,
+          "win": 1,
+          "settlement": 1
+        },
+        "mixed | aggressive": {
+          "games": 1,
+          "win": 0,
+          "settlement": -1
+        },
+        "partnership | heuristic+win": {
+          "games": 8,
+          "win": 1,
+          "settlement": 2.375
+        },
+        "pressure | heuristic": {
+          "games": 5,
+          "win": 0.2,
+          "settlement": -4.2
+        },
+        "pressure | aggressive+conservative": {
+          "games": 8,
+          "win": 0.875,
+          "settlement": 4
+        },
+        "pressure | conservative+heuristic": {
+          "games": 10,
+          "win": 0.8,
+          "settlement": -1.6
+        },
+        "mixed | heuristic": {
+          "games": 1,
+          "win": 0,
+          "settlement": -1
+        },
+        "mixed | conservative": {
+          "games": 1,
+          "win": 0,
+          "settlement": -6
+        },
+        "search | balanced+heuristic": {
+          "games": 7,
+          "win": 0.7142857142857143,
+          "settlement": -3.2857142857142856
+        },
+        "partnership | balanced+win": {
+          "games": 2,
+          "win": 1,
+          "settlement": 1
+        },
+        "search | aggressive+heuristic": {
+          "games": 3,
+          "win": 0.6666666666666666,
+          "settlement": 3
+        }
+      },
+      "inference": {
+        "decisions": 3672,
+        "p50ms": 0.029,
+        "p95ms": 0.086,
+        "illegal": 0
+      }
+    },
+    "legacy": {
+      "games": 320,
+      "utilities": {
+        "win": {
+          "value": {
+            "mean": 0.659375,
+            "ci95": [
+              0.6156250000000001,
+              0.700703125
+            ]
+          },
+          "paired": {}
+        },
+        "score": {
+          "value": {
+            "mean": 0.0123486328125,
+            "ci95": [
+              0.009132202148437508,
+              0.015524780273437504
+            ]
+          },
+          "paired": {}
+        },
+        "balanced": {
+          "value": {
+            "mean": 0.4652670898437501,
+            "ci95": [
+              0.4346456787109375,
+              0.49450904541015617
+            ]
+          },
+          "paired": {}
+        }
+      },
+      "winElo": 1500,
+      "settlement": {
+        "mean": 7.903125,
+        "p05": -18,
+        "p50": 3,
+        "p95": 60
+      },
+      "role": {
+        "opposition": {
+          "games": 207,
+          "win": 0.7198067632850241,
+          "settlement": 11.97584541062802
+        },
+        "declarer": {
+          "games": 48,
+          "win": 0.7291666666666666,
+          "settlement": 5.708333333333333
+        },
+        "friend": {
+          "games": 65,
+          "win": 0.4153846153846154,
+          "settlement": -3.4461538461538463
+        }
+      },
+      "crossplay": {
+        "mixed": {
+          "games": 80,
+          "win": 0.8,
+          "settlement": 26.95
+        },
+        "partnership": {
+          "games": 80,
+          "win": 0.5375,
+          "settlement": 1.0875
+        },
+        "pressure": {
+          "games": 80,
+          "win": 0.6625,
+          "settlement": 2.1625
+        },
+        "search": {
+          "games": 80,
+          "win": 0.6375,
+          "settlement": 1.4125
+        }
+      },
+      "realizedPartners": {
+        "mixed | aggressive+conservative": {
+          "games": 21,
+          "win": 1,
+          "settlement": 32.857142857142854
+        },
+        "mixed | aggressive+conservative+heuristic": {
+          "games": 18,
+          "win": 1,
+          "settlement": 68.66666666666667
+        },
+        "partnership | win": {
+          "games": 11,
+          "win": 0.9090909090909091,
+          "settlement": 7.181818181818182
+        },
+        "partnership | balanced+conservative": {
+          "games": 8,
+          "win": 0.25,
+          "settlement": -3.625
+        },
+        "partnership | heuristic": {
+          "games": 6,
+          "win": 0.5,
+          "settlement": 1.6666666666666667
+        },
+        "pressure | aggressive+score": {
+          "games": 4,
+          "win": 0.75,
+          "settlement": 0.25
+        },
+        "pressure | conservative": {
+          "games": 10,
+          "win": 0.9,
+          "settlement": 8.4
+        },
+        "pressure | aggressive+heuristic": {
+          "games": 9,
+          "win": 0.4444444444444444,
+          "settlement": -0.6666666666666666
+        },
+        "pressure | score": {
+          "games": 9,
+          "win": 0.6666666666666666,
+          "settlement": 2.888888888888889
+        },
+        "search | balanced+legacy": {
+          "games": 12,
+          "win": 0.75,
+          "settlement": 1.1666666666666667
+        },
+        "search | aggressive": {
+          "games": 9,
+          "win": 0.3333333333333333,
+          "settlement": 0.8888888888888888
+        },
+        "search | heuristic+legacy": {
+          "games": 9,
+          "win": 0.8888888888888888,
+          "settlement": 3.6666666666666665
+        },
+        "mixed | random": {
+          "games": 14,
+          "win": 0,
+          "settlement": -24
+        },
+        "mixed | conservative+heuristic": {
+          "games": 13,
+          "win": 1,
+          "settlement": 23.615384615384617
+        },
+        "partnership | conservative+heuristic": {
+          "games": 5,
+          "win": 1,
+          "settlement": 3.4
+        },
+        "partnership | balanced+heuristic": {
+          "games": 14,
+          "win": 0.07142857142857142,
+          "settlement": -3.7857142857142856
+        },
+        "partnership | balanced": {
+          "games": 8,
+          "win": 0.625,
+          "settlement": 4.875
+        },
+        "partnership | conservative+win": {
+          "games": 10,
+          "win": 0.3,
+          "settlement": -2.9
+        },
+        "pressure | aggressive": {
+          "games": 7,
+          "win": 0.5714285714285714,
+          "settlement": 6
+        },
+        "pressure | conservative+score": {
+          "games": 11,
+          "win": 0.7272727272727273,
+          "settlement": 2.8181818181818183
+        },
+        "search | balanced": {
+          "games": 6,
+          "win": 0.5,
+          "settlement": 1.3333333333333333
+        },
+        "search | aggressive+legacy": {
+          "games": 11,
+          "win": 0.8181818181818182,
+          "settlement": 0.7272727272727273
+        },
+        "search | heuristic": {
+          "games": 10,
+          "win": 0.7,
+          "settlement": 4.8
+        },
+        "search | aggressive+balanced": {
+          "games": 6,
+          "win": 0.5,
+          "settlement": -0.5
+        },
+        "mixed | aggressive+heuristic": {
+          "games": 10,
+          "win": 1,
+          "settlement": 25.9
+        },
+        "partnership | conservative": {
+          "games": 8,
+          "win": 0.625,
+          "settlement": 3.875
+        },
+        "pressure | heuristic+score": {
+          "games": 7,
+          "win": 0.2857142857142857,
+          "settlement": -5.142857142857143
+        },
+        "search | legacy": {
+          "games": 7,
+          "win": 0.42857142857142855,
+          "settlement": 1.2857142857142858
+        },
+        "mixed | heuristic+random": {
+          "games": 1,
+          "win": 1,
+          "settlement": 4
+        },
+        "mixed | aggressive": {
+          "games": 1,
+          "win": 0,
+          "settlement": -2
+        },
+        "partnership | heuristic+win": {
+          "games": 8,
+          "win": 1,
+          "settlement": 3.125
+        },
+        "pressure | heuristic": {
+          "games": 5,
+          "win": 0.6,
+          "settlement": 1.2
+        },
+        "pressure | aggressive+conservative": {
+          "games": 8,
+          "win": 0.875,
+          "settlement": 5.25
+        },
+        "pressure | conservative+heuristic": {
+          "games": 10,
+          "win": 0.7,
+          "settlement": -1.7
+        },
+        "mixed | heuristic": {
+          "games": 1,
+          "win": 1,
+          "settlement": 2
+        },
+        "mixed | conservative": {
+          "games": 1,
+          "win": 0,
+          "settlement": -4
+        },
+        "search | balanced+heuristic": {
+          "games": 7,
+          "win": 0.7142857142857143,
+          "settlement": -2
+        },
+        "partnership | balanced+win": {
+          "games": 2,
+          "win": 0.5,
+          "settlement": -1.5
+        },
+        "search | aggressive+heuristic": {
+          "games": 3,
+          "win": 0.3333333333333333,
+          "settlement": 0.6666666666666666
+        }
+      },
+      "inference": {
+        "decisions": 3672,
+        "p50ms": 4.4704999999999995,
+        "p95ms": 40.87854999999999,
+        "illegal": 0
+      }
+    },
+    "contract_search": {
+      "games": 320,
+      "utilities": {
+        "win": {
+          "value": {
+            "mean": 0.659375,
+            "ci95": [
+              0.6156250000000001,
+              0.700703125
+            ]
+          },
+          "paired": {
+            "legacy": {
+              "mean": 0,
+              "ci95": [
+                0,
+                0
+              ]
+            }
+          }
+        },
+        "score": {
+          "value": {
+            "mean": 0.0124267578125,
+            "ci95": [
+              0.009186035156250001,
+              0.015611450195312505
+            ]
+          },
+          "paired": {
+            "legacy": {
+              "mean": 0.000078125,
+              "ci95": [
+                -6.776263578034403e-21,
+                0.000166015625
+              ]
+            }
+          }
+        },
+        "balanced": {
+          "value": {
+            "mean": 0.46529052734375004,
+            "ci95": [
+              0.43466743164062493,
+              0.4945305053710936
+            ]
+          },
+          "paired": {
+            "legacy": {
+              "mean": 0.000023437500000001322,
+              "ci95": [
+                4.336808689942018e-19,
+                0.000049804687500002416
+              ]
+            }
+          }
+        }
+      },
+      "winElo": 1500,
+      "settlement": {
+        "mean": 7.953125,
+        "p05": -18,
+        "p50": 3,
+        "p95": 60
+      },
+      "role": {
+        "opposition": {
+          "games": 207,
+          "win": 0.7198067632850241,
+          "settlement": 11.97584541062802
+        },
+        "declarer": {
+          "games": 48,
+          "win": 0.7291666666666666,
+          "settlement": 6.041666666666667
+        },
+        "friend": {
+          "games": 65,
+          "win": 0.4153846153846154,
+          "settlement": -3.4461538461538463
+        }
+      },
+      "crossplay": {
+        "mixed": {
+          "games": 80,
+          "win": 0.8,
+          "settlement": 26.95
+        },
+        "partnership": {
+          "games": 80,
+          "win": 0.5375,
+          "settlement": 1.0625
+        },
+        "pressure": {
+          "games": 80,
+          "win": 0.6625,
+          "settlement": 2.3875
+        },
+        "search": {
+          "games": 80,
+          "win": 0.6375,
+          "settlement": 1.4125
+        }
+      },
+      "realizedPartners": {
+        "mixed | aggressive+conservative": {
+          "games": 21,
+          "win": 1,
+          "settlement": 32.857142857142854
+        },
+        "mixed | aggressive+conservative+heuristic": {
+          "games": 18,
+          "win": 1,
+          "settlement": 68.66666666666667
+        },
+        "partnership | win": {
+          "games": 11,
+          "win": 0.9090909090909091,
+          "settlement": 7.181818181818182
+        },
+        "partnership | balanced+conservative": {
+          "games": 8,
+          "win": 0.25,
+          "settlement": -3.625
+        },
+        "partnership | heuristic": {
+          "games": 6,
+          "win": 0.5,
+          "settlement": 1.6666666666666667
+        },
+        "pressure | aggressive+score": {
+          "games": 4,
+          "win": 0.75,
+          "settlement": 0.25
+        },
+        "pressure | conservative": {
+          "games": 10,
+          "win": 0.9,
+          "settlement": 10
+        },
+        "pressure | aggressive+heuristic": {
+          "games": 9,
+          "win": 0.4444444444444444,
+          "settlement": -0.6666666666666666
+        },
+        "pressure | score": {
+          "games": 9,
+          "win": 0.6666666666666666,
+          "settlement": 3.111111111111111
+        },
+        "search | balanced+legacy": {
+          "games": 12,
+          "win": 0.75,
+          "settlement": 1.1666666666666667
+        },
+        "search | aggressive": {
+          "games": 9,
+          "win": 0.3333333333333333,
+          "settlement": 0.8888888888888888
+        },
+        "search | heuristic+legacy": {
+          "games": 9,
+          "win": 0.8888888888888888,
+          "settlement": 3.6666666666666665
+        },
+        "mixed | random": {
+          "games": 14,
+          "win": 0,
+          "settlement": -24
+        },
+        "mixed | conservative+heuristic": {
+          "games": 13,
+          "win": 1,
+          "settlement": 23.615384615384617
+        },
+        "partnership | conservative+heuristic": {
+          "games": 5,
+          "win": 1,
+          "settlement": 3.4
+        },
+        "partnership | balanced+heuristic": {
+          "games": 14,
+          "win": 0.07142857142857142,
+          "settlement": -3.7857142857142856
+        },
+        "partnership | balanced": {
+          "games": 8,
+          "win": 0.625,
+          "settlement": 4.875
+        },
+        "partnership | conservative+win": {
+          "games": 10,
+          "win": 0.3,
+          "settlement": -2.9
+        },
+        "pressure | aggressive": {
+          "games": 7,
+          "win": 0.5714285714285714,
+          "settlement": 6
+        },
+        "pressure | conservative+score": {
+          "games": 11,
+          "win": 0.7272727272727273,
+          "settlement": 2.8181818181818183
+        },
+        "search | balanced": {
+          "games": 6,
+          "win": 0.5,
+          "settlement": 1.3333333333333333
+        },
+        "search | aggressive+legacy": {
+          "games": 11,
+          "win": 0.8181818181818182,
+          "settlement": 0.7272727272727273
+        },
+        "search | heuristic": {
+          "games": 10,
+          "win": 0.7,
+          "settlement": 4.8
+        },
+        "search | aggressive+balanced": {
+          "games": 6,
+          "win": 0.5,
+          "settlement": -0.5
+        },
+        "mixed | aggressive+heuristic": {
+          "games": 10,
+          "win": 1,
+          "settlement": 25.9
+        },
+        "partnership | conservative": {
+          "games": 8,
+          "win": 0.625,
+          "settlement": 3.625
+        },
+        "pressure | heuristic+score": {
+          "games": 7,
+          "win": 0.2857142857142857,
+          "settlement": -5.142857142857143
+        },
+        "search | legacy": {
+          "games": 7,
+          "win": 0.42857142857142855,
+          "settlement": 1.2857142857142858
+        },
+        "mixed | heuristic+random": {
+          "games": 1,
+          "win": 1,
+          "settlement": 4
+        },
+        "mixed | aggressive": {
+          "games": 1,
+          "win": 0,
+          "settlement": -2
+        },
+        "partnership | heuristic+win": {
+          "games": 8,
+          "win": 1,
+          "settlement": 3.125
+        },
+        "pressure | heuristic": {
+          "games": 5,
+          "win": 0.6,
+          "settlement": 1.2
+        },
+        "pressure | aggressive+conservative": {
+          "games": 8,
+          "win": 0.875,
+          "settlement": 5.25
+        },
+        "pressure | conservative+heuristic": {
+          "games": 10,
+          "win": 0.7,
+          "settlement": -1.7
+        },
+        "mixed | heuristic": {
+          "games": 1,
+          "win": 1,
+          "settlement": 2
+        },
+        "mixed | conservative": {
+          "games": 1,
+          "win": 0,
+          "settlement": -4
+        },
+        "search | balanced+heuristic": {
+          "games": 7,
+          "win": 0.7142857142857143,
+          "settlement": -2
+        },
+        "partnership | balanced+win": {
+          "games": 2,
+          "win": 0.5,
+          "settlement": -1.5
+        },
+        "search | aggressive+heuristic": {
+          "games": 3,
+          "win": 0.3333333333333333,
+          "settlement": 0.6666666666666666
+        }
+      },
+      "inference": {
+        "decisions": 3672,
+        "p50ms": 5.026,
+        "p95ms": 43.80024999999997,
+        "illegal": 0
+      }
+    },
+    "win": {
+      "games": 320,
+      "utilities": {
+        "win": {
+          "value": {
+            "mean": 0.584375,
+            "ci95": [
+              0.5399218750000001,
+              0.6250000000000004
+            ]
+          },
+          "paired": {
+            "legacy": {
+              "mean": -0.07500000000000001,
+              "ci95": [
+                -0.10695312500000007,
+                -0.04062500000000001
+              ]
+            }
+          }
+        },
+        "score": {
+          "value": {
+            "mean": 0.0099609375,
+            "ci95": [
+              0.006639404296875,
+              0.013137573242187492
+            ]
+          },
+          "paired": {
+            "legacy": {
+              "mean": -0.0023876953125,
+              "ci95": [
+                -0.003262817382812498,
+                -0.001534790039062501
+              ]
+            }
+          }
+        },
+        "balanced": {
+          "value": {
+            "mean": 0.41205078124999983,
+            "ci95": [
+              0.3797546875,
+              0.4409416870117186
+            ]
+          },
+          "paired": {
+            "legacy": {
+              "mean": -0.05321630859375001,
+              "ci95": [
+                -0.07582288818359374,
+                -0.029059106445312517
+              ]
+            }
+          }
+        }
+      },
+      "winElo": 1228.4374680529986,
+      "settlement": {
+        "mean": 6.375,
+        "p05": -18,
+        "p50": 2,
+        "p95": 52.200000000000045
+      },
+      "role": {
+        "opposition": {
+          "games": 207,
+          "win": 0.6956521739130435,
+          "settlement": 11.439613526570048
+        },
+        "declarer": {
+          "games": 48,
+          "win": 0.3958333333333333,
+          "settlement": 0.375
+        },
+        "friend": {
+          "games": 65,
+          "win": 0.36923076923076925,
+          "settlement": -5.323076923076923
+        }
+      },
+      "crossplay": {
+        "mixed": {
+          "games": 80,
+          "win": 0.7875,
+          "settlement": 26.1875
+        },
+        "partnership": {
+          "games": 80,
+          "win": 0.475,
+          "settlement": -0.0125
+        },
+        "pressure": {
+          "games": 80,
+          "win": 0.55,
+          "settlement": 0.2875
+        },
+        "search": {
+          "games": 80,
+          "win": 0.525,
+          "settlement": -0.9625
+        }
+      },
+      "realizedPartners": {
+        "mixed | aggressive+conservative": {
+          "games": 21,
+          "win": 1,
+          "settlement": 31.238095238095237
+        },
+        "mixed | aggressive+conservative+heuristic": {
+          "games": 18,
+          "win": 1,
+          "settlement": 69.11111111111111
+        },
+        "partnership | win": {
+          "games": 11,
+          "win": 0.6363636363636364,
+          "settlement": 3.3636363636363638
+        },
+        "partnership | balanced+conservative": {
+          "games": 8,
+          "win": 0.125,
+          "settlement": -4.125
+        },
+        "partnership | heuristic": {
+          "games": 7,
+          "win": 0.7142857142857143,
+          "settlement": 4.571428571428571
+        },
+        "pressure | aggressive+score": {
+          "games": 4,
+          "win": 0.5,
+          "settlement": 0
+        },
+        "pressure | conservative": {
+          "games": 10,
+          "win": 0.5,
+          "settlement": 4.8
+        },
+        "pressure | aggressive+heuristic": {
+          "games": 9,
+          "win": 0.3333333333333333,
+          "settlement": -0.8888888888888888
+        },
+        "pressure | score": {
+          "games": 9,
+          "win": 0.6666666666666666,
+          "settlement": 1
+        },
+        "search | balanced+legacy": {
+          "games": 12,
+          "win": 0.75,
+          "settlement": 0.3333333333333333
+        },
+        "search | aggressive": {
+          "games": 9,
+          "win": 0.1111111111111111,
+          "settlement": -2.3333333333333335
+        },
+        "search | heuristic+legacy": {
+          "games": 9,
+          "win": 1,
+          "settlement": 2.6666666666666665
+        },
+        "mixed | random": {
+          "games": 14,
+          "win": 0,
+          "settlement": -27.714285714285715
+        },
+        "mixed | conservative+heuristic": {
+          "games": 13,
+          "win": 1,
+          "settlement": 26.307692307692307
+        },
+        "partnership | conservative+heuristic": {
+          "games": 5,
+          "win": 0.6,
+          "settlement": -0.2
+        },
+        "partnership | balanced+heuristic": {
+          "games": 14,
+          "win": 0.07142857142857142,
+          "settlement": -4.285714285714286
+        },
+        "partnership | conservative": {
+          "games": 9,
+          "win": 0.4444444444444444,
+          "settlement": 2.111111111111111
+        },
+        "partnership | conservative+win": {
+          "games": 10,
+          "win": 0.3,
+          "settlement": -3.1
+        },
+        "pressure | aggressive": {
+          "games": 7,
+          "win": 0.42857142857142855,
+          "settlement": 1.4285714285714286
+        },
+        "pressure | conservative+score": {
+          "games": 11,
+          "win": 0.6363636363636364,
+          "settlement": 0.36363636363636365
+        },
+        "search | balanced": {
+          "games": 6,
+          "win": 0.16666666666666666,
+          "settlement": -6.333333333333333
+        },
+        "search | aggressive+legacy": {
+          "games": 11,
+          "win": 0.5454545454545454,
+          "settlement": -0.5454545454545454
+        },
+        "search | heuristic": {
+          "games": 10,
+          "win": 0.5,
+          "settlement": 0
+        },
+        "search | aggressive+balanced": {
+          "games": 6,
+          "win": 0.5,
+          "settlement": -0.6666666666666666
+        },
+        "mixed | aggressive+heuristic": {
+          "games": 10,
+          "win": 1,
+          "settlement": 24.8
+        },
+        "pressure | heuristic+score": {
+          "games": 7,
+          "win": 0.2857142857142857,
+          "settlement": -5
+        },
+        "search | legacy": {
+          "games": 7,
+          "win": 0.14285714285714285,
+          "settlement": -3.142857142857143
+        },
+        "mixed | heuristic+random": {
+          "games": 1,
+          "win": 1,
+          "settlement": 1
+        },
+        "mixed | aggressive": {
+          "games": 1,
+          "win": 0,
+          "settlement": -1
+        },
+        "partnership | heuristic+win": {
+          "games": 8,
+          "win": 1,
+          "settlement": 2.375
+        },
+        "pressure | heuristic": {
+          "games": 5,
+          "win": 0.2,
+          "settlement": -4.2
+        },
+        "pressure | aggressive+conservative": {
+          "games": 8,
+          "win": 0.875,
+          "settlement": 4
+        },
+        "pressure | conservative+heuristic": {
+          "games": 10,
+          "win": 0.8,
+          "settlement": -1.6
+        },
+        "mixed | heuristic": {
+          "games": 1,
+          "win": 0,
+          "settlement": -1
+        },
+        "mixed | conservative": {
+          "games": 1,
+          "win": 0,
+          "settlement": -6
+        },
+        "search | balanced+heuristic": {
+          "games": 7,
+          "win": 0.7142857142857143,
+          "settlement": -3.2857142857142856
+        },
+        "partnership | balanced+win": {
+          "games": 2,
+          "win": 1,
+          "settlement": 1
+        },
+        "search | aggressive+heuristic": {
+          "games": 3,
+          "win": 0.6666666666666666,
+          "settlement": 3
+        },
+        "partnership | balanced": {
+          "games": 6,
+          "win": 0.6666666666666666,
+          "settlement": 2.5
+        }
+      },
+      "inference": {
+        "decisions": 3672,
+        "p50ms": 0.088,
+        "p95ms": 0.31234999999999946,
+        "illegal": 0
+      }
+    },
+    "score": {
+      "games": 320,
+      "utilities": {
+        "win": {
+          "value": {
+            "mean": 0.5906250000000001,
+            "ci95": [
+              0.5468750000000001,
+              0.6343750000000001
+            ]
+          },
+          "paired": {
+            "legacy": {
+              "mean": -0.06875000000000002,
+              "ci95": [
+                -0.10000000000000003,
+                -0.04062500000000001
+              ]
+            }
+          }
+        },
+        "score": {
+          "value": {
+            "mean": 0.010244140625,
+            "ci95": [
+              0.006921630859375004,
+              0.013744628906249999
+            ]
+          },
+          "paired": {
+            "legacy": {
+              "mean": -0.0021044921875,
+              "ci95": [
+                -0.0030002441406250004,
+                -0.001213623046875
+              ]
+            }
+          }
+        },
+        "balanced": {
+          "value": {
+            "mean": 0.41651074218749995,
+            "ci95": [
+              0.38587995605468756,
+              0.4472524902343751
+            ]
+          },
+          "paired": {
+            "legacy": {
+              "mean": -0.048756347656250004,
+              "ci95": [
+                -0.07065555419921876,
+                -0.028983154296875004
+              ]
+            }
+          }
+        }
+      },
+      "winElo": 1264.3707155303312,
+      "settlement": {
+        "mean": 6.55625,
+        "p05": -18,
+        "p50": 2,
+        "p95": 56.200000000000045
+      },
+      "role": {
+        "opposition": {
+          "games": 207,
+          "win": 0.6908212560386473,
+          "settlement": 11.507246376811594
+        },
+        "declarer": {
+          "games": 48,
+          "win": 0.4166666666666667,
+          "settlement": 1.375
+        },
+        "friend": {
+          "games": 65,
+          "win": 0.4,
+          "settlement": -5.384615384615385
+        }
+      },
+      "crossplay": {
+        "mixed": {
+          "games": 80,
+          "win": 0.8,
+          "settlement": 26.4
+        },
+        "partnership": {
+          "games": 80,
+          "win": 0.5,
+          "settlement": 0.575
+        },
+        "pressure": {
+          "games": 80,
+          "win": 0.525,
+          "settlement": 0.025
+        },
+        "search": {
+          "games": 80,
+          "win": 0.5375,
+          "settlement": -0.775
+        }
+      },
+      "realizedPartners": {
+        "mixed | aggressive+conservative": {
+          "games": 21,
+          "win": 1,
+          "settlement": 30.904761904761905
+        },
+        "mixed | aggressive+conservative+heuristic": {
+          "games": 18,
+          "win": 1,
+          "settlement": 70.88888888888889
+        },
+        "partnership | win": {
+          "games": 11,
+          "win": 0.6363636363636364,
+          "settlement": 3.6363636363636362
+        },
+        "partnership | balanced+conservative": {
+          "games": 8,
+          "win": 0.125,
+          "settlement": -4
+        },
+        "partnership | heuristic": {
+          "games": 7,
+          "win": 0.7142857142857143,
+          "settlement": 4.571428571428571
+        },
+        "pressure | aggressive+score": {
+          "games": 4,
+          "win": 0.5,
+          "settlement": -0.5
+        },
+        "pressure | conservative": {
+          "games": 10,
+          "win": 0.5,
+          "settlement": 4.4
+        },
+        "pressure | aggressive+heuristic": {
+          "games": 9,
+          "win": 0.3333333333333333,
+          "settlement": -0.5555555555555556
+        },
+        "pressure | score": {
+          "games": 9,
+          "win": 0.6666666666666666,
+          "settlement": 1.4444444444444444
+        },
+        "search | balanced+legacy": {
+          "games": 12,
+          "win": 0.75,
+          "settlement": 0.08333333333333333
+        },
+        "search | aggressive": {
+          "games": 9,
+          "win": 0.2222222222222222,
+          "settlement": -2.3333333333333335
+        },
+        "search | heuristic+legacy": {
+          "games": 9,
+          "win": 1,
+          "settlement": 3.4444444444444446
+        },
+        "mixed | random": {
+          "games": 14,
+          "win": 0,
+          "settlement": -28.428571428571427
+        },
+        "mixed | conservative+heuristic": {
+          "games": 13,
+          "win": 1,
+          "settlement": 25.615384615384617
+        },
+        "partnership | conservative+heuristic": {
+          "games": 5,
+          "win": 0.6,
+          "settlement": -0.2
+        },
+        "partnership | balanced+heuristic": {
+          "games": 14,
+          "win": 0.07142857142857142,
+          "settlement": -3.9285714285714284
+        },
+        "partnership | conservative": {
+          "games": 9,
+          "win": 0.5555555555555556,
+          "settlement": 2.5555555555555554
+        },
+        "partnership | conservative+win": {
+          "games": 10,
+          "win": 0.3,
+          "settlement": -3
+        },
+        "pressure | aggressive": {
+          "games": 7,
+          "win": 0.42857142857142855,
+          "settlement": 1.4285714285714286
+        },
+        "pressure | conservative+score": {
+          "games": 11,
+          "win": 0.5454545454545454,
+          "settlement": -0.09090909090909091
+        },
+        "search | balanced": {
+          "games": 6,
+          "win": 0.16666666666666666,
+          "settlement": -5.333333333333333
+        },
+        "search | aggressive+legacy": {
+          "games": 11,
+          "win": 0.5454545454545454,
+          "settlement": -0.5454545454545454
+        },
+        "search | heuristic": {
+          "games": 10,
+          "win": 0.5,
+          "settlement": 0.3
+        },
+        "search | aggressive+balanced": {
+          "games": 6,
+          "win": 0.6666666666666666,
+          "settlement": 0
+        },
+        "mixed | aggressive+heuristic": {
+          "games": 10,
+          "win": 1,
+          "settlement": 25.2
+        },
+        "pressure | heuristic+score": {
+          "games": 7,
+          "win": 0.2857142857142857,
+          "settlement": -5.142857142857143
+        },
+        "search | legacy": {
+          "games": 7,
+          "win": 0,
+          "settlement": -3.4285714285714284
+        },
+        "mixed | heuristic+random": {
+          "games": 1,
+          "win": 1,
+          "settlement": 1
+        },
+        "mixed | aggressive": {
+          "games": 1,
+          "win": 0,
+          "settlement": -1
+        },
+        "partnership | heuristic+win": {
+          "games": 8,
+          "win": 1,
+          "settlement": 2.375
+        },
+        "pressure | heuristic": {
+          "games": 5,
+          "win": 0.2,
+          "settlement": -4.2
+        },
+        "pressure | aggressive+conservative": {
+          "games": 8,
+          "win": 0.875,
+          "settlement": 3.25
+        },
+        "pressure | conservative+heuristic": {
+          "games": 10,
+          "win": 0.7,
+          "settlement": -2.6
+        },
+        "mixed | heuristic": {
+          "games": 1,
+          "win": 1,
+          "settlement": 2
+        },
+        "mixed | conservative": {
+          "games": 1,
+          "win": 0,
+          "settlement": -2
+        },
+        "search | balanced+heuristic": {
+          "games": 7,
+          "win": 0.7142857142857143,
+          "settlement": -3.2857142857142856
+        },
+        "partnership | balanced+win": {
+          "games": 2,
+          "win": 1,
+          "settlement": 1
+        },
+        "search | aggressive+heuristic": {
+          "games": 3,
+          "win": 0.6666666666666666,
+          "settlement": 3
+        },
+        "partnership | balanced": {
+          "games": 6,
+          "win": 0.8333333333333334,
+          "settlement": 8
+        }
+      },
+      "inference": {
+        "decisions": 3672,
+        "p50ms": 0.0865,
+        "p95ms": 0.2984499999999998,
+        "illegal": 0
+      }
+    },
+    "balanced": {
+      "games": 320,
+      "utilities": {
+        "win": {
+          "value": {
+            "mean": 0.5937500000000001,
+            "ci95": [
+              0.55,
+              0.6382031250000002
+            ]
+          },
+          "paired": {
+            "legacy": {
+              "mean": -0.06562500000000003,
+              "ci95": [
+                -0.10000000000000005,
+                -0.025
+              ]
+            }
+          }
+        },
+        "score": {
+          "value": {
+            "mean": 0.0105322265625,
+            "ci95": [
+              0.006978515624999998,
+              0.014026855468750002
+            ]
+          },
+          "paired": {
+            "legacy": {
+              "mean": -0.001816406249999999,
+              "ci95": [
+                -0.0028439941406250002,
+                -0.0008370361328125008
+              ]
+            }
+          }
+        },
+        "balanced": {
+          "value": {
+            "mean": 0.4187846679687499,
+            "ci95": [
+              0.3881152832031249,
+              0.4503181274414061
+            ]
+          },
+          "paired": {
+            "legacy": {
+              "mean": -0.046482421875,
+              "ci95": [
+                -0.07069283447265624,
+                -0.0178251953125
+              ]
+            }
+          }
+        }
+      },
+      "winElo": 1273.2056145168772,
+      "settlement": {
+        "mean": 6.740625,
+        "p05": -18,
+        "p50": 2,
+        "p95": 60.200000000000045
+      },
+      "role": {
+        "opposition": {
+          "games": 212,
+          "win": 0.6886792452830188,
+          "settlement": 11.495283018867925
+        },
+        "declarer": {
+          "games": 42,
+          "win": 0.4523809523809524,
+          "settlement": 2.0952380952380953
+        },
+        "friend": {
+          "games": 66,
+          "win": 0.3787878787878788,
+          "settlement": -5.575757575757576
+        }
+      },
+      "crossplay": {
+        "mixed": {
+          "games": 80,
+          "win": 0.7875,
+          "settlement": 27.025
+        },
+        "partnership": {
+          "games": 80,
+          "win": 0.475,
+          "settlement": 0.1625
+        },
+        "pressure": {
+          "games": 80,
+          "win": 0.5625,
+          "settlement": 0.425
+        },
+        "search": {
+          "games": 80,
+          "win": 0.55,
+          "settlement": -0.65
+        }
+      },
+      "realizedPartners": {
+        "mixed | aggressive+conservative": {
+          "games": 21,
+          "win": 1,
+          "settlement": 31.761904761904763
+        },
+        "mixed | aggressive+conservative+heuristic": {
+          "games": 18,
+          "win": 1,
+          "settlement": 72.44444444444444
+        },
+        "partnership | win": {
+          "games": 11,
+          "win": 0.5454545454545454,
+          "settlement": 3
+        },
+        "partnership | balanced+conservative": {
+          "games": 8,
+          "win": 0.125,
+          "settlement": -4.125
+        },
+        "partnership | heuristic": {
+          "games": 7,
+          "win": 0.8571428571428571,
+          "settlement": 5.285714285714286
+        },
+        "pressure | aggressive+score": {
+          "games": 6,
+          "win": 0.5,
+          "settlement": -0.8333333333333334
+        },
+        "pressure | conservative": {
+          "games": 8,
+          "win": 0.625,
+          "settlement": 7
+        },
+        "pressure | aggressive+heuristic": {
+          "games": 9,
+          "win": 0.3333333333333333,
+          "settlement": -0.8888888888888888
+        },
+        "pressure | score": {
+          "games": 8,
+          "win": 0.625,
+          "settlement": 0.25
+        },
+        "search | balanced+legacy": {
+          "games": 12,
+          "win": 0.75,
+          "settlement": 0.25
+        },
+        "search | aggressive": {
+          "games": 9,
+          "win": 0.2222222222222222,
+          "settlement": -3.5555555555555554
+        },
+        "search | heuristic+legacy": {
+          "games": 10,
+          "win": 1,
+          "settlement": 4.3
+        },
+        "mixed | random": {
+          "games": 14,
+          "win": 0,
+          "settlement": -28
+        },
+        "mixed | conservative+heuristic": {
+          "games": 13,
+          "win": 1,
+          "settlement": 25.53846153846154
+        },
+        "partnership | conservative+heuristic": {
+          "games": 5,
+          "win": 0.6,
+          "settlement": -0.2
+        },
+        "partnership | balanced+heuristic": {
+          "games": 14,
+          "win": 0.07142857142857142,
+          "settlement": -4.071428571428571
+        },
+        "partnership | conservative": {
+          "games": 9,
+          "win": 0.4444444444444444,
+          "settlement": 1.2222222222222223
+        },
+        "partnership | conservative+win": {
+          "games": 10,
+          "win": 0.3,
+          "settlement": -3.1
+        },
+        "pressure | aggressive": {
+          "games": 7,
+          "win": 0.5714285714285714,
+          "settlement": 4.428571428571429
+        },
+        "pressure | conservative+score": {
+          "games": 11,
+          "win": 0.6363636363636364,
+          "settlement": 0.18181818181818182
+        },
+        "search | balanced": {
+          "games": 6,
+          "win": 0.16666666666666666,
+          "settlement": -2.5
+        },
+        "search | aggressive+legacy": {
+          "games": 11,
+          "win": 0.5454545454545454,
+          "settlement": -0.5454545454545454
+        },
+        "search | heuristic": {
+          "games": 10,
+          "win": 0.4,
+          "settlement": -0.2
+        },
+        "search | aggressive+balanced": {
+          "games": 6,
+          "win": 0.6666666666666666,
+          "settlement": -0.3333333333333333
+        },
+        "mixed | aggressive+heuristic": {
+          "games": 10,
+          "win": 1,
+          "settlement": 25.4
+        },
+        "pressure | heuristic+score": {
+          "games": 7,
+          "win": 0.2857142857142857,
+          "settlement": -5.142857142857143
+        },
+        "mixed | heuristic+random": {
+          "games": 1,
+          "win": 1,
+          "settlement": 1
+        },
+        "mixed | aggressive": {
+          "games": 1,
+          "win": 0,
+          "settlement": -1
+        },
+        "partnership | heuristic+win": {
+          "games": 8,
+          "win": 1,
+          "settlement": 2.375
+        },
+        "pressure | heuristic": {
+          "games": 5,
+          "win": 0.2,
+          "settlement": -4.2
+        },
+        "pressure | aggressive+conservative": {
+          "games": 8,
+          "win": 0.875,
+          "settlement": 3.875
+        },
+        "pressure | conservative+heuristic": {
+          "games": 11,
+          "win": 0.7272727272727273,
+          "settlement": -1.6363636363636365
+        },
+        "mixed | heuristic": {
+          "games": 1,
+          "win": 0,
+          "settlement": -1
+        },
+        "mixed | conservative": {
+          "games": 1,
+          "win": 0,
+          "settlement": -2
+        },
+        "search | balanced+heuristic": {
+          "games": 7,
+          "win": 0.7142857142857143,
+          "settlement": -3.2857142857142856
+        },
+        "search | aggressive+heuristic": {
+          "games": 4,
+          "win": 0.5,
+          "settlement": 1.25
+        },
+        "partnership | balanced+win": {
+          "games": 2,
+          "win": 0.5,
+          "settlement": -2
+        },
+        "search | legacy": {
+          "games": 5,
+          "win": 0.2,
+          "settlement": -4.6
+        },
+        "partnership | balanced": {
+          "games": 6,
+          "win": 0.8333333333333334,
+          "settlement": 6.5
+        }
+      },
+      "inference": {
+        "decisions": 3659,
+        "p50ms": 0.086,
+        "p95ms": 0.28009999999999996,
+        "illegal": 0
+      }
+    },
+    "recurrent_win": {
+      "games": 320,
+      "utilities": {
+        "win": {
+          "value": {
+            "mean": 0.60625,
+            "ci95": [
+              0.558671875,
+              0.653828125
+            ]
+          },
+          "paired": {
+            "legacy": {
+              "mean": -0.053125000000000006,
+              "ci95": [
+                -0.09687500000000003,
+                -0.0117968750000001
+              ]
+            },
+            "win": {
+              "mean": 0.021875000000000012,
+              "ci95": [
+                -0.009374999999999998,
+                0.05625000000000002
+              ]
+            }
+          }
+        },
+        "score": {
+          "value": {
+            "mean": 0.0102685546875,
+            "ci95": [
+              0.006713745117187499,
+              0.013574340820312501
+            ]
+          },
+          "paired": {
+            "legacy": {
+              "mean": -0.002080078125,
+              "ci95": [
+                -0.0030832519531249995,
+                -0.0010780029296875002
+              ]
+            },
+            "win": {
+              "mean": 0.0003076171875000001,
+              "ci95": [
+                -0.0003770751953125002,
+                0.0009836425781249998
+              ]
+            }
+          }
+        },
+        "balanced": {
+          "value": {
+            "mean": 0.42745556640624977,
+            "ci95": [
+              0.3937542724609374,
+              0.46123050537109356
+            ]
+          },
+          "paired": {
+            "legacy": {
+              "mean": -0.037811523437499994,
+              "ci95": [
+                -0.068512255859375,
+                -0.00858026123046881
+              ]
+            },
+            "win": {
+              "mean": 0.015404785156250017,
+              "ci95": [
+                -0.006569677734374992,
+                0.039619921875000005
+              ]
+            }
+          }
+        }
+      },
+      "winElo": 1304.7684690149792,
+      "settlement": {
+        "mean": 6.571875,
+        "p05": -18,
+        "p50": 2,
+        "p95": 56
+      },
+      "role": {
+        "opposition": {
+          "games": 221,
+          "win": 0.669683257918552,
+          "settlement": 10.638009049773755
+        },
+        "friend": {
+          "games": 80,
+          "win": 0.45,
+          "settlement": -3.875
+        },
+        "declarer": {
+          "games": 19,
+          "win": 0.5263157894736842,
+          "settlement": 3.263157894736842
+        }
+      },
+      "crossplay": {
+        "mixed": {
+          "games": 80,
+          "win": 0.8,
+          "settlement": 26.25
+        },
+        "partnership": {
+          "games": 80,
+          "win": 0.475,
+          "settlement": -0.1
+        },
+        "pressure": {
+          "games": 80,
+          "win": 0.5625,
+          "settlement": -0.0125
+        },
+        "search": {
+          "games": 80,
+          "win": 0.5875,
+          "settlement": 0.15
+        }
+      },
+      "realizedPartners": {
+        "mixed | aggressive+conservative": {
+          "games": 21,
+          "win": 1,
+          "settlement": 31.38095238095238
+        },
+        "mixed | aggressive+conservative+heuristic": {
+          "games": 18,
+          "win": 1,
+          "settlement": 69.77777777777777
+        },
+        "partnership | win": {
+          "games": 12,
+          "win": 0.75,
+          "settlement": 3.9166666666666665
+        },
+        "partnership | balanced+conservative": {
+          "games": 8,
+          "win": 0,
+          "settlement": -4.375
+        },
+        "partnership | heuristic": {
+          "games": 6,
+          "win": 0.5,
+          "settlement": 1.3333333333333333
+        },
+        "pressure | aggressive+score": {
+          "games": 6,
+          "win": 0.5,
+          "settlement": -0.8333333333333334
+        },
+        "pressure | conservative": {
+          "games": 5,
+          "win": 0.4,
+          "settlement": 5.6
+        },
+        "pressure | aggressive+heuristic": {
+          "games": 10,
+          "win": 0.5,
+          "settlement": -0.2
+        },
+        "pressure | score": {
+          "games": 8,
+          "win": 0.625,
+          "settlement": 0.5
+        },
+        "search | balanced+legacy": {
+          "games": 13,
+          "win": 0.7692307692307693,
+          "settlement": 0.9230769230769231
+        },
+        "search | aggressive": {
+          "games": 9,
+          "win": 0.1111111111111111,
+          "settlement": -4
+        },
+        "search | heuristic+legacy": {
+          "games": 10,
+          "win": 0.9,
+          "settlement": 3.9
+        },
+        "mixed | random": {
+          "games": 14,
+          "win": 0,
+          "settlement": -27.714285714285715
+        },
+        "mixed | conservative+heuristic": {
+          "games": 13,
+          "win": 1,
+          "settlement": 25.153846153846153
+        },
+        "partnership | conservative+heuristic": {
+          "games": 6,
+          "win": 0.3333333333333333,
+          "settlement": -1.8333333333333333
+        },
+        "partnership | balanced+heuristic": {
+          "games": 15,
+          "win": 0.13333333333333333,
+          "settlement": -3.533333333333333
+        },
+        "partnership | conservative+win": {
+          "games": 11,
+          "win": 0.2727272727272727,
+          "settlement": -3.3636363636363638
+        },
+        "pressure | aggressive": {
+          "games": 6,
+          "win": 0.5,
+          "settlement": 4.166666666666667
+        },
+        "pressure | conservative+score": {
+          "games": 14,
+          "win": 0.5714285714285714,
+          "settlement": -0.9285714285714286
+        },
+        "search | balanced": {
+          "games": 4,
+          "win": 0.5,
+          "settlement": -1.5
+        },
+        "search | aggressive+legacy": {
+          "games": 11,
+          "win": 0.5454545454545454,
+          "settlement": -0.2727272727272727
+        },
+        "search | heuristic": {
+          "games": 10,
+          "win": 0.7,
+          "settlement": 3.1
+        },
+        "search | aggressive+balanced": {
+          "games": 6,
+          "win": 0.8333333333333334,
+          "settlement": 1.1666666666666667
+        },
+        "mixed | aggressive+heuristic": {
+          "games": 10,
+          "win": 1,
+          "settlement": 24.8
+        },
+        "partnership | conservative": {
+          "games": 6,
+          "win": 0.6666666666666666,
+          "settlement": 3.3333333333333335
+        },
+        "pressure | heuristic+score": {
+          "games": 7,
+          "win": 0.2857142857142857,
+          "settlement": -5.142857142857143
+        },
+        "mixed | heuristic+random": {
+          "games": 1,
+          "win": 1,
+          "settlement": 1
+        },
+        "mixed | aggressive": {
+          "games": 1,
+          "win": 0,
+          "settlement": -1
+        },
+        "partnership | heuristic+win": {
+          "games": 8,
+          "win": 1,
+          "settlement": 2.375
+        },
+        "pressure | heuristic": {
+          "games": 5,
+          "win": 0.4,
+          "settlement": -1
+        },
+        "pressure | aggressive+conservative": {
+          "games": 8,
+          "win": 0.875,
+          "settlement": 2.875
+        },
+        "partnership | balanced+win": {
+          "games": 3,
+          "win": 0.6666666666666666,
+          "settlement": 1.6666666666666667
+        },
+        "pressure | conservative+heuristic": {
+          "games": 11,
+          "win": 0.7272727272727273,
+          "settlement": -1.8181818181818181
+        },
+        "mixed | heuristic": {
+          "games": 1,
+          "win": 1,
+          "settlement": 2
+        },
+        "mixed | aggressive+random": {
+          "games": 1,
+          "win": 0,
+          "settlement": -4
+        },
+        "search | balanced+heuristic": {
+          "games": 7,
+          "win": 0.5714285714285714,
+          "settlement": -4
+        },
+        "search | legacy": {
+          "games": 7,
+          "win": 0.2857142857142857,
+          "settlement": -0.8571428571428571
+        },
+        "search | aggressive+heuristic": {
+          "games": 3,
+          "win": 0.3333333333333333,
+          "settlement": 0.6666666666666666
+        },
+        "partnership | balanced": {
+          "games": 5,
+          "win": 1,
+          "settlement": 5.8
+        }
+      },
+      "inference": {
+        "decisions": 3585,
+        "p50ms": 0.159,
+        "p95ms": 0.4953999999999992,
+        "illegal": 0
+      }
+    },
+    "recurrent_score": {
+      "games": 320,
+      "utilities": {
+        "win": {
+          "value": {
+            "mean": 0.584375,
+            "ci95": [
+              0.5399218749999999,
+              0.628125
+            ]
+          },
+          "paired": {
+            "legacy": {
+              "mean": -0.07500000000000001,
+              "ci95": [
+                -0.11562500000000005,
+                -0.0375
+              ]
+            },
+            "score": {
+              "mean": -0.006249999999999993,
+              "ci95": [
+                -0.034375,
+                0.025
+              ]
+            }
+          }
+        },
+        "score": {
+          "value": {
+            "mean": 0.010654296875000004,
+            "ci95": [
+              0.007149780273437504,
+              0.014021484375000002
+            ]
+          },
+          "paired": {
+            "legacy": {
+              "mean": -0.0016943359375,
+              "ci95": [
+                -0.002534790039062501,
+                -0.000837646484375
+              ]
+            },
+            "score": {
+              "mean": 0.00041015625000000047,
+              "ci95": [
+                -0.0002794189453124997,
+                0.0011680908203125
+              ]
+            }
+          }
+        },
+        "balanced": {
+          "value": {
+            "mean": 0.4122587890624998,
+            "ci95": [
+              0.38001777343750004,
+              0.443893798828125
+            ]
+          },
+          "paired": {
+            "legacy": {
+              "mean": -0.053008300781249997,
+              "ci95": [
+                -0.08155145263671876,
+                -0.02653985595703124
+              ]
+            },
+            "score": {
+              "mean": -0.004251953124999988,
+              "ci95": [
+                -0.024077001953124993,
+                0.01769200439453126
+              ]
+            }
+          }
+        }
+      },
+      "winElo": 1215.5426876178979,
+      "settlement": {
+        "mean": 6.81875,
+        "p05": -18,
+        "p50": 2,
+        "p95": 60.200000000000045
+      },
+      "role": {
+        "opposition": {
+          "games": 210,
+          "win": 0.6714285714285714,
+          "settlement": 11.223809523809523
+        },
+        "declarer": {
+          "games": 44,
+          "win": 0.45454545454545453,
+          "settlement": 3.227272727272727
+        },
+        "friend": {
+          "games": 66,
+          "win": 0.3939393939393939,
+          "settlement": -4.803030303030303
+        }
+      },
+      "crossplay": {
+        "mixed": {
+          "games": 80,
+          "win": 0.8,
+          "settlement": 26.975
+        },
+        "partnership": {
+          "games": 80,
+          "win": 0.4125,
+          "settlement": -0.15
+        },
+        "pressure": {
+          "games": 80,
+          "win": 0.5875,
+          "settlement": 0.6
+        },
+        "search": {
+          "games": 80,
+          "win": 0.5375,
+          "settlement": -0.15
+        }
+      },
+      "realizedPartners": {
+        "mixed | aggressive+conservative": {
+          "games": 21,
+          "win": 1,
+          "settlement": 30.952380952380953
+        },
+        "mixed | aggressive+conservative+heuristic": {
+          "games": 18,
+          "win": 1,
+          "settlement": 71.77777777777777
+        },
+        "partnership | win": {
+          "games": 11,
+          "win": 0.5454545454545454,
+          "settlement": 3.727272727272727
+        },
+        "partnership | balanced+conservative": {
+          "games": 8,
+          "win": 0.125,
+          "settlement": -3.875
+        },
+        "partnership | heuristic": {
+          "games": 5,
+          "win": 0.4,
+          "settlement": 1.4
+        },
+        "pressure | aggressive+score": {
+          "games": 5,
+          "win": 0.4,
+          "settlement": -1.4
+        },
+        "pressure | conservative": {
+          "games": 8,
+          "win": 0.625,
+          "settlement": 6.25
+        },
+        "pressure | aggressive+heuristic": {
+          "games": 9,
+          "win": 0.4444444444444444,
+          "settlement": -0.8888888888888888
+        },
+        "pressure | score": {
+          "games": 10,
+          "win": 0.7,
+          "settlement": 4.3
+        },
+        "search | balanced+legacy": {
+          "games": 12,
+          "win": 0.75,
+          "settlement": 0.4166666666666667
+        },
+        "search | aggressive": {
+          "games": 9,
+          "win": 0.2222222222222222,
+          "settlement": -2.888888888888889
+        },
+        "search | heuristic+legacy": {
+          "games": 10,
+          "win": 0.9,
+          "settlement": 4.2
+        },
+        "mixed | random": {
+          "games": 14,
+          "win": 0,
+          "settlement": -25.428571428571427
+        },
+        "mixed | conservative+heuristic": {
+          "games": 13,
+          "win": 1,
+          "settlement": 25.384615384615383
+        },
+        "partnership | conservative+heuristic": {
+          "games": 6,
+          "win": 0.3333333333333333,
+          "settlement": -2.1666666666666665
+        },
+        "partnership | balanced+heuristic": {
+          "games": 14,
+          "win": 0.07142857142857142,
+          "settlement": -4.428571428571429
+        },
+        "partnership | balanced": {
+          "games": 7,
+          "win": 0.8571428571428571,
+          "settlement": 8
+        },
+        "partnership | conservative+win": {
+          "games": 10,
+          "win": 0.3,
+          "settlement": -3.3
+        },
+        "pressure | aggressive": {
+          "games": 7,
+          "win": 0.42857142857142855,
+          "settlement": 2
+        },
+        "pressure | conservative+score": {
+          "games": 11,
+          "win": 0.8181818181818182,
+          "settlement": 1.3636363636363635
+        },
+        "search | balanced": {
+          "games": 5,
+          "win": 0.4,
+          "settlement": 2
+        },
+        "search | aggressive+legacy": {
+          "games": 11,
+          "win": 0.6363636363636364,
+          "settlement": -0.18181818181818182
+        },
+        "search | heuristic": {
+          "games": 10,
+          "win": 0.5,
+          "settlement": 1.1
+        },
+        "search | aggressive+balanced": {
+          "games": 6,
+          "win": 0.3333333333333333,
+          "settlement": -1.8333333333333333
+        },
+        "mixed | aggressive+heuristic": {
+          "games": 10,
+          "win": 1,
+          "settlement": 24.4
+        },
+        "partnership | conservative": {
+          "games": 9,
+          "win": 0.4444444444444444,
+          "settlement": 1.7777777777777777
+        },
+        "pressure | heuristic+score": {
+          "games": 7,
+          "win": 0.2857142857142857,
+          "settlement": -4.857142857142857
+        },
+        "search | legacy": {
+          "games": 7,
+          "win": 0.2857142857142857,
+          "settlement": -2.142857142857143
+        },
+        "mixed | heuristic+random": {
+          "games": 1,
+          "win": 1,
+          "settlement": 1
+        },
+        "mixed | aggressive": {
+          "games": 1,
+          "win": 0,
+          "settlement": -1
+        },
+        "partnership | heuristic+win": {
+          "games": 8,
+          "win": 1,
+          "settlement": 2.125
+        },
+        "pressure | heuristic": {
+          "games": 5,
+          "win": 0.2,
+          "settlement": -4.6
+        },
+        "pressure | aggressive+conservative": {
+          "games": 8,
+          "win": 0.875,
+          "settlement": 3
+        },
+        "pressure | conservative+heuristic": {
+          "games": 10,
+          "win": 0.7,
+          "settlement": -2.6
+        },
+        "mixed | heuristic": {
+          "games": 1,
+          "win": 1,
+          "settlement": 2
+        },
+        "mixed | conservative": {
+          "games": 1,
+          "win": 0,
+          "settlement": -4
+        },
+        "search | balanced+heuristic": {
+          "games": 7,
+          "win": 0.42857142857142855,
+          "settlement": -5
+        },
+        "partnership | balanced+win": {
+          "games": 2,
+          "win": 0,
+          "settlement": -5
+        },
+        "search | aggressive+heuristic": {
+          "games": 3,
+          "win": 0.6666666666666666,
+          "settlement": 3
+        }
+      },
+      "inference": {
+        "decisions": 3664,
+        "p50ms": 0.161,
+        "p95ms": 0.48579999999999923,
+        "illegal": 0
+      }
+    },
+    "recurrent_balanced": {
+      "games": 320,
+      "utilities": {
+        "win": {
+          "value": {
+            "mean": 0.609375,
+            "ci95": [
+              0.564921875,
+              0.6562499999999999
+            ]
+          },
+          "paired": {
+            "legacy": {
+              "mean": -0.05,
+              "ci95": [
+                -0.09132812500000002,
+                -0.014921875000000103
+              ]
+            },
+            "balanced": {
+              "mean": 0.015625,
+              "ci95": [
+                -0.018750000000000003,
+                0.046875000000000014
+              ]
+            }
+          }
+        },
+        "score": {
+          "value": {
+            "mean": 0.010649414062500001,
+            "ci95": [
+              0.0074268798828125,
+              0.0138087158203125
+            ]
+          },
+          "paired": {
+            "legacy": {
+              "mean": -0.0016992187499999996,
+              "ci95": [
+                -0.0025228271484375,
+                -0.0008143310546874997
+              ]
+            },
+            "balanced": {
+              "mean": 0.00011718749999999989,
+              "ci95": [
+                -0.0006212158203124998,
+                0.0009652099609374997
+              ]
+            }
+          }
+        },
+        "balanced": {
+          "value": {
+            "mean": 0.42975732421874985,
+            "ci95": [
+              0.39815604248046865,
+              0.46298074951171864
+            ]
+          },
+          "paired": {
+            "legacy": {
+              "mean": -0.035509765624999995,
+              "ci95": [
+                -0.06451939697265623,
+                -0.01067430419921879
+              ]
+            },
+            "balanced": {
+              "mean": 0.010972656250000013,
+              "ci95": [
+                -0.01333432617187498,
+                0.03305086669921876
+              ]
+            }
+          }
+        }
+      },
+      "winElo": 1325.7633586878278,
+      "settlement": {
+        "mean": 6.815625,
+        "p05": -16,
+        "p50": 2,
+        "p95": 56.200000000000045
+      },
+      "role": {
+        "opposition": {
+          "games": 221,
+          "win": 0.669683257918552,
+          "settlement": 10.687782805429864
+        },
+        "friend": {
+          "games": 81,
+          "win": 0.4444444444444444,
+          "settlement": -3.197530864197531
+        },
+        "declarer": {
+          "games": 18,
+          "win": 0.6111111111111112,
+          "settlement": 4.333333333333333
+        }
+      },
+      "crossplay": {
+        "mixed": {
+          "games": 80,
+          "win": 0.8,
+          "settlement": 26.8375
+        },
+        "partnership": {
+          "games": 80,
+          "win": 0.475,
+          "settlement": -0.0375
+        },
+        "pressure": {
+          "games": 80,
+          "win": 0.5625,
+          "settlement": 0.2125
+        },
+        "search": {
+          "games": 80,
+          "win": 0.6,
+          "settlement": 0.25
+        }
+      },
+      "realizedPartners": {
+        "mixed | aggressive+conservative": {
+          "games": 21,
+          "win": 1,
+          "settlement": 30.80952380952381
+        },
+        "mixed | aggressive+conservative+heuristic": {
+          "games": 18,
+          "win": 1,
+          "settlement": 70.22222222222223
+        },
+        "partnership | win": {
+          "games": 12,
+          "win": 0.6666666666666666,
+          "settlement": 3.3333333333333335
+        },
+        "partnership | balanced+conservative": {
+          "games": 8,
+          "win": 0,
+          "settlement": -4.375
+        },
+        "partnership | heuristic": {
+          "games": 6,
+          "win": 0.6666666666666666,
+          "settlement": 3.6666666666666665
+        },
+        "pressure | aggressive+score": {
+          "games": 6,
+          "win": 0.5,
+          "settlement": -0.8333333333333334
+        },
+        "pressure | conservative": {
+          "games": 5,
+          "win": 0.6,
+          "settlement": 7.6
+        },
+        "pressure | aggressive+heuristic": {
+          "games": 10,
+          "win": 0.5,
+          "settlement": -0.1
+        },
+        "pressure | score": {
+          "games": 8,
+          "win": 0.625,
+          "settlement": 0.25
+        },
+        "search | balanced+legacy": {
+          "games": 13,
+          "win": 0.7692307692307693,
+          "settlement": 0.9230769230769231
+        },
+        "search | aggressive": {
+          "games": 9,
+          "win": 0.1111111111111111,
+          "settlement": -4
+        },
+        "search | heuristic+legacy": {
+          "games": 10,
+          "win": 0.9,
+          "settlement": 3.9
+        },
+        "mixed | random": {
+          "games": 14,
+          "win": 0,
+          "settlement": -24.071428571428573
+        },
+        "mixed | conservative+heuristic": {
+          "games": 13,
+          "win": 1,
+          "settlement": 25.46153846153846
+        },
+        "partnership | conservative+heuristic": {
+          "games": 6,
+          "win": 0.3333333333333333,
+          "settlement": -1.8333333333333333
+        },
+        "partnership | balanced+heuristic": {
+          "games": 15,
+          "win": 0.13333333333333333,
+          "settlement": -3.4
+        },
+        "partnership | conservative+win": {
+          "games": 11,
+          "win": 0.2727272727272727,
+          "settlement": -3.3636363636363638
+        },
+        "pressure | aggressive": {
+          "games": 7,
+          "win": 0.5714285714285714,
+          "settlement": 5.571428571428571
+        },
+        "pressure | conservative+score": {
+          "games": 14,
+          "win": 0.5714285714285714,
+          "settlement": -0.14285714285714285
+        },
+        "search | balanced": {
+          "games": 4,
+          "win": 0.5,
+          "settlement": 1.5
+        },
+        "search | aggressive+legacy": {
+          "games": 11,
+          "win": 0.5454545454545454,
+          "settlement": -0.2727272727272727
+        },
+        "search | heuristic": {
+          "games": 10,
+          "win": 0.8,
+          "settlement": 2.7
+        },
+        "search | aggressive+balanced": {
+          "games": 6,
+          "win": 0.8333333333333334,
+          "settlement": 1.1666666666666667
+        },
+        "mixed | aggressive+heuristic": {
+          "games": 10,
+          "win": 1,
+          "settlement": 24.4
+        },
+        "partnership | conservative": {
+          "games": 6,
+          "win": 0.6666666666666666,
+          "settlement": 3.3333333333333335
+        },
+        "pressure | heuristic+score": {
+          "games": 7,
+          "win": 0.2857142857142857,
+          "settlement": -4.857142857142857
+        },
+        "mixed | heuristic+random": {
+          "games": 1,
+          "win": 1,
+          "settlement": 1
+        },
+        "mixed | aggressive": {
+          "games": 1,
+          "win": 0,
+          "settlement": -1
+        },
+        "partnership | heuristic+win": {
+          "games": 8,
+          "win": 1,
+          "settlement": 2.375
+        },
+        "pressure | heuristic": {
+          "games": 4,
+          "win": 0.25,
+          "settlement": -3.75
+        },
+        "pressure | aggressive+conservative": {
+          "games": 8,
+          "win": 0.875,
+          "settlement": 2.875
+        },
+        "partnership | balanced+win": {
+          "games": 3,
+          "win": 1,
+          "settlement": 4
+        },
+        "pressure | conservative+heuristic": {
+          "games": 11,
+          "win": 0.6363636363636364,
+          "settlement": -2.5454545454545454
+        },
+        "mixed | heuristic": {
+          "games": 1,
+          "win": 1,
+          "settlement": 2
+        },
+        "mixed | aggressive+random": {
+          "games": 1,
+          "win": 0,
+          "settlement": -4
+        },
+        "search | balanced+heuristic": {
+          "games": 7,
+          "win": 0.5714285714285714,
+          "settlement": -4
+        },
+        "search | legacy": {
+          "games": 7,
+          "win": 0.2857142857142857,
+          "settlement": -0.8571428571428571
+        },
+        "search | aggressive+heuristic": {
+          "games": 3,
+          "win": 0.3333333333333333,
+          "settlement": 0.6666666666666666
+        },
+        "partnership | balanced": {
+          "games": 5,
+          "win": 0.8,
+          "settlement": 3.6
+        }
+      },
+      "inference": {
+        "decisions": 3588,
+        "p50ms": 0.157,
+        "p95ms": 0.3818999999999978,
+        "illegal": 0
+      }
+    },
+    "belief_uniform": {
+      "games": 320,
+      "utilities": {
+        "win": {
+          "value": {
+            "mean": 0.6000000000000001,
+            "ci95": [
+              0.5562500000000001,
+              0.6437500000000003
+            ]
+          },
+          "paired": {
+            "legacy": {
+              "mean": -0.05937500000000002,
+              "ci95": [
+                -0.09375000000000004,
+                -0.02500000000000001
+              ]
+            },
+            "heuristic": {
+              "mean": 0.003125,
+              "ci95": [
+                0,
+                0.009375000000000001
+              ]
+            }
+          }
+        },
+        "score": {
+          "value": {
+            "mean": 0.010429687499999998,
+            "ci95": [
+              0.007041015625000001,
+              0.013753906249999994
+            ]
+          },
+          "paired": {
+            "legacy": {
+              "mean": -0.0019189453124999994,
+              "ci95": [
+                -0.002809814453125,
+                -0.0009814453125000003
+              ]
+            },
+            "heuristic": {
+              "mean": 0.00009765625000000002,
+              "ci95": [
+                0,
+                0.00026367187500000007
+              ]
+            }
+          }
+        },
+        "balanced": {
+          "value": {
+            "mean": 0.42312890624999994,
+            "ci95": [
+              0.39147906494140616,
+              0.4542306396484375
+            ]
+          },
+          "paired": {
+            "legacy": {
+              "mean": -0.04213818359374999,
+              "ci95": [
+                -0.06621287841796877,
+                -0.018035913085937508
+              ]
+            },
+            "heuristic": {
+              "mean": 0.0022167968749999996,
+              "ci95": [
+                0,
+                0.006641601562499998
+              ]
+            }
+          }
+        }
+      },
+      "winElo": 1283.758259583393,
+      "settlement": {
+        "mean": 6.675,
+        "p05": -18,
+        "p50": 2,
+        "p95": 56.200000000000045
+      },
+      "role": {
+        "opposition": {
+          "games": 207,
+          "win": 0.7004830917874396,
+          "settlement": 11.666666666666666
+        },
+        "declarer": {
+          "games": 48,
+          "win": 0.4583333333333333,
+          "settlement": 1.3333333333333333
+        },
+        "friend": {
+          "games": 65,
+          "win": 0.38461538461538464,
+          "settlement": -5.276923076923077
+        }
+      },
+      "crossplay": {
+        "mixed": {
+          "games": 80,
+          "win": 0.7875,
+          "settlement": 26.5125
+        },
+        "partnership": {
+          "games": 80,
+          "win": 0.5,
+          "settlement": 0.2625
+        },
+        "pressure": {
+          "games": 80,
+          "win": 0.5625,
+          "settlement": 0.475
+        },
+        "search": {
+          "games": 80,
+          "win": 0.55,
+          "settlement": -0.55
+        }
+      },
+      "realizedPartners": {
+        "mixed | aggressive+conservative": {
+          "games": 21,
+          "win": 1,
+          "settlement": 31.714285714285715
+        },
+        "mixed | aggressive+conservative+heuristic": {
+          "games": 18,
+          "win": 1,
+          "settlement": 70.88888888888889
+        },
+        "partnership | win": {
+          "games": 11,
+          "win": 0.7272727272727273,
+          "settlement": 4.7272727272727275
+        },
+        "partnership | balanced+conservative": {
+          "games": 8,
+          "win": 0.125,
+          "settlement": -4
+        },
+        "partnership | heuristic": {
+          "games": 6,
+          "win": 0.6666666666666666,
+          "settlement": 3.6666666666666665
+        },
+        "pressure | aggressive+score": {
+          "games": 4,
+          "win": 0.5,
+          "settlement": -0.5
+        },
+        "pressure | conservative": {
+          "games": 10,
+          "win": 0.5,
+          "settlement": 4.6
+        },
+        "pressure | aggressive+heuristic": {
+          "games": 9,
+          "win": 0.3333333333333333,
+          "settlement": -0.8888888888888888
+        },
+        "pressure | score": {
+          "games": 9,
+          "win": 0.6666666666666666,
+          "settlement": 1
+        },
+        "search | balanced+legacy": {
+          "games": 12,
+          "win": 0.75,
+          "settlement": 0.25
+        },
+        "search | aggressive": {
+          "games": 9,
+          "win": 0.1111111111111111,
+          "settlement": -1.8888888888888888
+        },
+        "search | heuristic+legacy": {
+          "games": 9,
+          "win": 1,
+          "settlement": 3.4444444444444446
+        },
+        "mixed | random": {
+          "games": 14,
+          "win": 0,
+          "settlement": -28.285714285714285
+        },
+        "mixed | conservative+heuristic": {
+          "games": 13,
+          "win": 1,
+          "settlement": 25.692307692307693
+        },
+        "partnership | conservative+heuristic": {
+          "games": 5,
+          "win": 0.6,
+          "settlement": -0.2
+        },
+        "partnership | balanced+heuristic": {
+          "games": 14,
+          "win": 0.07142857142857142,
+          "settlement": -4.142857142857143
+        },
+        "partnership | balanced": {
+          "games": 8,
+          "win": 0.875,
+          "settlement": 5
+        },
+        "partnership | conservative+win": {
+          "games": 10,
+          "win": 0.3,
+          "settlement": -3
+        },
+        "pressure | aggressive": {
+          "games": 7,
+          "win": 0.5714285714285714,
+          "settlement": 4.285714285714286
+        },
+        "pressure | conservative+score": {
+          "games": 11,
+          "win": 0.6363636363636364,
+          "settlement": 0.36363636363636365
+        },
+        "search | balanced": {
+          "games": 6,
+          "win": 0.16666666666666666,
+          "settlement": -6.333333333333333
+        },
+        "search | aggressive+legacy": {
+          "games": 11,
+          "win": 0.5454545454545454,
+          "settlement": -0.5454545454545454
+        },
+        "search | heuristic": {
+          "games": 10,
+          "win": 0.6,
+          "settlement": 1.5
+        },
+        "search | aggressive+balanced": {
+          "games": 6,
+          "win": 0.6666666666666666,
+          "settlement": 0.3333333333333333
+        },
+        "mixed | aggressive+heuristic": {
+          "games": 10,
+          "win": 1,
+          "settlement": 24.8
+        },
+        "partnership | conservative": {
+          "games": 8,
+          "win": 0.375,
+          "settlement": 0.875
+        },
+        "pressure | heuristic+score": {
+          "games": 7,
+          "win": 0.2857142857142857,
+          "settlement": -5.142857142857143
+        },
+        "search | legacy": {
+          "games": 7,
+          "win": 0.14285714285714285,
+          "settlement": -2.857142857142857
+        },
+        "mixed | heuristic+random": {
+          "games": 1,
+          "win": 1,
+          "settlement": 1
+        },
+        "mixed | aggressive": {
+          "games": 1,
+          "win": 0,
+          "settlement": -1
+        },
+        "partnership | heuristic+win": {
+          "games": 8,
+          "win": 1,
+          "settlement": 2.375
+        },
+        "pressure | heuristic": {
+          "games": 5,
+          "win": 0.2,
+          "settlement": -4.2
+        },
+        "pressure | aggressive+conservative": {
+          "games": 8,
+          "win": 0.875,
+          "settlement": 4
+        },
+        "pressure | conservative+heuristic": {
+          "games": 10,
+          "win": 0.8,
+          "settlement": -1.6
+        },
+        "mixed | heuristic": {
+          "games": 1,
+          "win": 0,
+          "settlement": -1
+        },
+        "mixed | conservative": {
+          "games": 1,
+          "win": 0,
+          "settlement": -6
+        },
+        "search | balanced+heuristic": {
+          "games": 7,
+          "win": 0.7142857142857143,
+          "settlement": -3.2857142857142856
+        },
+        "partnership | balanced+win": {
+          "games": 2,
+          "win": 1,
+          "settlement": 1
+        },
+        "search | aggressive+heuristic": {
+          "games": 3,
+          "win": 0.6666666666666666,
+          "settlement": 3
+        }
+      },
+      "inference": {
+        "decisions": 3672,
+        "p50ms": 0.031,
+        "p95ms": 56.01489999999993,
+        "illegal": 0
+      }
+    },
+    "belief_learned": {
+      "games": 320,
+      "utilities": {
+        "win": {
+          "value": {
+            "mean": 0.6000000000000001,
+            "ci95": [
+              0.5562500000000001,
+              0.6437500000000003
+            ]
+          },
+          "paired": {
+            "legacy": {
+              "mean": -0.05937500000000002,
+              "ci95": [
+                -0.09375000000000004,
+                -0.02500000000000001
+              ]
+            },
+            "belief_uniform": {
+              "mean": 0,
+              "ci95": [
+                0,
+                0
+              ]
+            }
+          }
+        },
+        "score": {
+          "value": {
+            "mean": 0.010429687499999998,
+            "ci95": [
+              0.007041015625000001,
+              0.013753906249999994
+            ]
+          },
+          "paired": {
+            "legacy": {
+              "mean": -0.0019189453124999994,
+              "ci95": [
+                -0.002809814453125,
+                -0.0009814453125000003
+              ]
+            },
+            "belief_uniform": {
+              "mean": 0,
+              "ci95": [
+                0,
+                0
+              ]
+            }
+          }
+        },
+        "balanced": {
+          "value": {
+            "mean": 0.42312890624999994,
+            "ci95": [
+              0.39147906494140616,
+              0.4542306396484375
+            ]
+          },
+          "paired": {
+            "legacy": {
+              "mean": -0.04213818359374999,
+              "ci95": [
+                -0.06621287841796877,
+                -0.018035913085937508
+              ]
+            },
+            "belief_uniform": {
+              "mean": 0,
+              "ci95": [
+                0,
+                0
+              ]
+            }
+          }
+        }
+      },
+      "winElo": 1283.758259583393,
+      "settlement": {
+        "mean": 6.675,
+        "p05": -18,
+        "p50": 2,
+        "p95": 56.200000000000045
+      },
+      "role": {
+        "opposition": {
+          "games": 207,
+          "win": 0.7004830917874396,
+          "settlement": 11.666666666666666
+        },
+        "declarer": {
+          "games": 48,
+          "win": 0.4583333333333333,
+          "settlement": 1.3333333333333333
+        },
+        "friend": {
+          "games": 65,
+          "win": 0.38461538461538464,
+          "settlement": -5.276923076923077
+        }
+      },
+      "crossplay": {
+        "mixed": {
+          "games": 80,
+          "win": 0.7875,
+          "settlement": 26.5125
+        },
+        "partnership": {
+          "games": 80,
+          "win": 0.5,
+          "settlement": 0.2625
+        },
+        "pressure": {
+          "games": 80,
+          "win": 0.5625,
+          "settlement": 0.475
+        },
+        "search": {
+          "games": 80,
+          "win": 0.55,
+          "settlement": -0.55
+        }
+      },
+      "realizedPartners": {
+        "mixed | aggressive+conservative": {
+          "games": 21,
+          "win": 1,
+          "settlement": 31.714285714285715
+        },
+        "mixed | aggressive+conservative+heuristic": {
+          "games": 18,
+          "win": 1,
+          "settlement": 70.88888888888889
+        },
+        "partnership | win": {
+          "games": 11,
+          "win": 0.7272727272727273,
+          "settlement": 4.7272727272727275
+        },
+        "partnership | balanced+conservative": {
+          "games": 8,
+          "win": 0.125,
+          "settlement": -4
+        },
+        "partnership | heuristic": {
+          "games": 6,
+          "win": 0.6666666666666666,
+          "settlement": 3.6666666666666665
+        },
+        "pressure | aggressive+score": {
+          "games": 4,
+          "win": 0.5,
+          "settlement": -0.5
+        },
+        "pressure | conservative": {
+          "games": 10,
+          "win": 0.5,
+          "settlement": 4.6
+        },
+        "pressure | aggressive+heuristic": {
+          "games": 9,
+          "win": 0.3333333333333333,
+          "settlement": -0.8888888888888888
+        },
+        "pressure | score": {
+          "games": 9,
+          "win": 0.6666666666666666,
+          "settlement": 1
+        },
+        "search | balanced+legacy": {
+          "games": 12,
+          "win": 0.75,
+          "settlement": 0.25
+        },
+        "search | aggressive": {
+          "games": 9,
+          "win": 0.1111111111111111,
+          "settlement": -1.8888888888888888
+        },
+        "search | heuristic+legacy": {
+          "games": 9,
+          "win": 1,
+          "settlement": 3.4444444444444446
+        },
+        "mixed | random": {
+          "games": 14,
+          "win": 0,
+          "settlement": -28.285714285714285
+        },
+        "mixed | conservative+heuristic": {
+          "games": 13,
+          "win": 1,
+          "settlement": 25.692307692307693
+        },
+        "partnership | conservative+heuristic": {
+          "games": 5,
+          "win": 0.6,
+          "settlement": -0.2
+        },
+        "partnership | balanced+heuristic": {
+          "games": 14,
+          "win": 0.07142857142857142,
+          "settlement": -4.142857142857143
+        },
+        "partnership | balanced": {
+          "games": 8,
+          "win": 0.875,
+          "settlement": 5
+        },
+        "partnership | conservative+win": {
+          "games": 10,
+          "win": 0.3,
+          "settlement": -3
+        },
+        "pressure | aggressive": {
+          "games": 7,
+          "win": 0.5714285714285714,
+          "settlement": 4.285714285714286
+        },
+        "pressure | conservative+score": {
+          "games": 11,
+          "win": 0.6363636363636364,
+          "settlement": 0.36363636363636365
+        },
+        "search | balanced": {
+          "games": 6,
+          "win": 0.16666666666666666,
+          "settlement": -6.333333333333333
+        },
+        "search | aggressive+legacy": {
+          "games": 11,
+          "win": 0.5454545454545454,
+          "settlement": -0.5454545454545454
+        },
+        "search | heuristic": {
+          "games": 10,
+          "win": 0.6,
+          "settlement": 1.5
+        },
+        "search | aggressive+balanced": {
+          "games": 6,
+          "win": 0.6666666666666666,
+          "settlement": 0.3333333333333333
+        },
+        "mixed | aggressive+heuristic": {
+          "games": 10,
+          "win": 1,
+          "settlement": 24.8
+        },
+        "partnership | conservative": {
+          "games": 8,
+          "win": 0.375,
+          "settlement": 0.875
+        },
+        "pressure | heuristic+score": {
+          "games": 7,
+          "win": 0.2857142857142857,
+          "settlement": -5.142857142857143
+        },
+        "search | legacy": {
+          "games": 7,
+          "win": 0.14285714285714285,
+          "settlement": -2.857142857142857
+        },
+        "mixed | heuristic+random": {
+          "games": 1,
+          "win": 1,
+          "settlement": 1
+        },
+        "mixed | aggressive": {
+          "games": 1,
+          "win": 0,
+          "settlement": -1
+        },
+        "partnership | heuristic+win": {
+          "games": 8,
+          "win": 1,
+          "settlement": 2.375
+        },
+        "pressure | heuristic": {
+          "games": 5,
+          "win": 0.2,
+          "settlement": -4.2
+        },
+        "pressure | aggressive+conservative": {
+          "games": 8,
+          "win": 0.875,
+          "settlement": 4
+        },
+        "pressure | conservative+heuristic": {
+          "games": 10,
+          "win": 0.8,
+          "settlement": -1.6
+        },
+        "mixed | heuristic": {
+          "games": 1,
+          "win": 0,
+          "settlement": -1
+        },
+        "mixed | conservative": {
+          "games": 1,
+          "win": 0,
+          "settlement": -6
+        },
+        "search | balanced+heuristic": {
+          "games": 7,
+          "win": 0.7142857142857143,
+          "settlement": -3.2857142857142856
+        },
+        "partnership | balanced+win": {
+          "games": 2,
+          "win": 1,
+          "settlement": 1
+        },
+        "search | aggressive+heuristic": {
+          "games": 3,
+          "win": 0.6666666666666666,
+          "settlement": 3
+        }
+      },
+      "inference": {
+        "decisions": 3672,
+        "p50ms": 0.031,
+        "p95ms": 55.98964999999978,
+        "illegal": 0
+      }
+    },
+    "gru_belief_uniform": {
+      "games": 320,
+      "utilities": {
+        "win": {
+          "value": {
+            "mean": 0.609375,
+            "ci95": [
+              0.564921875,
+              0.6562499999999999
+            ]
+          },
+          "paired": {
+            "legacy": {
+              "mean": -0.05,
+              "ci95": [
+                -0.09132812500000002,
+                -0.014921875000000103
+              ]
+            },
+            "recurrent_balanced": {
+              "mean": 0,
+              "ci95": [
+                0,
+                0
+              ]
+            }
+          }
+        },
+        "score": {
+          "value": {
+            "mean": 0.010659179687500001,
+            "ci95": [
+              0.0074366455078125,
+              0.0138087158203125
+            ]
+          },
+          "paired": {
+            "legacy": {
+              "mean": -0.0016894531249999998,
+              "ci95": [
+                -0.002521728515625,
+                -0.0008143310546874997
+              ]
+            },
+            "recurrent_balanced": {
+              "mean": 0.000009765625000000009,
+              "ci95": [
+                0,
+                0.000029296875000000026
+              ]
+            }
+          }
+        },
+        "balanced": {
+          "value": {
+            "mean": 0.4297602539062498,
+            "ci95": [
+              0.3981619018554686,
+              0.46298140869140614
+            ]
+          },
+          "paired": {
+            "legacy": {
+              "mean": -0.035506835937499995,
+              "ci95": [
+                -0.06451580810546872,
+                -0.01067203369140629
+              ]
+            },
+            "recurrent_balanced": {
+              "mean": 0.000002929687500000111,
+              "ci95": [
+                0,
+                0.000008789062500000333
+              ]
+            }
+          }
+        }
+      },
+      "winElo": 1325.7633586878278,
+      "settlement": {
+        "mean": 6.821875,
+        "p05": -16,
+        "p50": 2,
+        "p95": 56.200000000000045
+      },
+      "role": {
+        "opposition": {
+          "games": 221,
+          "win": 0.669683257918552,
+          "settlement": 10.69683257918552
+        },
+        "friend": {
+          "games": 81,
+          "win": 0.4444444444444444,
+          "settlement": -3.197530864197531
+        },
+        "declarer": {
+          "games": 18,
+          "win": 0.6111111111111112,
+          "settlement": 4.333333333333333
+        }
+      },
+      "crossplay": {
+        "mixed": {
+          "games": 80,
+          "win": 0.8,
+          "settlement": 26.8625
+        },
+        "partnership": {
+          "games": 80,
+          "win": 0.475,
+          "settlement": -0.0375
+        },
+        "pressure": {
+          "games": 80,
+          "win": 0.5625,
+          "settlement": 0.2125
+        },
+        "search": {
+          "games": 80,
+          "win": 0.6,
+          "settlement": 0.25
+        }
+      },
+      "realizedPartners": {
+        "mixed | aggressive+conservative": {
+          "games": 21,
+          "win": 1,
+          "settlement": 30.904761904761905
+        },
+        "mixed | aggressive+conservative+heuristic": {
+          "games": 18,
+          "win": 1,
+          "settlement": 70.22222222222223
+        },
+        "partnership | win": {
+          "games": 12,
+          "win": 0.6666666666666666,
+          "settlement": 3.3333333333333335
+        },
+        "partnership | balanced+conservative": {
+          "games": 8,
+          "win": 0,
+          "settlement": -4.375
+        },
+        "partnership | heuristic": {
+          "games": 6,
+          "win": 0.6666666666666666,
+          "settlement": 3.6666666666666665
+        },
+        "pressure | aggressive+score": {
+          "games": 6,
+          "win": 0.5,
+          "settlement": -0.8333333333333334
+        },
+        "pressure | conservative": {
+          "games": 5,
+          "win": 0.6,
+          "settlement": 7.6
+        },
+        "pressure | aggressive+heuristic": {
+          "games": 10,
+          "win": 0.5,
+          "settlement": -0.1
+        },
+        "pressure | score": {
+          "games": 8,
+          "win": 0.625,
+          "settlement": 0.25
+        },
+        "search | balanced+legacy": {
+          "games": 13,
+          "win": 0.7692307692307693,
+          "settlement": 0.9230769230769231
+        },
+        "search | aggressive": {
+          "games": 9,
+          "win": 0.1111111111111111,
+          "settlement": -4
+        },
+        "search | heuristic+legacy": {
+          "games": 10,
+          "win": 0.9,
+          "settlement": 3.9
+        },
+        "mixed | random": {
+          "games": 14,
+          "win": 0,
+          "settlement": -24.071428571428573
+        },
+        "mixed | conservative+heuristic": {
+          "games": 13,
+          "win": 1,
+          "settlement": 25.46153846153846
+        },
+        "partnership | conservative+heuristic": {
+          "games": 6,
+          "win": 0.3333333333333333,
+          "settlement": -1.8333333333333333
+        },
+        "partnership | balanced+heuristic": {
+          "games": 15,
+          "win": 0.13333333333333333,
+          "settlement": -3.4
+        },
+        "partnership | conservative+win": {
+          "games": 11,
+          "win": 0.2727272727272727,
+          "settlement": -3.3636363636363638
+        },
+        "pressure | aggressive": {
+          "games": 7,
+          "win": 0.5714285714285714,
+          "settlement": 5.571428571428571
+        },
+        "pressure | conservative+score": {
+          "games": 14,
+          "win": 0.5714285714285714,
+          "settlement": -0.14285714285714285
+        },
+        "search | balanced": {
+          "games": 4,
+          "win": 0.5,
+          "settlement": 1.5
+        },
+        "search | aggressive+legacy": {
+          "games": 11,
+          "win": 0.5454545454545454,
+          "settlement": -0.2727272727272727
+        },
+        "search | heuristic": {
+          "games": 10,
+          "win": 0.8,
+          "settlement": 2.7
+        },
+        "search | aggressive+balanced": {
+          "games": 6,
+          "win": 0.8333333333333334,
+          "settlement": 1.1666666666666667
+        },
+        "mixed | aggressive+heuristic": {
+          "games": 10,
+          "win": 1,
+          "settlement": 24.4
+        },
+        "partnership | conservative": {
+          "games": 6,
+          "win": 0.6666666666666666,
+          "settlement": 3.3333333333333335
+        },
+        "pressure | heuristic+score": {
+          "games": 7,
+          "win": 0.2857142857142857,
+          "settlement": -4.857142857142857
+        },
+        "mixed | heuristic+random": {
+          "games": 1,
+          "win": 1,
+          "settlement": 1
+        },
+        "mixed | aggressive": {
+          "games": 1,
+          "win": 0,
+          "settlement": -1
+        },
+        "partnership | heuristic+win": {
+          "games": 8,
+          "win": 1,
+          "settlement": 2.375
+        },
+        "pressure | heuristic": {
+          "games": 4,
+          "win": 0.25,
+          "settlement": -3.75
+        },
+        "pressure | aggressive+conservative": {
+          "games": 8,
+          "win": 0.875,
+          "settlement": 2.875
+        },
+        "partnership | balanced+win": {
+          "games": 3,
+          "win": 1,
+          "settlement": 4
+        },
+        "pressure | conservative+heuristic": {
+          "games": 11,
+          "win": 0.6363636363636364,
+          "settlement": -2.5454545454545454
+        },
+        "mixed | heuristic": {
+          "games": 1,
+          "win": 1,
+          "settlement": 2
+        },
+        "mixed | aggressive+random": {
+          "games": 1,
+          "win": 0,
+          "settlement": -4
+        },
+        "search | balanced+heuristic": {
+          "games": 7,
+          "win": 0.5714285714285714,
+          "settlement": -4
+        },
+        "search | legacy": {
+          "games": 7,
+          "win": 0.2857142857142857,
+          "settlement": -0.8571428571428571
+        },
+        "search | aggressive+heuristic": {
+          "games": 3,
+          "win": 0.3333333333333333,
+          "settlement": 0.6666666666666666
+        },
+        "partnership | balanced": {
+          "games": 5,
+          "win": 0.8,
+          "settlement": 3.6
+        }
+      },
+      "inference": {
+        "decisions": 3588,
+        "p50ms": 0.17,
+        "p95ms": 56.91249999999998,
+        "illegal": 0
+      }
+    },
+    "gru_belief_learned": {
+      "games": 320,
+      "utilities": {
+        "win": {
+          "value": {
+            "mean": 0.609375,
+            "ci95": [
+              0.564921875,
+              0.6562499999999999
+            ]
+          },
+          "paired": {
+            "legacy": {
+              "mean": -0.05,
+              "ci95": [
+                -0.09132812500000002,
+                -0.014921875000000103
+              ]
+            },
+            "gru_belief_uniform": {
+              "mean": 0,
+              "ci95": [
+                0,
+                0
+              ]
+            }
+          }
+        },
+        "score": {
+          "value": {
+            "mean": 0.010659179687500001,
+            "ci95": [
+              0.0074366455078125,
+              0.0138087158203125
+            ]
+          },
+          "paired": {
+            "legacy": {
+              "mean": -0.0016894531249999998,
+              "ci95": [
+                -0.002521728515625,
+                -0.0008143310546874997
+              ]
+            },
+            "gru_belief_uniform": {
+              "mean": 0,
+              "ci95": [
+                0,
+                0
+              ]
+            }
+          }
+        },
+        "balanced": {
+          "value": {
+            "mean": 0.4297602539062498,
+            "ci95": [
+              0.3981619018554686,
+              0.46298140869140614
+            ]
+          },
+          "paired": {
+            "legacy": {
+              "mean": -0.035506835937499995,
+              "ci95": [
+                -0.06451580810546872,
+                -0.01067203369140629
+              ]
+            },
+            "gru_belief_uniform": {
+              "mean": 0,
+              "ci95": [
+                0,
+                0
+              ]
+            }
+          }
+        }
+      },
+      "winElo": 1325.7633586878278,
+      "settlement": {
+        "mean": 6.821875,
+        "p05": -16,
+        "p50": 2,
+        "p95": 56.200000000000045
+      },
+      "role": {
+        "opposition": {
+          "games": 221,
+          "win": 0.669683257918552,
+          "settlement": 10.69683257918552
+        },
+        "friend": {
+          "games": 81,
+          "win": 0.4444444444444444,
+          "settlement": -3.197530864197531
+        },
+        "declarer": {
+          "games": 18,
+          "win": 0.6111111111111112,
+          "settlement": 4.333333333333333
+        }
+      },
+      "crossplay": {
+        "mixed": {
+          "games": 80,
+          "win": 0.8,
+          "settlement": 26.8625
+        },
+        "partnership": {
+          "games": 80,
+          "win": 0.475,
+          "settlement": -0.0375
+        },
+        "pressure": {
+          "games": 80,
+          "win": 0.5625,
+          "settlement": 0.2125
+        },
+        "search": {
+          "games": 80,
+          "win": 0.6,
+          "settlement": 0.25
+        }
+      },
+      "realizedPartners": {
+        "mixed | aggressive+conservative": {
+          "games": 21,
+          "win": 1,
+          "settlement": 30.904761904761905
+        },
+        "mixed | aggressive+conservative+heuristic": {
+          "games": 18,
+          "win": 1,
+          "settlement": 70.22222222222223
+        },
+        "partnership | win": {
+          "games": 12,
+          "win": 0.6666666666666666,
+          "settlement": 3.3333333333333335
+        },
+        "partnership | balanced+conservative": {
+          "games": 8,
+          "win": 0,
+          "settlement": -4.375
+        },
+        "partnership | heuristic": {
+          "games": 6,
+          "win": 0.6666666666666666,
+          "settlement": 3.6666666666666665
+        },
+        "pressure | aggressive+score": {
+          "games": 6,
+          "win": 0.5,
+          "settlement": -0.8333333333333334
+        },
+        "pressure | conservative": {
+          "games": 5,
+          "win": 0.6,
+          "settlement": 7.6
+        },
+        "pressure | aggressive+heuristic": {
+          "games": 10,
+          "win": 0.5,
+          "settlement": -0.1
+        },
+        "pressure | score": {
+          "games": 8,
+          "win": 0.625,
+          "settlement": 0.25
+        },
+        "search | balanced+legacy": {
+          "games": 13,
+          "win": 0.7692307692307693,
+          "settlement": 0.9230769230769231
+        },
+        "search | aggressive": {
+          "games": 9,
+          "win": 0.1111111111111111,
+          "settlement": -4
+        },
+        "search | heuristic+legacy": {
+          "games": 10,
+          "win": 0.9,
+          "settlement": 3.9
+        },
+        "mixed | random": {
+          "games": 14,
+          "win": 0,
+          "settlement": -24.071428571428573
+        },
+        "mixed | conservative+heuristic": {
+          "games": 13,
+          "win": 1,
+          "settlement": 25.46153846153846
+        },
+        "partnership | conservative+heuristic": {
+          "games": 6,
+          "win": 0.3333333333333333,
+          "settlement": -1.8333333333333333
+        },
+        "partnership | balanced+heuristic": {
+          "games": 15,
+          "win": 0.13333333333333333,
+          "settlement": -3.4
+        },
+        "partnership | conservative+win": {
+          "games": 11,
+          "win": 0.2727272727272727,
+          "settlement": -3.3636363636363638
+        },
+        "pressure | aggressive": {
+          "games": 7,
+          "win": 0.5714285714285714,
+          "settlement": 5.571428571428571
+        },
+        "pressure | conservative+score": {
+          "games": 14,
+          "win": 0.5714285714285714,
+          "settlement": -0.14285714285714285
+        },
+        "search | balanced": {
+          "games": 4,
+          "win": 0.5,
+          "settlement": 1.5
+        },
+        "search | aggressive+legacy": {
+          "games": 11,
+          "win": 0.5454545454545454,
+          "settlement": -0.2727272727272727
+        },
+        "search | heuristic": {
+          "games": 10,
+          "win": 0.8,
+          "settlement": 2.7
+        },
+        "search | aggressive+balanced": {
+          "games": 6,
+          "win": 0.8333333333333334,
+          "settlement": 1.1666666666666667
+        },
+        "mixed | aggressive+heuristic": {
+          "games": 10,
+          "win": 1,
+          "settlement": 24.4
+        },
+        "partnership | conservative": {
+          "games": 6,
+          "win": 0.6666666666666666,
+          "settlement": 3.3333333333333335
+        },
+        "pressure | heuristic+score": {
+          "games": 7,
+          "win": 0.2857142857142857,
+          "settlement": -4.857142857142857
+        },
+        "mixed | heuristic+random": {
+          "games": 1,
+          "win": 1,
+          "settlement": 1
+        },
+        "mixed | aggressive": {
+          "games": 1,
+          "win": 0,
+          "settlement": -1
+        },
+        "partnership | heuristic+win": {
+          "games": 8,
+          "win": 1,
+          "settlement": 2.375
+        },
+        "pressure | heuristic": {
+          "games": 4,
+          "win": 0.25,
+          "settlement": -3.75
+        },
+        "pressure | aggressive+conservative": {
+          "games": 8,
+          "win": 0.875,
+          "settlement": 2.875
+        },
+        "partnership | balanced+win": {
+          "games": 3,
+          "win": 1,
+          "settlement": 4
+        },
+        "pressure | conservative+heuristic": {
+          "games": 11,
+          "win": 0.6363636363636364,
+          "settlement": -2.5454545454545454
+        },
+        "mixed | heuristic": {
+          "games": 1,
+          "win": 1,
+          "settlement": 2
+        },
+        "mixed | aggressive+random": {
+          "games": 1,
+          "win": 0,
+          "settlement": -4
+        },
+        "search | balanced+heuristic": {
+          "games": 7,
+          "win": 0.5714285714285714,
+          "settlement": -4
+        },
+        "search | legacy": {
+          "games": 7,
+          "win": 0.2857142857142857,
+          "settlement": -0.8571428571428571
+        },
+        "search | aggressive+heuristic": {
+          "games": 3,
+          "win": 0.3333333333333333,
+          "settlement": 0.6666666666666666
+        },
+        "partnership | balanced": {
+          "games": 5,
+          "win": 0.8,
+          "settlement": 3.6
+        }
+      },
+      "inference": {
+        "decisions": 3588,
+        "p50ms": 0.168,
+        "p95ms": 56.75884999999984,
+        "illegal": 0
+      }
+    }
+  },
+  "ranking": {
+    "win": [
+      "legacy",
+      "contract_search",
+      "recurrent_balanced",
+      "gru_belief_uniform",
+      "gru_belief_learned",
+      "recurrent_win",
+      "belief_uniform",
+      "belief_learned",
+      "heuristic",
+      "balanced",
+      "score",
+      "win",
+      "recurrent_score"
+    ],
+    "score": [
+      "contract_search",
+      "legacy",
+      "gru_belief_uniform",
+      "gru_belief_learned",
+      "recurrent_score",
+      "recurrent_balanced",
+      "balanced",
+      "belief_uniform",
+      "belief_learned",
+      "heuristic",
+      "recurrent_win",
+      "score",
+      "win"
+    ],
+    "balanced": [
+      "contract_search",
+      "legacy",
+      "gru_belief_uniform",
+      "gru_belief_learned",
+      "recurrent_balanced",
+      "recurrent_win",
+      "belief_uniform",
+      "belief_learned",
+      "heuristic",
+      "balanced",
+      "score",
+      "recurrent_score",
+      "win"
+    ]
+  },
+  "winEloMatches": [
+    {
+      "a": "heuristic",
+      "b": "legacy",
+      "wins": 1,
+      "ties": 4,
+      "losses": 11
+    },
+    {
+      "a": "heuristic",
+      "b": "contract_search",
+      "wins": 1,
+      "ties": 4,
+      "losses": 11
+    },
+    {
+      "a": "heuristic",
+      "b": "win",
+      "wins": 4,
+      "ties": 10,
+      "losses": 2
+    },
+    {
+      "a": "heuristic",
+      "b": "score",
+      "wins": 5,
+      "ties": 7,
+      "losses": 4
+    },
+    {
+      "a": "heuristic",
+      "b": "balanced",
+      "wins": 4,
+      "ties": 8,
+      "losses": 4
+    },
+    {
+      "a": "heuristic",
+      "b": "recurrent_win",
+      "wins": 5,
+      "ties": 5,
+      "losses": 6
+    },
+    {
+      "a": "heuristic",
+      "b": "recurrent_score",
+      "wins": 6,
+      "ties": 6,
+      "losses": 4
+    },
+    {
+      "a": "heuristic",
+      "b": "recurrent_balanced",
+      "wins": 5,
+      "ties": 4,
+      "losses": 7
+    },
+    {
+      "a": "heuristic",
+      "b": "belief_uniform",
+      "wins": 0,
+      "ties": 15,
+      "losses": 1
+    },
+    {
+      "a": "heuristic",
+      "b": "belief_learned",
+      "wins": 0,
+      "ties": 15,
+      "losses": 1
+    },
+    {
+      "a": "heuristic",
+      "b": "gru_belief_uniform",
+      "wins": 5,
+      "ties": 4,
+      "losses": 7
+    },
+    {
+      "a": "heuristic",
+      "b": "gru_belief_learned",
+      "wins": 5,
+      "ties": 4,
+      "losses": 7
+    },
+    {
+      "a": "legacy",
+      "b": "contract_search",
+      "wins": 0,
+      "ties": 16,
+      "losses": 0
+    },
+    {
+      "a": "legacy",
+      "b": "win",
+      "wins": 12,
+      "ties": 2,
+      "losses": 2
+    },
+    {
+      "a": "legacy",
+      "b": "score",
+      "wins": 13,
+      "ties": 2,
+      "losses": 1
+    },
+    {
+      "a": "legacy",
+      "b": "balanced",
+      "wins": 11,
+      "ties": 3,
+      "losses": 2
+    },
+    {
+      "a": "legacy",
+      "b": "recurrent_win",
+      "wins": 9,
+      "ties": 4,
+      "losses": 3
+    },
+    {
+      "a": "legacy",
+      "b": "recurrent_score",
+      "wins": 12,
+      "ties": 2,
+      "losses": 2
+    },
+    {
+      "a": "legacy",
+      "b": "recurrent_balanced",
+      "wins": 10,
+      "ties": 3,
+      "losses": 3
+    },
+    {
+      "a": "legacy",
+      "b": "belief_uniform",
+      "wins": 11,
+      "ties": 4,
+      "losses": 1
+    },
+    {
+      "a": "legacy",
+      "b": "belief_learned",
+      "wins": 11,
+      "ties": 4,
+      "losses": 1
+    },
+    {
+      "a": "legacy",
+      "b": "gru_belief_uniform",
+      "wins": 10,
+      "ties": 3,
+      "losses": 3
+    },
+    {
+      "a": "legacy",
+      "b": "gru_belief_learned",
+      "wins": 10,
+      "ties": 3,
+      "losses": 3
+    },
+    {
+      "a": "contract_search",
+      "b": "win",
+      "wins": 12,
+      "ties": 2,
+      "losses": 2
+    },
+    {
+      "a": "contract_search",
+      "b": "score",
+      "wins": 13,
+      "ties": 2,
+      "losses": 1
+    },
+    {
+      "a": "contract_search",
+      "b": "balanced",
+      "wins": 11,
+      "ties": 3,
+      "losses": 2
+    },
+    {
+      "a": "contract_search",
+      "b": "recurrent_win",
+      "wins": 9,
+      "ties": 4,
+      "losses": 3
+    },
+    {
+      "a": "contract_search",
+      "b": "recurrent_score",
+      "wins": 12,
+      "ties": 2,
+      "losses": 2
+    },
+    {
+      "a": "contract_search",
+      "b": "recurrent_balanced",
+      "wins": 10,
+      "ties": 3,
+      "losses": 3
+    },
+    {
+      "a": "contract_search",
+      "b": "belief_uniform",
+      "wins": 11,
+      "ties": 4,
+      "losses": 1
+    },
+    {
+      "a": "contract_search",
+      "b": "belief_learned",
+      "wins": 11,
+      "ties": 4,
+      "losses": 1
+    },
+    {
+      "a": "contract_search",
+      "b": "gru_belief_uniform",
+      "wins": 10,
+      "ties": 3,
+      "losses": 3
+    },
+    {
+      "a": "contract_search",
+      "b": "gru_belief_learned",
+      "wins": 10,
+      "ties": 3,
+      "losses": 3
+    },
+    {
+      "a": "win",
+      "b": "score",
+      "wins": 3,
+      "ties": 8,
+      "losses": 5
+    },
+    {
+      "a": "win",
+      "b": "balanced",
+      "wins": 1,
+      "ties": 12,
+      "losses": 3
+    },
+    {
+      "a": "win",
+      "b": "recurrent_win",
+      "wins": 4,
+      "ties": 5,
+      "losses": 7
+    },
+    {
+      "a": "win",
+      "b": "recurrent_score",
+      "wins": 4,
+      "ties": 7,
+      "losses": 5
+    },
+    {
+      "a": "win",
+      "b": "recurrent_balanced",
+      "wins": 4,
+      "ties": 4,
+      "losses": 8
+    },
+    {
+      "a": "win",
+      "b": "belief_uniform",
+      "wins": 1,
+      "ties": 11,
+      "losses": 4
+    },
+    {
+      "a": "win",
+      "b": "belief_learned",
+      "wins": 1,
+      "ties": 11,
+      "losses": 4
+    },
+    {
+      "a": "win",
+      "b": "gru_belief_uniform",
+      "wins": 4,
+      "ties": 4,
+      "losses": 8
+    },
+    {
+      "a": "win",
+      "b": "gru_belief_learned",
+      "wins": 4,
+      "ties": 4,
+      "losses": 8
+    },
+    {
+      "a": "score",
+      "b": "balanced",
+      "wins": 4,
+      "ties": 8,
+      "losses": 4
+    },
+    {
+      "a": "score",
+      "b": "recurrent_win",
+      "wins": 6,
+      "ties": 2,
+      "losses": 8
+    },
+    {
+      "a": "score",
+      "b": "recurrent_score",
+      "wins": 8,
+      "ties": 4,
+      "losses": 4
+    },
+    {
+      "a": "score",
+      "b": "recurrent_balanced",
+      "wins": 6,
+      "ties": 3,
+      "losses": 7
+    },
+    {
+      "a": "score",
+      "b": "belief_uniform",
+      "wins": 3,
+      "ties": 8,
+      "losses": 5
+    },
+    {
+      "a": "score",
+      "b": "belief_learned",
+      "wins": 3,
+      "ties": 8,
+      "losses": 5
+    },
+    {
+      "a": "score",
+      "b": "gru_belief_uniform",
+      "wins": 6,
+      "ties": 3,
+      "losses": 7
+    },
+    {
+      "a": "score",
+      "b": "gru_belief_learned",
+      "wins": 6,
+      "ties": 3,
+      "losses": 7
+    },
+    {
+      "a": "balanced",
+      "b": "recurrent_win",
+      "wins": 6,
+      "ties": 3,
+      "losses": 7
+    },
+    {
+      "a": "balanced",
+      "b": "recurrent_score",
+      "wins": 6,
+      "ties": 6,
+      "losses": 4
+    },
+    {
+      "a": "balanced",
+      "b": "recurrent_balanced",
+      "wins": 4,
+      "ties": 6,
+      "losses": 6
+    },
+    {
+      "a": "balanced",
+      "b": "belief_uniform",
+      "wins": 3,
+      "ties": 9,
+      "losses": 4
+    },
+    {
+      "a": "balanced",
+      "b": "belief_learned",
+      "wins": 3,
+      "ties": 9,
+      "losses": 4
+    },
+    {
+      "a": "balanced",
+      "b": "gru_belief_uniform",
+      "wins": 4,
+      "ties": 6,
+      "losses": 6
+    },
+    {
+      "a": "balanced",
+      "b": "gru_belief_learned",
+      "wins": 4,
+      "ties": 6,
+      "losses": 6
+    },
+    {
+      "a": "recurrent_win",
+      "b": "recurrent_score",
+      "wins": 7,
+      "ties": 6,
+      "losses": 3
+    },
+    {
+      "a": "recurrent_win",
+      "b": "recurrent_balanced",
+      "wins": 2,
+      "ties": 10,
+      "losses": 4
+    },
+    {
+      "a": "recurrent_win",
+      "b": "belief_uniform",
+      "wins": 6,
+      "ties": 5,
+      "losses": 5
+    },
+    {
+      "a": "recurrent_win",
+      "b": "belief_learned",
+      "wins": 6,
+      "ties": 5,
+      "losses": 5
+    },
+    {
+      "a": "recurrent_win",
+      "b": "gru_belief_uniform",
+      "wins": 2,
+      "ties": 10,
+      "losses": 4
+    },
+    {
+      "a": "recurrent_win",
+      "b": "gru_belief_learned",
+      "wins": 2,
+      "ties": 10,
+      "losses": 4
+    },
+    {
+      "a": "recurrent_score",
+      "b": "recurrent_balanced",
+      "wins": 3,
+      "ties": 4,
+      "losses": 9
+    },
+    {
+      "a": "recurrent_score",
+      "b": "belief_uniform",
+      "wins": 3,
+      "ties": 7,
+      "losses": 6
+    },
+    {
+      "a": "recurrent_score",
+      "b": "belief_learned",
+      "wins": 3,
+      "ties": 7,
+      "losses": 6
+    },
+    {
+      "a": "recurrent_score",
+      "b": "gru_belief_uniform",
+      "wins": 3,
+      "ties": 4,
+      "losses": 9
+    },
+    {
+      "a": "recurrent_score",
+      "b": "gru_belief_learned",
+      "wins": 3,
+      "ties": 4,
+      "losses": 9
+    },
+    {
+      "a": "recurrent_balanced",
+      "b": "belief_uniform",
+      "wins": 7,
+      "ties": 4,
+      "losses": 5
+    },
+    {
+      "a": "recurrent_balanced",
+      "b": "belief_learned",
+      "wins": 7,
+      "ties": 4,
+      "losses": 5
+    },
+    {
+      "a": "recurrent_balanced",
+      "b": "gru_belief_uniform",
+      "wins": 0,
+      "ties": 16,
+      "losses": 0
+    },
+    {
+      "a": "recurrent_balanced",
+      "b": "gru_belief_learned",
+      "wins": 0,
+      "ties": 16,
+      "losses": 0
+    },
+    {
+      "a": "belief_uniform",
+      "b": "belief_learned",
+      "wins": 0,
+      "ties": 16,
+      "losses": 0
+    },
+    {
+      "a": "belief_uniform",
+      "b": "gru_belief_uniform",
+      "wins": 5,
+      "ties": 4,
+      "losses": 7
+    },
+    {
+      "a": "belief_uniform",
+      "b": "gru_belief_learned",
+      "wins": 5,
+      "ties": 4,
+      "losses": 7
+    },
+    {
+      "a": "belief_learned",
+      "b": "gru_belief_uniform",
+      "wins": 5,
+      "ties": 4,
+      "losses": 7
+    },
+    {
+      "a": "belief_learned",
+      "b": "gru_belief_learned",
+      "wins": 5,
+      "ties": 4,
+      "losses": 7
+    },
+    {
+      "a": "gru_belief_uniform",
+      "b": "gru_belief_learned",
+      "wins": 0,
+      "ties": 16,
+      "losses": 0
+    }
+  ],
+  "summaryCodeHash": "4e2b6ed6fcbfb0d9f27569e21424a53cb793576962dc8c41b40f4db3532a9f4b"
+}
