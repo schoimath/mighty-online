@@ -8,11 +8,21 @@
   <title>Mighty Club · 마이티 온라인</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 60 60'%3E%3Crect width='60' height='60' rx='12' fill='%23174639'/%3E%3Ctext x='30' y='48' text-anchor='middle' font-size='50' fill='%23f8f3de'%3E♠%3C/text%3E%3C/svg%3E">
   <link rel="stylesheet" href="./style.css">
-  <link rel="stylesheet" href="./game.css">
-  <link rel="stylesheet" href="./score.css">
+  <link rel="stylesheet" href="./game.css?v=setting-2">
+  <link rel="stylesheet" href="./score.css?v=setting-2">
   <link rel="stylesheet" href="./auction.css">
   <link rel="stylesheet" href="./chat.css">
-  <script type="module" src="./app.js"></script>
+  <script type="importmap">
+    {
+      "imports": {
+        "./game-ui.js": "./game-ui.js?v=setting-2",
+        "./session.js": "./session.js?v=setting-2",
+        "./table-deal.js": "./table-deal.js?v=setting-2",
+        "./score-ui.js": "./score-ui.js?v=setting-2"
+      }
+    }
+  </script>
+  <script type="module" src="./app.js?v=setting-2"></script>
 </head>
 <body>
   <header class="site-header" id="site-header">

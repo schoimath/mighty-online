@@ -216,6 +216,23 @@ function sweepMarkup(kind, points) {
   </div>`;
 }
 
+function emptyTableMarkup(ui, nameAt) {
+  const {view} = ui;
+  if (ui.sweep) return sweepMarkup(ui.sweep, view.result.points);
+  if (view.phase === "bid" || view.phase === "discard") return leadingBidMarkup(view, nameAt);
+  if (canDeclareSetting(ui)) {
+    return '<strong>첫 카드를 내세요</strong><button type="button" class="g-btn g-claim-center" data-do="claim" aria-haspopup="dialog">세팅 선언</button>';
+  }
+  if (view.phase === "play" && view.seat === view.declarer && view.turn === view.seat && view.choices.canDeclareSetting === undefined) {
+    return '<div class="g-setting-compat"><strong>이 방은 세팅 선언을 지원하지 않아요</strong><small>이번 판이 끝나면 방장이 게임을 새로고침하고 새 방을 열어 주세요.</small></div>';
+  }
+  let label = view.phase === "play" ? "첫 카드를 기다리는 중" : labels[view.phase];
+  if (view.claimPending || ui.claimSubmitting) label = "세팅 판정 중";
+  else if (view.settingAwaitingFriend) label = "초구 프렌드 결정";
+  else if (view.phase === "result" && view.result.setting) label = view.result.setting.success ? "세팅 성공" : "세팅 실패";
+  return `<span class="g-table-symbol" aria-hidden="true">♠</span><strong>${escapeHtml(label)}</strong>`;
+}
+
 function renderTable(ui, nameAt) {
   const {view, root, resolving} = ui;
   const felt = root.querySelector(".g-felt");
@@ -239,13 +256,7 @@ function renderTable(ui, nameAt) {
     trick.dataset.number = String(view.trickNo);
   }
   if (!center.hidden) {
-    let emptyLabel = view.phase === "play" ? "첫 카드를 기다리는 중" : labels[view.phase];
-    if (view.claimPending || ui.claimSubmitting) emptyLabel = "세팅 판정 중";
-    else if (view.settingAwaitingFriend) emptyLabel = "초구 프렌드 결정";
-    else if (view.phase === "result" && view.result.setting) emptyLabel = view.result.setting.success ? "세팅 성공" : "세팅 실패";
-    const markup = ui.sweep ? sweepMarkup(ui.sweep, view.result.points)
-      : view.phase === "bid" || view.phase === "discard" ? leadingBidMarkup(view, nameAt)
-      : `<span class="g-table-symbol" aria-hidden="true">♠</span><strong>${escapeHtml(emptyLabel)}</strong>`;
+    const markup = emptyTableMarkup(ui, nameAt);
     if (ui.centerMarkup !== markup) {
       center.innerHTML = markup;
       ui.centerMarkup = markup;
@@ -303,7 +314,10 @@ function renderHand(ui, newDeal) {
   hand.dataset.seatRole = visibleRole(view, view.seat);
   role.textContent = roleAt(view, view.seat) || roleLabels[view.selfRole] || "";
   role.hidden = !role.textContent;
-  hand.querySelector('[data-do="claim"]').hidden = !canDeclareSetting(ui);
+  const claimAvailable = canDeclareSetting(ui);
+  hand.querySelector('[data-do="claim"]').hidden = !claimAvailable;
+  const boardClaim = root.querySelector(".g-claim-center");
+  if (boardClaim) boardClaim.disabled = !claimAvailable;
   if (newDeal) row.replaceChildren();
   const existing = new Map(Array.from(row.children, el => [el.dataset.card, el]));
   for (const [card, el] of existing) if (!view.hand.includes(card)) el.remove();
@@ -644,7 +658,7 @@ function redraw(ui, newDeal = false) {
   if (openLog && panel.querySelector(".g-log")) panel.querySelector(".g-log").open = true;
   if (openBids && panel.querySelector("details.g-bid-history")) panel.querySelector("details.g-bid-history").open = true;
   if (ui.scoresOpen && panel.querySelector("details.match-standings")) panel.querySelector("details.match-standings").open = true;
-  if (oldFocus) {
+  if (oldFocus && document.activeElement !== focused) {
     const [attr, value] = oldFocus;
     const radio = focused.type === "radio" ? `[value="${focused.value}"]` : "";
     root.querySelector(`[data-${attr}="${value}"]${radio}`)?.focus({ preventScroll: true });
