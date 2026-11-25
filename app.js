@@ -482,7 +482,7 @@ function takeBotTurn() {
   }
   try {
     const request = session.botRequest(seed);
-    botWorker ??= new Worker(new URL('./bot-worker.js', import.meta.url), {type:'module'});
+    botWorker ??= new Worker(new URL(`./bot-worker.js?v=${VERSION}`, import.meta.url), {type:'module'});
     botWorker.onmessage = event => {
       const {data} = event;
       if (data?.revision !== revision) return;

@@ -14,7 +14,7 @@ export const UPDATED_AT = '${updatedAt}';
 export const UPDATED_ON = UPDATED_AT.slice(0, 10);
 export const UPDATED_LABEL = UPDATED_AT.slice(0, 19).replace('T', ' ');
 `;
-for (const asset of ['index.html', 'claim-worker.js']) {
+for (const asset of ['index.html', 'bot-worker.js', 'lab/table-agents.js', 'claim-worker.js']) {
   const file = new URL(asset, import.meta.url);
   const source = await readFile(file, 'utf8');
   const updated = source.replace(/\?v=\d+\.\d+(?:\.\d{12}(?:\d{2})?)?(?=["'])/g, '?v=' + version);

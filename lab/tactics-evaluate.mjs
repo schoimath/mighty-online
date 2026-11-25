@@ -94,7 +94,9 @@ async function summarize(oldRows, newRows) {
   const {decideTableTurn} = await import('./table-agents.js');
   const paired = oldRows.map((a,i) => {
     const b = newRows[i];
-    if (a.seed!==b.seed || a.seat!==b.seat || a.modelId!==b.modelId || a.role!==b.role ||
+    // The focal declarer can choose a partner in one game and play solo in the other.
+    const changedSide = a.role !== b.role && a.seat !== a.contract.seat;
+    if (a.seed!==b.seed || a.seat!==b.seat || a.modelId!==b.modelId || changedSide ||
         JSON.stringify(a.contract)!==JSON.stringify(b.contract)) throw Error('Opening or pair mismatch: '+JSON.stringify(b));
     const events = a.events.map(({kind, request, card}) => ({kind,
       before:eventValue(kind,card,request.view),

@@ -1,5 +1,15 @@
 import {jokerActive, mighty, pointsIn, winningPlay} from './engine.js';
 
+export function protectCalledJoker(view) {
+  if (view.phase !== 'play' || view.seat !== view.declarer ||
+      view.call?.kind !== 'card' || view.call.card !== 'JK') return view;
+  const {plays} = view.choices;
+  if (!plays.some(move => move.jokerCall)) return view;
+  // A call forces our named partner's Joker out powerless. If the declarer
+  // named their own or buried Joker, there is no opponent's Joker to force.
+  return {...view, choices:{...view.choices, plays:plays.filter(move => !move.jokerCall)}};
+}
+
 export function conserveOpeningJoker(view) {
   if (view.phase !== 'play' || view.trickNo !== 1 || view.trick[0]?.jokerCall) return view;
   const {plays} = view.choices;

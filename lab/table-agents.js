@@ -1,7 +1,9 @@
 import {botDecision, policyPlay} from '../engine.js';
 import {withJokerStatus} from '../table-joker.js';
-import {conserveMightyOnTrumpAce, conserveOpeningJoker} from '../table-tactics.js';
+import {conserveMightyOnTrumpAce, conserveOpeningJoker, protectCalledJoker} from '../table-tactics.js?v=1.1.20261126063317';
 import {preferTrumpLead} from '../table-trump-lead.js';
+import {preferSideAcePlan} from '../table-side-ace.js?v=1.1.20261126063317';
+import {coordinateFriendPlay} from '../table-friend-play.js?v=1.1.20261126063317';
 import {rngFor} from './game.js';
 import {protectPartner} from './partnership-policy.js';
 import {contractSearchAction} from './contract-search.js';
@@ -37,7 +39,12 @@ function chooseModelTurn(modelId, view, rng, memory, recurrentTurn) {
 export function decideTableTurn({modelId = DEFAULT_MODEL, view, seed, memory}, recurrentTurn = balancedTurn) {
   const rng = rngFor(seed ?? crypto.getRandomValues(new Uint32Array(1))[0]);
   const openingView = conserveOpeningJoker(withJokerStatus(view));
-  const decision = chooseModelTurn(modelId, conserveMightyOnTrumpAce(openingView), rng, memory, recurrentTurn);
-  decision.action = preferTrumpLead(view, decision.action);
+  const tableView = protectCalledJoker(conserveMightyOnTrumpAce(openingView));
+  const decision = chooseModelTurn(modelId, tableView, rng, memory, recurrentTurn);
+  if (tableView.selfRole === 'declarer') {
+    decision.action = preferSideAcePlan(tableView, preferTrumpLead(tableView, decision.action));
+  } else if (tableView.selfRole === 'friend') {
+    decision.action = coordinateFriendPlay(tableView, decision.action);
+  }
   return decision;
 }
