@@ -44,7 +44,8 @@ export function settingPenaltyPile(view) {
 }
 
 export function seatStanding(board, seat, beforeSettlement = false) {
-  const member = board?.members?.find(entry => entry.seat === seat);
+  const panelMemberId = board?.panelMemberIds?.[seat];
+  const member = board?.members?.find(entry => panelMemberId == null ? entry.seat === seat : entry.id === panelMemberId);
   if (!Number.isSafeInteger(member?.total)) return '';
   const previousChange = beforeSettlement && Number.isSafeInteger(member.lastDelta) ? member.lastDelta : 0;
   const points = member.total - previousChange;

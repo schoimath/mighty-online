@@ -26,7 +26,7 @@ function connectionError(error) {
   return result;
 }
 
-async function openPeer(id, signal) {
+export async function openPeer(id, signal) {
   if (signal?.aborted) throw cancelled();
   if (!globalThis.peerjs?.Peer) {
     await import('./vendor/peerjs-1.5.5/peerjs.min.js');
@@ -148,7 +148,7 @@ export async function hostRoom({onJoin, onMessage, onLeave, onError, signal} = {
       guests.set(id, guest);
       let decision;
       try {
-        decision = onJoin?.(id, name.trim());
+        decision = onJoin?.(id, name.trim(), link.metadata?.intent);
       } catch (error) {
         onError?.(error);
         decision = '방에 입장하지 못했습니다.';
@@ -183,7 +183,7 @@ export async function hostRoom({onJoin, onMessage, onLeave, onError, signal} = {
   return {code, send, drop, close};
 }
 
-export async function joinRoom(rawCode, rawName, {onMessage, onClose, onError, signal} = {}) {
+export async function joinRoom(rawCode, rawName, {onMessage, onClose, onError, signal, intent = 'play'} = {}) {
   const code = normalizeRoomCode(rawCode);
   if (!/^[A-Z0-9]{6}$/.test(code)) throw new Error('여섯 자리 방 코드를 입력해 주세요.');
   const name = String(rawName ?? '').trim();
@@ -228,7 +228,7 @@ export async function joinRoom(rawCode, rawName, {onMessage, onClose, onError, s
     peer.on('connection', incoming => incoming.close());
     try {
       link = peer.connect(CHANNEL + '-' + code, {
-        label: CHANNEL, reliable: true, serialization: 'binary', metadata: {name}
+        label: CHANNEL, reliable: true, serialization: 'binary', metadata: {name, intent}
       });
     } catch {
       end('방장과 연결할 수 없습니다. 다시 시도해 주세요.');

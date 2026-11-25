@@ -7,30 +7,35 @@
   <meta name="description" content="친구와 방 코드를 나누고 즐기는 5인 마이티 카드 게임. AI와 함께 연습할 수도 있어요.">
   <title>Mighty Club · 마이티 온라인</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 60 60'%3E%3Crect width='60' height='60' rx='12' fill='%23174639'/%3E%3Ctext x='30' y='48' text-anchor='middle' font-size='50' fill='%23f8f3de'%3E♠%3C/text%3E%3C/svg%3E">
-  <link rel="stylesheet" href="./style.css?v=1.1.20261126063317">
-  <link rel="stylesheet" href="./game.css?v=1.1.20261126063317">
-  <link rel="stylesheet" href="./score.css?v=1.1.20261126063317">
+  <link rel="stylesheet" href="./style.css?v=1.1.20261126065537">
+  <link rel="stylesheet" href="./game.css?v=1.1.20261126065537">
+  <link rel="stylesheet" href="./score.css?v=1.1.20261126065537">
   <link rel="stylesheet" href="./auction.css">
   <link rel="stylesheet" href="./chat.css">
+  <link rel="stylesheet" href="./public-room.css?v=1.1.20261126065537">
   <script type="importmap">
     {
       "imports": {
-        "./lab/table-agents.js": "./lab/table-agents.js?v=1.1.20261126063317",
-        "./model-picker.js": "./model-picker.js?v=1.1.20261126063317",
-        "./room-preferences.js": "./room-preferences.js?v=1.1.20261126063317",
-        "./game-ui.js": "./game-ui.js?v=1.1.20261126063317",
-        "./sound.js": "./sound.js?v=1.1.20261126063317",
-        "./release.js": "./release.js?v=1.1.20261126063317",
-        "./session.js": "./session.js?v=1.1.20261126063317",
-        "./bot-setting.js": "./bot-setting.js?v=1.1.20261126063317",
-        "./table-claim.js": "./table-claim.js?v=1.1.20261126063317",
-        "./table-setting.js": "./table-setting.js?v=1.1.20261126063317",
-        "./table-deal.js": "./table-deal.js?v=1.1.20261126063317",
-        "./score-ui.js": "./score-ui.js?v=1.1.20261126063317"
+        "./chat.js": "./chat.js?v=1.1.20261126065537",
+        "./network.js": "./network.js?v=1.1.20261126065537",
+        "./public-directory.js": "./public-directory.js?v=1.1.20261126065537",
+        "./public-room-ui.js": "./public-room-ui.js?v=1.1.20261126065537",
+        "./lab/table-agents.js": "./lab/table-agents.js?v=1.1.20261126065537",
+        "./model-picker.js": "./model-picker.js?v=1.1.20261126065537",
+        "./room-preferences.js": "./room-preferences.js?v=1.1.20261126065537",
+        "./game-ui.js": "./game-ui.js?v=1.1.20261126065537",
+        "./sound.js": "./sound.js?v=1.1.20261126065537",
+        "./release.js": "./release.js?v=1.1.20261126065537",
+        "./session.js": "./session.js?v=1.1.20261126065537",
+        "./bot-setting.js": "./bot-setting.js?v=1.1.20261126065537",
+        "./table-claim.js": "./table-claim.js?v=1.1.20261126065537",
+        "./table-setting.js": "./table-setting.js?v=1.1.20261126065537",
+        "./table-deal.js": "./table-deal.js?v=1.1.20261126065537",
+        "./score-ui.js": "./score-ui.js?v=1.1.20261126065537"
       }
     }
   </script>
-  <script type="module" src="./app.js?v=1.1.20261126063317"></script>
+  <script type="module" src="./app.js?v=1.1.20261126065537"></script>
 </head>
 <body>
   <header class="site-header" id="site-header">
@@ -56,6 +61,15 @@
         <div class="art-card card-hearts"><span class="rank upper">A<small>♥</small></span><span class="heart-pip">♥</span><span class="rank lower">A<small>♥</small></span></div>
         <div class="art-card card-ace"><span class="rank upper">A<small>♠</small></span><div class="ace-crest"><span class="crest-top">✧</span><span class="ace-spade">♠</span><span class="crest-letter">M</span><span class="crest-line">✦</span></div><span class="rank lower">A<small>♠</small></span></div>
       </div>
+    </section>
+    <section class="public-tables" id="public-tables" aria-labelledby="public-title">
+      <div class="section-heading">
+        <span class="heading-ornament" aria-hidden="true">♠</span><h2 id="public-title">공개 테이블</h2>
+        <span id="public-count" hidden></span><span class="heading-line"></span>
+        <button type="button" class="public-refresh" id="public-refresh">새로고침</button>
+      </div>
+      <p id="public-status" role="status">공개 테이블을 찾는 중…</p>
+      <ul id="public-list" aria-label="현재 열린 공개 테이블" hidden></ul>
     </section>
     <section class="modes" aria-labelledby="mode-title">
       <div class="section-heading"><span class="heading-ornament" aria-hidden="true">♣</span><h2 id="mode-title">플레이 모드</h2><span class="heading-line"></span></div>

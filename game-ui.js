@@ -62,7 +62,7 @@ function renderAuctionCalls(ui, felt, nameAt) {
   if (calls.hidden) return;
   const newest = view.bidHistory.at(-1);
   const markup = Array.from({length: 5}, (_, offset) => {
-    const seat = (view.seat + offset) % 5;
+    const seat = (Math.max(0, view.seat) + offset) % 5;
     const entry = view.bidHistory.findLast(call => call.seat === seat);
     if (!entry) return "";
     const name = escapeHtml(entry.name ?? nameAt(seat));
@@ -155,7 +155,7 @@ function seatMarkup(ui, nameAt) {
   const {view, options, resolving} = ui;
   const beforeSettlement = resolving && ui.latest.phase === "result";
   return Array.from({ length: 5 }, (_, offset) => {
-    const seat = (view.seat + offset) % 5, name = nameAt(seat);
+    const seat = (Math.max(0, view.seat) + offset) % 5, name = nameAt(seat);
     const model = options.modelLabels?.[seat];
     const isTurn = view.turn === seat && view.phase !== "result";
     const role = roleAt(view, seat);
@@ -166,7 +166,7 @@ function seatMarkup(ui, nameAt) {
     const leader = inAuction && view.bid?.seat === seat;
     const avatar = inAuction ? seat + 1 : Array.from(name.trim().replace(/^AI\s+/i, ""))[0] || "♠";
     const standing = seatStanding(options.scoreboard, seat, beforeSettlement);
-    const header = `<span class="g-avatar g-avatar-${seat}" aria-label="${seat + 1}번 자리">${escapeHtml(avatar)}</span><span class="g-seat-tag"><span class="g-seat-identity"><span class="g-seat-name">${escapeHtml(name)}${offset === 0 ? '<small>나</small>' : ""}</span>${standing}</span><span class="g-seat-detail">${isTurn ? '<i></i>' : ""}${status}</span></span>`;
+    const header = `<span class="g-avatar g-avatar-${seat}" aria-label="${seat + 1}번 자리">${escapeHtml(avatar)}</span><span class="g-seat-tag"><span class="g-seat-identity"><span class="g-seat-name">${escapeHtml(name)}${seat === view.seat ? '<small>나</small>' : ""}</span>${standing}</span><span class="g-seat-detail">${isTurn ? '<i></i>' : ""}${status}</span></span>`;
     return `<div class="g-seat g-seat-${offset} ${isTurn ? "g-seat-active" : ""} ${leader ? "g-seat-bidder" : ""} ${resolving?.winner === seat ? "g-trick-winner" : ""}" data-seat="${seat}" data-seat-role="${visibleRole(view, seat)}" role="group" aria-label="${escapeHtml(name)} 자리${model ? ' · ' + escapeHtml(model) : ''}"${model ? ' title="' + escapeHtml(model) + '"' : ""}><div class="g-seat-head">${header}</div>${seatPile(view, seat)}</div>`;
   }).join("");
 }
@@ -183,8 +183,8 @@ function dealToOtherSeats(root, localSeat) {
   felt.querySelectorAll(".g-flight-back").forEach(card => card.remove());
   if (!motionEnabled()) return;
   const deck = felt.getBoundingClientRect();
-  for (let offset = 1; offset < 5; offset++) {
-    const destination = felt.querySelector(`[data-seat="${(localSeat + offset) % 5}"]`).getBoundingClientRect();
+  for (let offset = localSeat < 0 ? 0 : 1; offset < 5; offset++) {
+    const destination = felt.querySelector(`[data-seat="${(Math.max(0, localSeat) + offset) % 5}"]`).getBoundingClientRect();
     const card = document.createElement("i");
     card.className = "g-flight-back";
     card.setAttribute("aria-hidden", "true");
@@ -269,7 +269,7 @@ function renderTable(ui, nameAt) {
   // Keep cards already on the felt mounted when another player acts.
   const lead = leadSuit(view.trick);
   for (const move of view.trick.slice(trick.children.length)) {
-    const offset = (move.seat - view.seat + 5) % 5;
+    const offset = (move.seat - Math.max(0, view.seat) + 5) % 5;
     const isMighty = move.card === mighty(view.bid.suit);
     const called = move.jokerCall && (!view.jokerPlayed || view.trick.some(play => play.card === "JK"));
     const ruff = move.card[0] === view.bid.suit && lead !== view.bid.suit;
@@ -306,7 +306,8 @@ function canDeclareSetting(ui) {
 function renderHand(ui, newDeal) {
   const {view, root} = ui;
   const hand = root.querySelector(".g-hand");
-  hand.hidden = view.phase === "result";
+  hand.hidden = view.seat < 0 || view.phase === "result";
+  if (view.seat < 0 && hand.firstChild) hand.replaceChildren();
   if (hand.hidden) return;
   let row = hand.querySelector(".g-cards");
   if (!row) {
@@ -647,6 +648,7 @@ function mountTable(root) {
         <section class="g-match-final" aria-label="경기 최종 결과" hidden></section>
         <aside class="g-panel"></aside>
       </div>
+      <section class="g-public-audience public-audience" hidden></section>
     </div>
     <dialog class="modal g-claim-dialog" aria-labelledby="g-claim-title" aria-describedby="g-claim-description g-claim-warning">
       <div class="modal-inner"><h2 id="g-claim-title">세팅을 선언할까요?</h2>
@@ -658,6 +660,7 @@ function mountTable(root) {
 }
 function redraw(ui, newDeal = false) {
   const { view, options, root } = ui;
+  root.querySelector(".g-nav-phase").textContent = view.seat < 0 ? "테이블 관전" : "게임 테이블";
   const nameAt = seat => String(options.names?.[seat] ?? ((seat + 1) + "번 플레이어"));
   const focused = root.contains(document.activeElement) ? document.activeElement : null;
   const oldFocus = focused && ["card", "field", "do"].map(attr => [attr, focused.dataset[attr]]).find(([, value]) => value != null);

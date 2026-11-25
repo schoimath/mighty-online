@@ -9,7 +9,7 @@ export function chatText(value) {
 
 function validMessage(message) {
   return message && Number.isSafeInteger(message.id) && message.id > 0 &&
-    Number.isInteger(message.seat) && message.seat >= 0 && message.seat < 5 &&
+    Number.isInteger(message.seat) && message.seat >= -1 && message.seat < 5 &&
     typeof message.name === 'string' && message.name.length > 0 && message.name.length <= 16 &&
     Number.isSafeInteger(message.time) && message.time >= 0 && message.time <= 8640000000000000 &&
     Boolean(chatText(message.text));
@@ -244,7 +244,7 @@ export function setupChat(send) {
     const meta = document.createElement('div');
     meta.className = 'chat-meta';
     const name = document.createElement('strong');
-    name.textContent = message.name + (own ? ' · 나' : '');
+    name.textContent = message.name + (message.seat === -1 ? ' · 관전' : '') + (own ? ' · 나' : '');
     const time = document.createElement('time');
     const date = new Date(message.time);
     time.dateTime = date.toISOString();

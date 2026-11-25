@@ -1,0 +1,266 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import {HostSession} from '../session.js';
+import {seatStanding, signedScore} from '../score-ui.js';
+import {settlements} from '../table-scoring.js';
+
+const table = roundLimit => new HostSession('방장', undefined, Array(5).fill('heuristic'), roundLimit, {publicRoom:true});
+
+function step(room, action) {
+  const {turn} = room.round;
+  return room.botTurn ? room.runBot(action) : room.act(turn, room.revision, action);
+}
+
+function openPlay(room, friendSeat) {
+  step(room, {type:'bid', suit:'H', points:14});
+  for (let i = 0; i < 4; i++) step(room, {type:'pass'});
+  const declarer = room.round.declarer;
+  step(room, {type:'discard', cards:room.view(declarer).game.hand.slice(0, 3)});
+  const call = friendSeat === undefined ? {kind:'none'} : {kind:'card',card:room.view(friendSeat).game.hand[0]};
+  step(room, {type:'friend', ...call});
+}
+
+function finish(room) {
+  while (room.round.phase === 'play') {
+    const [legal] = room.view(room.round.turn).game.choices.plays;
+    step(room, {type:'play', ...legal});
+  }
+  assert.equal(room.round.phase, 'result');
+}
+
+test('public lobby seats, full-table FIFO and spectator-only membership', () => {
+  const room = table(10);
+  assert.deepEqual(room.publicSummary(), {hostName:'방장', phase:'waiting', humanCount:1,
+    spectatorCount:0, reservationCount:0, roundNumber:1, roundLimit:10});
+  const revision = room.revision;
+  assert.equal(room.addGuest('viewer','관전자','watch'), null);
+  assert.equal(room.revision, revision);
+  assert.equal(room.viewFor('viewer').spectator, true);
+  assert.equal(room.viewFor('viewer').game, null);
+  assert.deepEqual(room.view(0).spectators, [{name:'관전자',position:null,seat:null}]);
+  assert.equal(room.view(0).scoreboard.members.length, 1);
+  assert.throws(() => room.moveSeat('viewer',1,room.revision));
+  assert.throws(() => room.viewFor('unregistered'));
+  assert.ok(room.addGuest('invalid','잘못된 입장','other'));
+  assert.equal(room.setReservation('viewer',true), true);
+  assert.equal(room.seatFor('viewer'), 1);
+  assert.equal(room.viewFor('viewer').spectator, false);
+  assert.equal(room.nameFor('viewer'), '관전자');
+  assert.throws(() => room.setReservation('viewer',true));
+  for (const id of ['a','b','c','x','y']) assert.equal(room.addGuest(id,id), null);
+  assert.deepEqual(room.viewFor('x').reservation, {position:1,seat:null});
+  assert.equal(room.nameFor('y'), 'y');
+  assert.equal(room.setReservation('y',true), false);
+  room.removeGuest('b');
+  assert.equal(room.seatFor('x'), 3);
+  assert.deepEqual(room.viewFor('y').reservation, {position:1,seat:null});
+  room.removeGuest('y');
+  assert.equal(room.nameFor('y'), undefined);
+  assert.equal(room.publicSummary().reservationCount, 0);
+  assert.equal(room.publicSummary().humanCount, 5);
+});
+
+test('spectators get public tricks and covered piles, no hands or controls even while a claim is pending', () => {
+  const room = table();
+  room.start();
+  const bidRevision = room.revision;
+  assert.equal(room.addGuest('viewer','관전','watch'), null);
+  room.addGuest('queue','예약','reserve');
+  assert.equal(room.revision, bidRevision);
+  const view = () => room.viewFor('viewer').game;
+  function checkPrivate() {
+    const g = view();
+    assert.equal(g.seat, -1);
+    assert.equal(g.selfRole, 'spectator');
+    assert.deepEqual(g.hand, []);
+    assert.deepEqual(g.discarded, []);
+    assert.equal(g.incomingCards, undefined);
+    assert.equal(g.playedTricks, undefined);
+    assert.equal(g.choices.canPass, false);
+    assert.equal(g.choices.discard, false);
+    for (const key of ['bids','contracts','friends','plays']) assert.deepEqual(g.choices[key], []);
+    assert.ok(!g.choices.canDeclareSetting);
+    assert.throws(() => room.act(room.seatFor('viewer'),room.revision,{type:'pass'}));
+  }
+  checkPrivate();
+  room.act(0,bidRevision,{type:'bid',suit:'H',points:14});
+  for (let i = 0; i < 4; i++) step(room, {type:'pass'});
+  checkPrivate();
+  assert.equal(view().counts[0],13);
+  step(room,{type:'discard',cards:room.view(0).game.hand.slice(0,3)});
+  checkPrivate();
+  const called = room.view(2).game.hand[0];
+  step(room,{type:'friend',kind:'card',card:called});
+  assert.equal(room.view(2).game.selfRole, 'friend');
+  assert.equal(view().friend, null);
+  const position = room.act(0,room.revision,{type:'claim'});
+  checkPrivate();
+  assert.equal(view().claimPending, true);
+  assert.equal(view().turn, null);
+  room.abandonClaim(position);
+  while (room.round.phase === 'play') {
+    checkPrivate();
+    const g = view();
+    assert.equal(g.friend,room.round.friendKnown ? 2 : null);
+    for (const seat of [0, ...(room.round.friendKnown ? [2] : [])]) {
+      assert.deepEqual(g.captured[seat], []);
+      assert.equal(g.scores[seat], null);
+    }
+    assert.deepEqual(g.trick,room.round.trick);
+    const [move] = room.view(room.round.turn).game.choices.plays;
+    step(room,{type:'play',...move});
+  }
+  assert.deepEqual(view().result,room.round.result);
+  assert.deepEqual(room.viewFor('queue').reservation,{position:1,seat:1});
+});
+
+test('a settlement confirms available seats in order, keeps confirmed seats stable and promotes on the next deal', () => {
+  const room = table();
+  room.addGuest('one','일'); room.addGuest('two','이');
+  room.start();
+  for (const id of ['A','B','C','D']) room.addGuest(id,id,'reserve');
+  openPlay(room);
+  finish(room);
+  assert.equal(room.publicSummary().phase,'finished');
+  const revision = room.revision;
+  for (const [index,id] of ['A','B','C','D'].entries()) {
+    assert.deepEqual(room.viewFor(id).reservation,{position:index + 1,seat:[3,4,null,null][index]});
+    assert.equal(room.seatFor(id),-1);
+  }
+  const resultNames = room.viewFor('B').players.map(p => p.name);
+  const panelScore = seatStanding(room.viewFor('B').scoreboard,1);
+  room.setReservation('A',false);
+  assert.deepEqual(room.viewFor('B').reservation,{position:1,seat:4});
+  assert.deepEqual(room.viewFor('C').reservation,{position:2,seat:3});
+  room.removeGuest('C');
+  assert.deepEqual(room.viewFor('D').reservation,{position:2,seat:3});
+  assert.equal(room.revision,revision);
+  room.removeGuest('one');
+  const afterExit = room.viewFor('B');
+  assert.deepEqual(afterExit.players.map(p => p.name),resultNames);
+  assert.equal(afterExit.scoreboard.panelMemberIds[1],afterExit.players[1].memberId);
+  assert.equal(seatStanding(afterExit.scoreboard,1),panelScore);
+  room.start();
+  assert.equal(room.seatFor('B'),4);
+  assert.equal(room.seatFor('D'),3);
+  for (const id of ['B','D']) {
+    const v = room.viewFor(id);
+    assert.equal(v.spectator,false);
+    assert.equal(v.game.hand.length,10);
+    assert.equal(v.scoreboard.members.find(m => m.seat === v.seat).total,0);
+  }
+  assert.equal(room.seatFor('A'),-1);
+  assert.equal(room.viewFor('A').game.hand.length,0);
+  assert.equal(room.publicSummary().roundNumber,2);
+});
+
+test('a fresh substitute AI starts at zero after a human has taken a previously scoring bot seat', () => {
+  const room = table();
+  room.start();
+  const priorBot = room.players[1].memberId;
+  room.addGuest('next','새 참가자','reserve');
+  openPlay(room);
+  finish(room);
+  room.returnToRoom();
+  assert.equal(room.seatFor('next'),1);
+  const human = room.players[1].memberId;
+  room.start();
+  openPlay(room,1);
+  room.removeGuest('next');
+  const newBot = room.players[1].memberId;
+  assert.notEqual(newBot,priorBot);
+  assert.notEqual(newBot,human);
+  finish(room);
+  const ledger = id => room.view(0).scoreboard.members.find(m => m.id === id);
+  assert.equal(ledger(priorBot).rounds,1);
+  assert.equal(ledger(human).total,settlements(room.round.result,'H')[1]);
+  assert.equal(ledger(human).rounds,1);
+  assert.equal(ledger(human).lastSeat,1);
+  assert.equal(ledger(newBot).rounds,0);
+  assert.equal(ledger(newBot).total,0);
+  const settled = room.view(0);
+  assert.equal(settled.players[1].memberId,human);
+  assert.ok(seatStanding(settled.scoreboard,1).includes('<b>' + signedScore(ledger(human).total) + '</b>'));
+  room.start();
+  assert.equal(room.players[1].memberId,newBot);
+  assert.equal(ledger(newBot).total,0);
+});
+
+test('private invitation rooms keep their existing admission rules', () => {
+  const room = new HostSession('초대방');
+  assert.equal(room.publicSummary(),null);
+  assert.ok(room.addGuest('watch','이름','watch'));
+  assert.ok(room.addGuest('reserve','이름','reserve'));
+  assert.equal(room.connections.size,0);
+  assert.equal(room.addGuest('player','이름'),null);
+  room.start();
+  assert.throws(() => room.leaveHostSeat());
+  assert.ok(room.addGuest('new','이름','play'));
+  assert.throws(() => room.viewFor('new'));
+});
+
+test('the public host can run the table from the audience and return through FIFO with the same score', () => {
+  const room = table();
+  assert.equal(room.hostView().seat,0);
+  assert.throws(() => room.leaveHostSeat());
+  room.start();
+  room.addGuest('first','먼저 예약','reserve');
+  openPlay(room);
+  const hostId = room.players[0].memberId;
+  assert.equal(room.leaveHostSeat(),true);
+  const watching = room.hostView();
+  assert.equal(room.hostSeat,-1);
+  assert.equal(watching.spectator,true);
+  assert.deepEqual(watching.game.hand,[]);
+  assert.deepEqual(watching.game.discarded,[]);
+  assert.equal(room.players[0].bot,true);
+  assert.equal(room.botTurn,true);
+  assert.equal(room.publicSummary().humanCount,0);
+  assert.equal(room.publicSummary().hostName,'방장');
+  assert.equal(room.publicSummary().spectatorCount,2);
+  assert.equal(room.connections.has(null),false);
+  assert.equal(room.nameFor(null),'방장');
+  assert.throws(() => room.leaveHostSeat());
+  const turnRevision = room.revision;
+  room.setReservation(null,true);
+  room.removeGuest(null);
+  assert.equal(room.revision,turnRevision);
+  assert.deepEqual(room.hostView().reservation,{position:2,seat:null});
+  finish(room);
+  const pay = settlements(room.round.result,'H')[0];
+  const settled = room.hostView();
+  assert.equal(settled.scoreboard.members.find(m => m.id === hostId).total,pay);
+  assert.equal(settled.scoreboard.members.find(m => m.seat === 0).total,0);
+  assert.deepEqual(settled.reservation,{position:2,seat:1});
+  assert.throws(() => room.leaveHostSeat());
+  room.start();
+  assert.equal(room.seatFor('first'),0);
+  assert.equal(room.hostSeat,1);
+  assert.equal(room.players[1].memberId,hostId);
+  assert.equal(room.hostView().spectator,false);
+  assert.equal(room.hostView().game.hand.length,10);
+  assert.equal(room.hostView().scoreboard.members.find(m => m.seat === 1).total,pay);
+  assert.equal(room.publicSummary().spectatorCount,0);
+  assert.equal(room.connections.has(null),false);
+  // The solo declarer from the previous hand opens from their new seat.
+  assert.equal(room.round.turn,1);
+  room.act(1,room.revision,{type:'pass'});
+});
+
+test('the host can stay in the next waiting room as an observer and reclaim an open seat', () => {
+  const room = table();
+  room.start();
+  openPlay(room);
+  room.leaveHostSeat();
+  finish(room);
+  room.returnToRoom();
+  assert.equal(room.publicSummary().phase,'waiting');
+  assert.equal(room.publicSummary().hostName,'방장');
+  assert.equal(room.hostSeat,-1);
+  assert.equal(room.hostView().game,null);
+  assert.throws(() => room.moveSeat(null,4,room.revision));
+  room.setReservation(null,true);
+  assert.equal(room.hostSeat,0);
+  assert.equal(room.hostView().seat,0);
+  assert.equal(room.hostView().scoreboard.members.find(m => m.seat === 0).rounds,1);
+});

@@ -47,9 +47,24 @@ export function applyAction(state, seat, action, randomSource) {
 }
 
 export function getView(state, seat) {
-  const view = project(state, seat);
+  return withTableRules(state, project(state, seat));
+}
+
+export function getSpectatorView(state) {
+  // Reuse the table's public masking of captured piles, the friend and the
+  // most recent trick. New fields on player projections stay private until
+  // explicitly included here. An inactive seat has no possible moves.
+  const inactive = state.turn === 0 ? 1 : 0;
+  const {phase, turn, dealNo, rules, counts, passed, bid, bidHistory, declarer, friendKnown, friend,
+    call, trick, trickNo, lastTrick, result, scores, captured, choices} = project(state, inactive);
+  return withTableRules(state, {seat:-1, selfRole:'spectator', hand:[], discarded:[], choices,
+    phase, turn, dealNo, rules, counts, passed, bid, bidHistory, declarer, friendKnown, friend,
+    call, trick, trickNo, lastTrick, result, scores, captured});
+}
+
+function withTableRules(state, view) {
   if (state.phase === 'play' || state.result?.setting) {
-    view.choices.canDeclareSetting = canDeclareSetting(state, seat);
+    view.choices.canDeclareSetting = canDeclareSetting(state, view.seat);
     view.settingAwaitingFriend = Boolean(state.settingAwaitingFriend);
   }
   if (state.result?.setting?.success === false) {

@@ -1,6 +1,8 @@
 import {clearGame, renderGame, rulesContent} from './game-ui.js';
 import {AUCTION_BEAT_MS, FRIEND_ANNOUNCEMENT_MS} from './table-timing.js';
 import {hostRoom, joinRoom, normalizeRoomCode} from './network.js';
+import {listPublicRooms, publishPublicRoom, PUBLIC_ROOM_LIMIT} from './public-directory.js';
+import {renderPublicTables, renderPublicAudience, visibilityPicker} from './public-room-ui.js';
 import {HostSession} from './session.js';
 import {chatText, setupChat} from './chat.js';
 import {DEFAULT_RULES} from './engine.js';
@@ -48,15 +50,19 @@ let claimWorker = null;
 let workerUnavailable = false;
 let pendingConnect = null;
 let roomCode = '';
+let publicListing = null;
+let directoryScan = null;
+let directoryTimer;
+let listedRooms = [];
 const chat = setupChat(sendChat);
 
-function broadcastChat(seat, text) {
-  const player = authority?.players[seat];
-  if (!player || player.bot || !chatText(text)) return false;
-  const message = {id: chat.log.lastId + 1, time: Date.now(), seat, name: player.name, text: text.trim()};
-  if (!chat.receive(message, seat === authority.hostSeat)) return false;
-  for (const [id, guestSeat] of authority.connections) {
-    transport.send(id, {type:'chat-message', message, own:guestSeat === seat});
+function broadcastChat(seat, text, senderId = null) {
+  const name = authority.nameFor(senderId);
+  if (!name || !chatText(text)) return false;
+  const message = {id: chat.log.lastId + 1, time: Date.now(), seat, name, text: text.trim()};
+  if (!chat.receive(message, senderId === null)) return false;
+  for (const id of authority.connections.keys()) {
+    transport.send(id, {type:'chat-message', message, own:id === senderId});
   }
   return true;
 }
@@ -77,6 +83,40 @@ function showScreen(screen) {
   $('site-header').hidden = $('site-footer').hidden = screen === 'game';
   $('profile-btn').disabled = screen !== 'lobby';
 }
+
+function pauseDirectory() {
+  clearTimeout(directoryTimer);
+  directoryScan?.abort();
+  directoryScan = null;
+}
+
+async function refreshDirectory() {
+  if (mode !== 'lobby' || pendingConnect || document.hidden || directoryScan) return;
+  clearTimeout(directoryTimer);
+  const controller = new AbortController();
+  directoryScan = controller;
+  renderPublicTables(listedRooms, {loading:true, capacity:PUBLIC_ROOM_LIMIT});
+  try {
+    const rooms = await listPublicRooms({signal:controller.signal});
+    if (controller.signal.aborted) return;
+    listedRooms = rooms;
+    renderPublicTables(rooms, {capacity:PUBLIC_ROOM_LIMIT});
+  } catch (error) {
+    if (!controller.signal.aborted) renderPublicTables(listedRooms, {error:error.message, capacity:PUBLIC_ROOM_LIMIT});
+  } finally {
+    if (directoryScan === controller) {
+      directoryScan = null;
+      directoryTimer = setTimeout(refreshDirectory, 45000);
+    }
+  }
+}
+
+document.addEventListener('visibilitychange', () => document.hidden ? pauseDirectory() : refreshDirectory());
+$('public-refresh').onclick = refreshDirectory;
+$('public-tables').addEventListener('click', event => {
+  const button = event.target.closest('[data-public-code][data-public-intent]');
+  if (button) openForm('join', button.dataset.publicCode, button.dataset.publicIntent);
+});
 
 function modal(title, content) {
   $('modal-content').innerHTML = '<h2 id="modal-title">' + escape(title) + '</h2>' + content;
@@ -158,6 +198,8 @@ $('nav-rules').onclick = showRules;
 
 function stopSession(message) {
   generation++;
+  publicListing?.close();
+  publicListing = null;
   clearTimeout(botTimer);
   botWorker?.terminate();
   botWorker = null;
@@ -180,17 +222,27 @@ function stopSession(message) {
     history.replaceState(null,'',url);
   }
   showScreen('lobby');
+  refreshDirectory();
   window.scrollTo(0,0);
   if (message) toast(message);
 }
 
 function requestLeave() {
   if (mode === 'lobby') return;
+  const canWatch = mode === 'host' && snapshot.publicRoom && !snapshot.spectator &&
+    snapshot.game && snapshot.game.phase !== 'result';
   const reason = mode === 'host' ? '방장이 나가면 이 방이 닫히고 모든 참가자의 연결이 끝납니다.' :
-    mode === 'practice' ? '현재 연습 게임이 종료됩니다.' : '플레이 중에 나가면 AI가 이 자리를 이어서 진행합니다.';
-  modal('로비로 나갈까요?', '<p>' + reason + '</p><div class="room-actions"><button class="plain-button" id="stay">계속하기</button><button class="primary-button" id="quit">나가기</button></div>');
+    mode === 'practice' ? '현재 연습 게임이 종료됩니다.' : snapshot?.spectator ? '관전을 끝냅니다. 신청한 자리 예약도 취소됩니다.' : '플레이 중에 나가면 AI가 이 자리를 이어서 진행합니다.';
+  const stepAside = canWatch ? '<button class="primary-button" id="host-watch">AI에게 맡기고 관전</button>' : '';
+  modal('로비로 나갈까요?', '<p>' + reason + (canWatch ? ' 방을 유지하려면 AI에게 자리를 맡기고 이 탭에서 관전하세요.' : '') +
+    '</p><div class="room-actions"><button class="plain-button" id="stay">계속하기</button>' + stepAside +
+    '<button class="' + (canWatch ? 'plain-button' : 'primary-button') + '" id="quit">' + (mode === 'host' ? '방 닫기' : '나가기') + '</button></div>');
   $('stay').onclick = closeModal;
   $('quit').onclick = () => stopSession();
+  if (canWatch) $('host-watch').onclick = () => {
+    try { authority.leaveHostSeat(); closeModal(); clearGame($('game')); publish(); }
+    catch (error) { closeModal(); toast(error.message); }
+  };
 }
 $('nav-lobby').onclick = requestLeave;
 document.querySelector('.brand').addEventListener('click', event => {
@@ -253,7 +305,7 @@ function drawRoom() {
   const modelDetailsOpen = room.querySelector('.model-details')?.open;
   const standingsOpen = room.querySelector('details.match-standings')?.open;
   const focusSeat = focus?.closest('[data-room-seat]')?.dataset.roomSeat;
-  const canChoose = Number.isInteger(snapshot.hostSeat);
+  const canChoose = !snapshot.spectator && Number.isInteger(snapshot.hostSeat);
   const hostSeat = snapshot.hostSeat ?? 0;
   const swap = snapshot.swap;
   const seats = snapshot.players.map((player, index) => {
@@ -283,7 +335,8 @@ function drawRoom() {
       : '<button type="button" class="plain-button" id="swap-cancel">요청 취소</button>';
     swapPanel = '<div id="seat-swap"><p role="status">' + message + '</p><div class="swap-actions">' + actions + '</div></div>';
   }
-  $('room').innerHTML = '<section class="room-panel"><h1>게임 대기실</h1><p>친구에게 방 코드나 초대 링크를 보내 주세요.</p>' +
+  $('room').innerHTML = '<section class="room-panel"><h1>' + (snapshot.publicRoom ? '공개 게임 대기실' : '게임 대기실') + '</h1><p>' +
+    (snapshot.publicRoom ? '로비의 공개 테이블 목록에서 참가하거나 관전할 수 있습니다.' : '친구에게 방 코드나 초대 링크를 보내 주세요.') + '</p>' +
     '<div class="room-code-section"><span>방 코드</span><strong class="room-code">' + escape(roomCode) + '</strong><button id="copy-invite" class="plain-button">초대 링크 복사</button></div>' +
     '<div class="seat-heading"><h2>' + (canChoose ? '자리 선택' : '참가자') + '</h2><span>참가 ' + occupied + ' / 5</span></div>' +
     (canChoose ? '<p class="seat-hint">자리 번호 순으로 진행합니다. 빈자리에 앉거나 다른 참가자에게 교환을 요청하세요.</p>' : '') +
@@ -291,7 +344,7 @@ function drawRoom() {
     (canSetLimit ? seriesPicker(board?.roundLimit) : seriesSummary(board)) +
     (host ? modelSettings(snapshot.botModels, hostSeat, snapshot.players) : modelSummary(snapshot)) +
     (host ? ruleEditor(activeRules()) : '<h2 class="room-heading">테이블 규칙</h2>' + rulesSummary(activeRules())) +
-    '<p>' + (host ? (occupied < 5 ? '지금 시작하면 빈자리 ' + (5-occupied) + '곳은 AI가 맡습니다.' : '다섯 명이 모였습니다. 게임을 시작하세요.') : '방장이 게임을 시작하면 카드를 받습니다.') +
+    '<section class="public-audience" hidden></section><p>' + (host ? (occupied < 5 ? '지금 시작하면 빈자리 ' + (5-occupied) + '곳은 AI가 맡습니다.' : '다섯 명이 모였습니다. 게임을 시작하세요.') : snapshot.spectator ? '방장이 게임을 시작하면 보드에서 관전할 수 있습니다.' : '방장이 게임을 시작하면 카드를 받습니다.') +
     '</p><div class="room-actions">' + (host ? '<button class="primary-button" id="start-round">게임 시작</button>' : '') +
     '<button class="plain-button" id="room-leave">나가기</button></div>' +
     scoreTable(snapshot.scoreboard, snapshot.seat, {collapsed:!snapshot.scoreboard?.rounds}) + '</section>';
@@ -339,6 +392,7 @@ function drawRoom() {
     if (focus?.name) settings.elements.namedItem(focus.name)?.focus({preventScroll:true});
   }
   chat.attach($('room').querySelector('.room-actions'));
+  drawAudience();
   const oldControl = focus?.id ? $(focus.id) : null;
   if (focusSeat != null || focus?.id.startsWith('swap-')) {
     const button = focusSeat == null ? null : room.querySelector('[data-choose-seat="' + focusSeat + '"]');
@@ -346,6 +400,29 @@ function drawRoom() {
     next?.focus({preventScroll:true});
   } else oldControl?.focus({preventScroll:true});
   if ($('modal').open && $('modal-content').querySelector('.rules-wrap')) showRules();
+}
+
+function drawAudience() {
+  if (!snapshot) return;
+  const node = $(snapshot.game ? 'game' : 'room').querySelector('.public-audience');
+  if (node) renderPublicAudience(node, snapshot, {
+    onReserve:() => changeReservation(true), onCancel:() => changeReservation(false)
+  });
+}
+
+function changeReservation(wanted) {
+  if (!snapshot?.spectator) return;
+  if (mode === 'host') {
+    try { applyReservation(authority, null, wanted); }
+    catch (error) { toast(error.message); }
+  } else if (!transport?.send({type:'reservation', wanted})) toast('방장과의 연결을 확인해 주세요.');
+}
+
+function applyReservation(session, id, wanted) {
+  const revision = session.revision;
+  if (!session.setReservation(id, wanted)) return;
+  if (revision === session.revision) publishAudience();
+  else publish();
 }
 
 function draw() {
@@ -366,6 +443,7 @@ function draw() {
       window.scrollTo(0,0);
     },
     onAction(action) {
+      if (snapshot.spectator) return false;
       if (authority) {
         try { submitTurn(authority, authority.hostSeat, snapshot.revision, action); return true; }
         catch (error) { toast(error.message); return false; }
@@ -376,14 +454,27 @@ function draw() {
     }
   });
   if (mode === 'host' || mode === 'guest') chat.attach($('game').querySelector('.g-nav-actions'));
+  drawAudience();
+}
+
+// Roster updates must not restart a bid clock or unlock a play awaiting confirmation.
+function publishAudience(joinedId) {
+  for (const id of authority.connections.keys()) {
+    const view = authority.viewFor(id);
+    const packet = id === joinedId ? {type:'state', view} :
+      {type:'audience', spectators:view.spectators, reservation:view.reservation};
+    transport.send(id, packet);
+  }
+  snapshot = authority.hostView();
+  drawAudience();
 }
 
 function publish() {
   clearTimeout(botTimer);
-  for (const [id, seat] of authority.connections) {
-    transport?.send(id,{type:'state',view:authority.view(seat)});
+  for (const id of authority.connections.keys()) {
+    transport?.send(id,{type:'state',view:authority.viewFor(id)});
   }
-  snapshot = authority.view(authority.hostSeat);
+  snapshot = authority.hostView();
   draw();
   if (authority.botTurn) {
     const game = snapshot.game;
@@ -522,6 +613,7 @@ function openPracticeSetup() {
       authority.setRules(rules);
       authority.setBotModels(models);
     } else {
+      pauseDirectory();
       mode = 'practice';
       authority = new HostSession(nickname, rules, models, selectedLimit(event.currentTarget));
     }
@@ -530,33 +622,42 @@ function openPracticeSetup() {
   };
 }
 
-async function connectRoom(kind, name, code, signal, roundLimit) {
+async function connectRoom(kind, name, code, signal, {roundLimit, publicRoom, intent}) {
   const token = ++generation;
   const active = () => token === generation && !signal.aborted;
   let link;
+  pauseDirectory();
   if (kind === 'create') {
     const preferences = roomPreferences();
-    const session = new HostSession(name, preferences.rules, roomModels(preferences.models), roundLimit);
+    const session = new HostSession(name, preferences.rules, roomModels(preferences.models), roundLimit, {publicRoom});
     link = await hostRoom({
       signal,
-      onJoin(id, guestName) {
-        if (!active()) return '이미 닫힌 방입니다.';
-        const reason = session.addGuest(id,guestName);
+      onJoin(id, guestName, guestIntent) {
+        if (!active() || authority !== session) return '테이블을 준비하고 있습니다. 잠시 후 다시 시도해 주세요.';
+        // Earlier clients can take a seat but cannot display an observer projection.
+        if (publicRoom && guestIntent === undefined && (session.round || session.players.every(Boolean))) {
+          return '로비를 새로고침한 뒤 관전하거나 다음 판을 예약해 주세요.';
+        }
+        const revision = session.revision;
+        const reason = session.addGuest(id,guestName,guestIntent);
         if (reason) return reason;
-        publish();
+        if (session.revision === revision) publishAudience(id);
+        else publish();
         transport.send(id, {type:'chat-history', messages:chat.log.messages});
         return true;
       },
       onMessage(id, packet) {
-        if (!active() || !packet) return;
+        if (!active() || !packet || !session.connections.has(id)) return;
         const seat = session.seatFor(id);
-        if (seat < 0) return;
         if (packet.type === 'chat-send') {
-          broadcastChat(seat, packet.text);
+          broadcastChat(seat, packet.text, id);
           return;
         }
         try {
-          if (packet.type === 'seat-choice') {
+          if (packet.type === 'reservation') {
+            applyReservation(session, id, packet.wanted);
+          } else if (seat < 0) return;
+          else if (packet.type === 'seat-choice') {
             if (applySeatChoice(session, id, packet)) publish();
           } else if (packet.type === 'action') {
             submitTurn(session, seat, packet.revision, packet.action);
@@ -567,25 +668,43 @@ async function connectRoom(kind, name, code, signal, roundLimit) {
       },
       onLeave(id) {
         if (!active()) return;
-        const name = session.players[session.seatFor(id)]?.name;
+        const seat = session.seatFor(id);
+        const name = session.nameFor(id);
+        const revision = session.revision;
         session.removeGuest(id);
-        if (name) toast(name + '님이 나갔습니다.' + (session.round ? ' AI가 이어서 플레이합니다.' : ''));
-        publish();
+        if (name && seat >= 0) toast(name + '님이 나갔습니다.' + (session.round && !session.round.result ? ' AI가 이어서 플레이합니다.' : ''));
+        if (revision === session.revision) publishAudience();
+        else publish();
       },
       onError(error) { if (active()) toast(error.message); }
     });
     if (!active()) { link.close(); return; }
+    if (publicRoom) {
+      let listing;
+      try {
+        listing = await publishPublicRoom({signal, getSummary:() => ({...session.publicSummary(), code:link.code}),
+          onError:error => { if (active()) toast(error.message); }});
+      } catch (error) { link.close(); throw error; }
+      if (!active()) { listing.close(); link.close(); return; }
+      publicListing = listing;
+    }
     mode = 'host';
     authority = session;
     rememberRoom({roundLimit});
   } else {
     mode = 'joining';
     link = await joinRoom(code,name,{
-      signal,
+      signal, intent,
       onMessage(packet) {
         if (!active()) return;
         if (packet?.type === 'chat-message') { chat.receive(packet.message, packet.own === true); return; }
         if (packet?.type === 'chat-history') { chat.restore(packet.messages); return; }
+        if (packet?.type === 'audience' && snapshot) {
+          snapshot.spectators = packet.spectators;
+          snapshot.reservation = packet.reservation;
+          if (mode === 'guest') drawAudience();
+          return;
+        }
         if (packet?.type === 'error') { toast(packet.message); if (mode === 'guest') draw(); return; }
         if (packet?.type === 'state') {
           snapshot = packet.view;
@@ -608,14 +727,17 @@ async function connectRoom(kind, name, code, signal, roundLimit) {
   window.scrollTo(0,0);
 }
 
-function openForm(kind, code = '') {
+function openForm(kind, code = '', publicIntent = null) {
   const profile = kind === 'profile';
   const joining = kind === 'join';
-  const title = profile ? '닉네임 변경' : joining ? '방 참가하기' : '방 만들기';
-  const intro = profile ? '' : '<p>' + (joining ? '친구에게 받은 6자리 방 코드를 입력하세요.' : '테이블을 열면 친구를 초대할 방 코드가 생깁니다. 게임 중에는 방장 탭을 열어 두세요.') + '</p>';
+  const publicTitles = {play:'공개 테이블 참가', watch:'테이블 관전', reserve:'다음 판 예약'};
+  const title = profile ? '닉네임 변경' : publicTitles[publicIntent] ?? (joining ? '방 참가하기' : '방 만들기');
+  const intro = profile ? '' : '<p>' + (publicIntent ? '테이블 ' + escape(code) +
+    (publicIntent === 'reserve' ? '에서 관전하며 다음 자리를 기다립니다.' : '에 입장할 닉네임을 확인하세요.') :
+    joining ? '친구에게 받은 6자리 방 코드를 입력하세요.' : '게임 중에는 테이블을 운영하는 방장 탭을 열어 두세요.') + '</p>';
   modal(title, intro + '<form id="setup-form"><label class="field">닉네임<input id="name-field" name="nickname" maxlength="16" required autocomplete="nickname"></label>' +
-    (joining ? '<label class="field">방 코드<input class="code-field" id="code-field" name="code" maxlength="12" placeholder="6자리 코드" required autocomplete="off" spellcheck="false"></label>' : '') +
-    (kind === 'create' ? seriesPicker(roomPreferences().roundLimit) : '') +
+    (publicIntent ? '<input type="hidden" id="code-field">' : joining ? '<label class="field">방 코드<input class="code-field" id="code-field" name="code" maxlength="12" placeholder="6자리 코드" required autocomplete="off" spellcheck="false"></label>' : '') +
+    (kind === 'create' ? visibilityPicker() + seriesPicker(roomPreferences().roundLimit) : '') +
     '<div class="form-error" role="alert" id="form-error"></div><button class="primary-button form-submit" id="submit-form">' + (profile ? '저장' : title) + '</button></form>');
   $('name-field').value = nickname;
   if (joining) { $('code-field').value = code; (code ? $('name-field') : $('code-field')).focus(); }
@@ -635,13 +757,18 @@ function openForm(kind, code = '') {
     submit.disabled = true;
     submit.textContent = '연결 중…';
     $('form-error').textContent = '';
-    try { await connectRoom(kind,name,code,controller.signal,selectedLimit(event.currentTarget)); }
+    try {
+      const form = event.currentTarget;
+      await connectRoom(kind,name,code,controller.signal,{roundLimit:selectedLimit(form),
+        publicRoom:form.elements.visibility?.value === 'public', intent:publicIntent ?? 'play'});
+    }
     catch (error) {
       if (controller.signal.aborted) return;
       $('form-error').textContent = error.message;
     } finally {
       if (pendingConnect === controller) pendingConnect = null;
       if (mode === 'joining' && !transport) mode = 'lobby';
+      if (mode === 'lobby') refreshDirectory();
       submit.disabled = false;
       submit.textContent = title;
     }
@@ -668,3 +795,4 @@ $('prev-tip').onclick = () => turnTip(-1);
 $('next-tip').onclick = () => turnTip(1);
 const invitation = new URL(location.href).searchParams.get('room');
 if (invitation) openForm('join',normalizeRoomCode(invitation));
+refreshDirectory();

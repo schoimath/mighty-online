@@ -1,5 +1,5 @@
 import {botObservation, DEFAULT_RULES, legalPlays, validateRules} from './engine.js';
-import {applyAction, canDeclareSetting, createGame, getView, resolveSetting} from './table-deal.js';
+import {applyAction, canDeclareSetting, createGame, getView, getSpectatorView, resolveSetting} from './table-deal.js';
 import {jokerWasPlayed, withJokerStatus} from './table-joker.js';
 import {shouldDeclareSetting} from './bot-setting.js';
 import {settlements, TABLE_SCORING_VERSION} from './table-scoring.js';
@@ -22,8 +22,14 @@ function validateRoundLimit(limit) {
 
 export class HostSession {
   #swaps = [];
-  #nextBidder = {seat: 0, player: null};
+  #nextBidder = {seat: 0, memberId: null};
+  #hostName;
   #nextGuest = 1;
+  #botIds = BOT_NAMES.map((_, seat) => 'bot-' + seat);
+  #nextBot = 1;
+  #observers = new Map();
+  #queue = [];
+  #dealtPlayers = null;
   #members = new Map();
   #roundMembers = null;
   #completedRounds = 0;
@@ -34,7 +40,9 @@ export class HostSession {
   #claim = null;
   #skipBotClaim = false;
 
-  constructor(hostName, rules = DEFAULT_RULES, botModels = randomSeatModels(), roundLimit = null) {
+  constructor(hostName, rules = DEFAULT_RULES, botModels = randomSeatModels(), roundLimit = null, {publicRoom = false} = {}) {
+    this.publicRoom = publicRoom === true;
+    this.#hostName = hostName;
     this.players = [this.#player('host', hostName, false), null, null, null, null];
     this.hostSeat = 0;
     this.rules = validateRules(rules);
@@ -49,6 +57,21 @@ export class HostSession {
     return this.connections.get(id) ?? -1;
   }
 
+  nameFor(id) {
+    if (id === null) return this.#hostName;
+    return this.#observers.get(id) ?? this.players[this.seatFor(id)]?.name;
+  }
+
+  publicSummary() {
+    if (!this.publicRoom) return null;
+    const finished = this.round?.phase === 'result';
+    return {
+      hostName:this.#hostName, phase:!this.round ? 'waiting' : finished ? 'finished' : 'playing',
+      humanCount:this.players.filter(player => player && !player.bot).length, spectatorCount:this.#observers.size,
+      reservationCount:this.#queue.length, roundNumber:this.#completedRounds + (finished ? 0 : 1), roundLimit:this.#roundLimit
+    };
+  }
+
   #player(memberId, name, bot) {
     if (!this.#members.has(memberId)) {
       this.#members.set(memberId, {id: memberId, name, bot, total: 0, rounds: 0});
@@ -56,11 +79,19 @@ export class HostSession {
     return {memberId, name, bot};
   }
 
-  addGuest(id, name) {
-    if (this.round) return '진행 중인 게임입니다. 다음 판에 참가해 주세요.';
+  addGuest(id, name, intent = 'play') {
+    if (!this.publicRoom && this.round) return '진행 중인 게임입니다. 다음 판에 참가해 주세요.';
     if (id == null) return '참가자 연결을 확인해 주세요.';
     if (this.connections.has(id)) return '이미 입장한 연결입니다.';
     if (typeof name !== 'string' || !name.trim() || name.trim().length > 16) return '닉네임은 1~16자로 입력해 주세요.';
+    if (!['play','watch','reserve'].includes(intent)) return '참가 방식을 확인해 주세요.';
+    if (!this.publicRoom && intent !== 'play') return '공개 테이블에서 관전하거나 자리를 예약할 수 있습니다.';
+    if (this.publicRoom) {
+      this.connections.set(id, -1);
+      this.#observers.set(id, name.trim());
+      if (intent !== 'watch') this.setReservation(id, true);
+      return null;
+    }
     const seat = this.players.indexOf(null);
     if (seat < 0) return '다섯 자리가 모두 찼습니다.';
     this.connections.set(id, seat);
@@ -69,19 +100,83 @@ export class HostSession {
     return null;
   }
 
+  setReservation(id, wanted) {
+    if (!this.publicRoom || !this.#observers.has(id) || typeof wanted !== 'boolean') {
+      throw new Error('관전 중인 공개 테이블에서 자리를 예약할 수 있습니다.');
+    }
+    const index = this.#queue.findIndex(entry => entry.id === id);
+    if (wanted === (index >= 0)) return false;
+    if (wanted) this.#queue.push({id, seat:null});
+    else this.#queue.splice(index, 1);
+    if (this.#updateReservations()) this.revision++;
+    return true;
+  }
+
+  // Seat assignments are stable once shown on the result screen. The current
+  // hand and its settlement still belong to the players who were dealt in.
+  #updateReservations() {
+    if (!this.#queue.length || (this.round && this.round.phase !== 'result')) return;
+    const assigned = new Set(this.#queue.map(entry => entry.seat));
+    const open = BOT_NAMES.map((_, i) => i).filter(seat =>
+      !assigned.has(seat) && (!this.players[seat] || this.players[seat].bot));
+    for (const entry of this.#queue) {
+      if (entry.seat === null && open.length) entry.seat = open.shift();
+    }
+    return !this.round && this.#seatReservedPlayers();
+  }
+
+  #seatReservedPlayers() {
+    const ready = this.#queue.filter(entry => entry.seat !== null);
+    for (const {id, seat} of ready) {
+      const isHost = id === null;
+      this.players[seat] = this.#player(isHost ? 'host' : 'guest-' + this.#nextGuest++, this.#observers.get(id), false);
+      if (isHost) this.hostSeat = seat;
+      else this.connections.set(id, seat);
+      this.#observers.delete(id);
+    }
+    this.#queue = this.#queue.filter(entry => entry.seat === null);
+    return ready.length;
+  }
+
   removeGuest(id) {
+    if (id == null) return;
+    if (this.#observers.delete(id)) {
+      this.connections.delete(id);
+      this.#queue = this.#queue.filter(entry => entry.id !== id);
+      this.#updateReservations();
+      return;
+    }
     const seat = this.seatFor(id);
     if (seat < 0) return;
-    if (this.players[seat] === this.#nextBidder.player) this.#nextBidder.seat = seat;
-    const memberId = this.players[seat].memberId;
-    if (!this.round && !this.#members.get(memberId).rounds) this.#members.delete(memberId);
     this.connections.delete(id);
+    this.#releaseSeat(seat);
+  }
+
+  leaveHostSeat() {
+    if (!this.publicRoom || !validSeat(this.hostSeat) || !this.round || this.round.phase === 'result') {
+      throw new Error('진행 중인 공개 테이블에서 방장 자리를 AI에게 넘길 수 있습니다.');
+    }
+    const seat = this.hostSeat;
+    this.hostSeat = -1;
+    this.#observers.set(null, this.#hostName);
+    this.#releaseSeat(seat);
+    return true;
+  }
+
+  #releaseSeat(seat) {
+    const memberId = this.players[seat].memberId;
+    if (memberId === this.#nextBidder.memberId) this.#nextBidder.seat = seat;
+    if (!this.round && !this.#members.get(memberId).rounds) this.#members.delete(memberId);
     this.#clearSwapsAt(seat);
+    if (this.publicRoom && this.#members.get(this.#botIds[seat])?.rounds) {
+      this.#botIds[seat] = 'sub-' + this.#nextBot++;
+    }
     this.players[seat] = this.round ? this.botPlayer(seat) : null;
     if (this.round && this.round.phase !== 'result' && hasSeatMemory(this.botModels[seat])) {
       this.#botMemory[seat] = memoryForReplacement(this.botModels[seat], this.#guestDecisions[seat]);
       this.#guestDecisions[seat] = [];
     }
+    this.#updateReservations();
     this.revision++;
   }
 
@@ -154,7 +249,7 @@ export class HostSession {
   }
 
   botPlayer(seat) {
-    const player = this.#player('bot-' + seat, 'AI ' + BOT_NAMES[seat], true);
+    const player = this.#player(this.#botIds[seat], 'AI ' + BOT_NAMES[seat], true);
     return {...player, modelId: this.botModels[seat]};
   }
 
@@ -185,12 +280,15 @@ export class HostSession {
   start() {
     if (this.#complete) throw new Error('목표 판수를 모두 마쳤습니다. 새 대국을 시작해 주세요.');
     if (this.round && this.round.phase !== 'result') throw new Error('이미 게임이 진행 중입니다.');
-    const players = this.players.map((p, i) => p ?? this.botPlayer(i));
-    const bidderSeat = players.indexOf(this.#nextBidder.player);
+    const returningHostSeat = this.#nextBidder.memberId === 'host' ? this.#queue.find(entry => entry.id === null)?.seat : null;
+    const bidderSeat = returningHostSeat ?? this.players.findIndex(p => p && p.memberId === this.#nextBidder.memberId);
     const firstSeat = bidderSeat < 0 ? this.#nextBidder.seat : bidderSeat;
-    this.round = createGame({firstSeat, rules: this.rules});
+    const round = createGame({firstSeat, rules: this.rules});
+    this.#seatReservedPlayers();
+    this.round = round;
     this.#resetBotMemory();
-    this.players = players;
+    this.players = this.players.map((p, i) => p ?? this.botPlayer(i));
+    this.#dealtPlayers = this.publicRoom ? [...this.players] : null;
     // A substitute finishes on behalf of the member who received the original hand.
     this.#roundMembers = this.players.map(player => player.memberId);
     this.#swaps = [];
@@ -200,6 +298,7 @@ export class HostSession {
   returnToRoom() {
     if (this.round?.phase !== 'result') throw new Error('게임을 끝낸 후 대기실로 돌아갈 수 있습니다.');
     this.round = null;
+    this.#dealtPlayers = null;
     this.players = this.players.map(p => p?.bot ? null : p);
     if (this.#complete) {
       this.#completedRounds = 0;
@@ -208,8 +307,9 @@ export class HostSession {
       for (const player of this.players) {
         if (player) this.#player(player.memberId, player.name, player.bot);
       }
-      this.#nextBidder = {seat:0, player:null};
+      this.#nextBidder = {seat:0, memberId:null};
     }
+    this.#updateReservations();
     this.revision++;
   }
 
@@ -282,9 +382,9 @@ export class HostSession {
 
   #applyTurn(seat, action, memory) {
     const dealNo = this.round.dealNo;
-    // Keep only the departing guest's own decision history for a possible
+    // Keep only the departing player's own decision history for a possible
     // mid-round recurrent substitute. These records never enter a room view.
-    const track = seat !== this.hostSeat && !this.players[seat].bot && hasSeatMemory(this.botModels[seat]);
+    const track = (this.publicRoom || seat !== this.hostSeat) && !this.players[seat].bot && hasSeatMemory(this.botModels[seat]);
     const observation = track ? withJokerStatus(botObservation(this.round, seat)) : null;
     // Older clients still offer a call after everyone has seen the Joker.
     if (action?.type === 'play' && action.jokerCall === true && this.round.phase === 'play' &&
@@ -320,9 +420,10 @@ export class HostSession {
         this.#lastSettlement.set(id, {lastSeat: seat, lastDelta: changes[seat]});
       });
       this.#completedRounds++;
-      this.#roundMembers = null;
       const opener = this.round.result.friend ?? this.round.result.declarer;
-      this.#nextBidder = {seat: opener, player: this.players[opener]};
+      this.#nextBidder = {seat: opener, memberId: this.#roundMembers[opener]};
+      this.#roundMembers = null;
+      this.#updateReservations();
     }
   }
 
@@ -343,14 +444,31 @@ export class HostSession {
       });
     }
     members.sort((a, b) => (a.seat ?? BOT_NAMES.length) - (b.seat ?? BOT_NAMES.length));
-    return {scoringVersion: TABLE_SCORING_VERSION, rounds: this.#completedRounds,
+    const board = {scoringVersion: TABLE_SCORING_VERSION, rounds: this.#completedRounds,
       roundLimit:this.#roundLimit, complete:this.#complete, members};
+    if (this.round?.result && this.#dealtPlayers) board.panelMemberIds = this.#dealtPlayers.map(p => p.memberId);
+    return board;
   }
 
   view(seat) {
     if (!validSeat(seat)) throw new Error('유효하지 않은 자리입니다.');
+    return this.#view(seat);
+  }
+
+  viewFor(id) {
+    if (!this.connections.has(id)) throw new Error('참가자 연결을 확인해 주세요.');
+    return this.#view(this.seatFor(id), id);
+  }
+
+  hostView() {
+    return this.#view(this.hostSeat, null);
+  }
+
+  #view(seat, id) {
     const swap = this.#swapAt(seat);
-    const game = this.round ? withJokerStatus(getView(this.round, seat), jokerWasPlayed(this.round)) : null;
+    const spectator = seat === -1;
+    const projection = this.round && (spectator ? getSpectatorView(this.round) : getView(this.round, seat));
+    const game = projection && withJokerStatus(projection, jokerWasPlayed(this.round));
     if (game && this.#claim) {
       game.claimPending = true;
       game.turn = null;
@@ -360,8 +478,12 @@ export class HostSession {
     if (game?.phase === 'discard' && seat === game.declarer) {
       game.incomingCards = [...(this.round.knownKitty || [])];
     }
+    const positions = new Map(this.#queue.map(({id, seat}, i) => [id, {position:i + 1, seat}]));
+    const spectators = Array.from(this.#observers, ([id, name]) => ({name, position:null, seat:null, ...positions.get(id)}));
+    const roster = game?.result && this.#dealtPlayers ? this.#dealtPlayers : this.players;
     return {revision: this.revision, seat, hostSeat: this.hostSeat, swap: swap ? {...swap} : null,
-      rules: {...this.rules}, botModels: [...this.botModels], players: this.players.map(p => p && {...p}),
+      publicRoom:this.publicRoom, spectator, spectators, reservation:positions.get(id) ?? null,
+      rules: {...this.rules}, botModels: [...this.botModels], players: roster.map(p => p && {...p}),
       scoreboard: this.#scoreboard(), game};
   }
 }
