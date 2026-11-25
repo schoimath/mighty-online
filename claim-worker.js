@@ -1,5 +1,7 @@
-import {canSweepRemaining} from './table-claim.js';
+import {analyzeSetting} from './table-claim.js?v=1.1';
 
 self.onmessage = ({data}) => {
-  self.postMessage(canSweepRemaining(data));
+  // Open tabs from the previous release submit the position directly.
+  const verdict = analyzeSetting(data.position ?? data);
+  self.postMessage(data.position ? verdict : verdict.success);
 };

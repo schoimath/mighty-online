@@ -50,6 +50,7 @@
 .g-heading h1 { margin: 0; color: var(--g-cream); font-size: clamp(1.75rem, 3.4vw, 2.5rem); font-weight: 700; letter-spacing: -.055em; line-height: 1.2; }
 .g-eyebrow { display: flex; align-items: center; gap: 6px; font-size: .8rem; font-weight: 600; color: #b9c8b3; }
 .g-eyebrow i { color: #ddbc76; font: normal 1.1rem Georgia, serif; }
+.g-release-note { margin-inline-start: auto; color: #b1c3b5; font-size: .74rem; font-weight: 400; }
 .g-round-tag { color: #c2d4c5; border: 1px solid #486151; border-radius: 20px; padding: 5px 11px; font-size: .8rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .g-round-tag:not(.g-contract-tag) { margin-inline-start: auto; }
 .g-contract-tag strong { color: var(--g-cream); }
@@ -89,11 +90,6 @@ html:has(.g-screen) { scrollbar-gutter: stable; }
 .g-table-symbol { font: 45px/1 Georgia, serif; color: #d6c6957a; }
 .g-table-center small, .g-table-center > span:last-child:not(.g-table-symbol) { font-size: .8rem; color: #c0d1b6; }
 .g-table-center strong { font-size: 1.05rem; font-weight: 650; color: #f1ebd5; }
-.g-btn.g-claim-center {
-  min-height: 44px; margin-top: 4px; padding: 6px 18px; border-color: #efcf8c;
-  color: #263a29; background: #edcf8c; font-size: .98rem; font-weight: 700;
-}
-.g-btn.g-claim-center:hover { background: #f8dfa7; }
 .g-setting-compat { display: grid; gap: 4px; line-height: 1.4; }
 .g-sweep {
   --sweep-ink: #ffe3a1; --sweep-light: #ffecc2; --sweep-glow: #ebc45e34;
@@ -143,9 +139,7 @@ html:has(.g-screen) { scrollbar-gutter: stable; }
 }
 .g-friend-call small { color: #c6e1ec; font-size: .74rem; }
 .g-friend-call strong { font-size: clamp(.93rem, 2vw, 1.25rem); }
-.g-felt:has(.g-friend-call:not([hidden])) .g-table-center:not(:has(.g-claim-center)),
-.g-felt:has(.g-friend-call:not([hidden])) .g-table-center:has(.g-claim-center) > strong { visibility: hidden; }
-.g-table-center:has(.g-claim-center):not([hidden]) ~ .g-friend-call { translate: 0 calc(-50% - .85rem); }
+.g-felt:has(.g-friend-call:not([hidden])) .g-table-center { visibility: hidden; }
 .g-friend-call:not([hidden]) ~ .g-trick-result { translate: 0 calc(-50% - 2rem); }
 @media (prefers-reduced-motion: no-preference) {
   .g-friend-call:not([hidden]) { animation: g-friend-announce .24s ease-out; }
@@ -322,6 +316,16 @@ html:has(.g-screen) { scrollbar-gutter: stable; }
 .g-claim-outcome[data-success="false"] { border-color: #d09574; }
 .g-claim-outcome[data-success="false"] > strong { color: #ffc49b; }
 .g-action .g-claim-outcome p { margin: 2px 0 0; }
+.g-setting-line { margin-top: 16px; padding: 14px 6px 0; border-top: 1px solid #56715b; }
+.g-setting-line h2 { margin: 0; color: #f4dea3; font-size: 1.05rem; }
+.g-setting-line p { margin: 3px 0 12px; color: #c6d6c7; font-size: .84rem; }
+.g-setting-line ol { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.g-setting-line li { display: grid; justify-items: center; gap: 3px; }
+.g-setting-line li > small { color: #d6dfce; font-size: .72rem; font-variant-numeric: tabular-nums; }
+.g-setting-line li > .g-setting-note { color: #f5dfa4; }
+.g-setting-card { display: block; position: relative; width: clamp(42px, 6cqi, 55px); aspect-ratio: 62 / 87; }
+.g-setting-card .g-corner b { font-size: .94rem; }
+.g-setting-card .g-pip { font-size: 1.45rem; }
 .g-action > :last-child { margin-bottom: 0; }
 .g-suit-picker { margin: 0 0 10px; padding: 0; border: 0; min-width: 0; }
 .g-suit-picker legend { padding: 0; color: #d5decd; font-size: .8rem; }

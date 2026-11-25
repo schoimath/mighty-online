@@ -1,6 +1,7 @@
 import {botObservation, DEFAULT_RULES, legalPlays, validateRules} from './engine.js';
 import {applyAction, canDeclareSetting, createGame, getView, resolveSetting} from './table-deal.js';
 import {jokerWasPlayed, withJokerStatus} from './table-joker.js';
+import {shouldDeclareSetting} from './bot-setting.js';
 import {settlements, TABLE_SCORING_VERSION} from './table-scoring.js';
 import {decideTableTurn, hasSeatMemory, isModelId, memoryForReplacement, randomSeatModels} from './lab/table-agents.js';
 
@@ -25,6 +26,7 @@ export class HostSession {
   #botMemory = Array(5).fill(null);
   #guestDecisions = Array.from({length:5}, () => []);
   #claim = null;
+  #skipBotClaim = false;
 
   constructor(hostName, rules = DEFAULT_RULES, botModels = randomSeatModels()) {
     this.players = [this.#player('host', hostName, false), null, null, null, null];
@@ -186,21 +188,28 @@ export class HostSession {
     if (!this.round || !Number.isInteger(seat) || seat < 0 || seat > 4 || this.players[seat]?.bot) throw new Error('플레이어 자리를 확인해 주세요.');
     if (revision !== this.revision) throw new Error('테이블 상태가 바뀌었습니다. 다시 선택해 주세요.');
     if (this.#claim) throw new Error('세팅을 판정하고 있습니다.');
-    if (action?.type === 'claim') {
-      if (!canDeclareSetting(this.round, seat)) throw new Error('주공이 선을 잡았을 때 세팅을 선언할 수 있습니다.');
-      const {phase, turn, declarer, trickNo, trick, hands, bid, rules} = this.round;
-      // This position goes only to the host's local solver. Peers receive view().
-      this.#claim = structuredClone({phase, turn, declarer, trickNo, trick, hands, bid, rules});
-      this.revision++;
-      return this.#claim;
-    }
+    if (action?.type === 'claim') return this.#beginClaim(seat);
     this.#applyTurn(seat, action);
   }
 
-  finishClaim(position, success) {
+  #beginClaim(seat) {
+    if (!canDeclareSetting(this.round, seat)) throw new Error('주공이 선을 잡았을 때 세팅을 선언할 수 있습니다.');
+    const {phase, turn, declarer, trickNo, trick, hands, bid, rules} = this.round;
+    // This position goes only to the host's local solver. Peers receive view().
+    this.#claim = structuredClone({phase, turn, declarer, trickNo, trick, hands, bid, rules});
+    this.revision++;
+    return this.#claim;
+  }
+
+  tryBotClaim() {
+    if (!this.botTurn || this.#skipBotClaim || !canDeclareSetting(this.round, this.round.turn)) return null;
+    const view = botObservation(this.round, this.round.turn);
+    return shouldDeclareSetting(view) ? this.#beginClaim(view.seat) : null;
+  }
+
+  finishClaim(position, verdict) {
     if (!position || this.#claim !== position) return false;
-    if (typeof success !== 'boolean') throw new Error('세팅 판정 결과를 확인해 주세요.');
-    resolveSetting(this.round, this.round.declarer, success);
+    resolveSetting(this.round, this.round.declarer, verdict);
     this.#claim = null;
     this.#recordResult();
     this.revision++;
@@ -210,6 +219,7 @@ export class HostSession {
   abandonClaim(position) {
     if (!position || this.#claim !== position) return false;
     this.#claim = null;
+    this.#skipBotClaim = Boolean(this.players[position.declarer]?.bot);
     this.revision++;
     return true;
   }
@@ -236,6 +246,7 @@ export class HostSession {
   }
 
   #resetBotMemory() {
+    this.#skipBotClaim = false;
     this.#botMemory.fill(null);
     this.#guestDecisions = Array.from({length:5}, () => []);
   }
@@ -253,6 +264,7 @@ export class HostSession {
       action = {...action, jokerCall:false};
     }
     applyAction(this.round, seat, action);
+    this.#skipBotClaim = false;
     if (this.round.dealNo !== dealNo) this.#resetBotMemory();
     else if (track) {
       const entry = {observation};

@@ -3,14 +3,14 @@ import {DECK, jokerActive, legalPlays, mighty, strength} from './engine.js';
 // The declarer must keep the lead throughout, so every follower responds to the
 // same lead, independently of earlier followers. An inactive Joker lead already
 // loses to the first ordinary card and never needs to be expanded.
-export function canSweepRemaining(round) {
+export function analyzeSetting(round) {
   if (round.phase !== 'play' || round.turn !== round.declarer || round.trick.length) {
     throw new Error('주공이 선을 잡은 트릭에서만 세팅을 판정할 수 있습니다.');
   }
   const own = round.hands[round.declarer];
   const others = round.hands.filter((_, seat) => seat !== round.declarer);
   const master = mighty(round.bid.suit);
-  if (others.some(hand => hand.includes(master))) return false;
+  if (others.some(hand => hand.includes(master))) return {success:false};
 
   const full = (1 << own.length) - 1;
   const base = full + 1;
@@ -105,12 +105,30 @@ export function canSweepRemaining(round) {
         return options[seat].every(hand => { nextHands[seat] = hand; return allReplies(seat + 1); });
       }
       if (!lead.next || allReplies(0)) {
-        memo[ownMask].set(key, true);
-        return true;
+        memo[ownMask].set(key, lead);
+        return lead;
       }
     }
-    memo[ownMask].set(key, false);
-    return false;
+    memo[ownMask].set(key, null);
+    return null;
   }
-  return solve(full, others.map(() => full));
+
+  let hands = others.map(() => full);
+  let lead = solve(full, hands);
+  if (!lead) return {success:false};
+  // Replay one branch of the proven strategy. The first representative reply
+  // from each seat is legal and was among the branches checked by allReplies.
+  // Only declarer leads are public. Other replies may yield a different line.
+  const line = [];
+  while (lead) {
+    line.push(lead.move);
+    if (!lead.next) break;
+    hands = hands.map((mask, seat) => response(seat, mask, lead)[0]);
+    lead = solve(lead.next, hands);
+  }
+  return {success:true, line};
+}
+
+export function canSweepRemaining(round) {
+  return analyzeSetting(round).success;
 }

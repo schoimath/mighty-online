@@ -1,4 +1,4 @@
-import {applyAction as applyEngineAction, pointsIn, sortHand} from './engine.js';
+import {applyAction as applyEngineAction, legalPlays, pointsIn, sortHand} from './engine.js';
 
 export function canDeclareSetting(state, seat) {
   return state.phase === 'play' && Number.isInteger(seat) && seat >= 0 && seat < state.hands.length &&
@@ -30,15 +30,31 @@ function finishSetting(state, success, friendTrick = []) {
 }
 
 // A verdict comes exclusively from the host's solver, never a network action.
-export function resolveSetting(state, seat, success) {
+export function resolveSetting(state, seat, verdict) {
   if (!canDeclareSetting(state, seat)) throw new Error('세팅은 주공이 선을 잡고 카드를 내기 전에만 선언할 수 있습니다.');
+  const success = typeof verdict === 'boolean' ? verdict : verdict?.success;
   if (typeof success !== 'boolean') throw new Error('세팅 판정이 완료되지 않았습니다.');
+  let line;
+  if (success && typeof verdict === 'object') {
+    const hand = [...state.hands[seat]];
+    if (!Array.isArray(verdict.line) || verdict.line.length !== hand.length) throw new Error('세팅 카드 순서가 올바르지 않습니다.');
+    line = [];
+    for (const move of verdict.line) {
+      const legal = legalPlays({...state, trickNo:state.trickNo + line.length}, hand).find(play =>
+        play.card === move?.card && play.suit === move.suit && play.jokerCall === move.jokerCall);
+      if (!legal) throw new Error('세팅 카드 순서가 올바르지 않습니다.');
+      hand.splice(hand.indexOf(legal.card), 1);
+      line.push(legal);
+    }
+  }
   if (!success && state.call.kind === 'first' && !state.friendKnown) {
     // Identify the partner before charging individual settlements.
     state.settingAwaitingFriend = true;
     return state;
   }
-  return finishSetting(state, success);
+  finishSetting(state, success);
+  if (line) state.result.setting.line = line;
+  return state;
 }
 
 // The engine judges the opening trick and determines its friend normally.

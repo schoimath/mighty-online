@@ -7,22 +7,26 @@
   <meta name="description" content="친구와 방 코드를 나누고 즐기는 5인 마이티 카드 게임. AI와 함께 연습할 수도 있어요.">
   <title>Mighty Club · 마이티 온라인</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 60 60'%3E%3Crect width='60' height='60' rx='12' fill='%23174639'/%3E%3Ctext x='30' y='48' text-anchor='middle' font-size='50' fill='%23f8f3de'%3E♠%3C/text%3E%3C/svg%3E">
-  <link rel="stylesheet" href="./style.css">
-  <link rel="stylesheet" href="./game.css?v=setting-2">
-  <link rel="stylesheet" href="./score.css?v=setting-2">
+  <link rel="stylesheet" href="./style.css?v=1.1">
+  <link rel="stylesheet" href="./game.css?v=1.1">
+  <link rel="stylesheet" href="./score.css?v=1.1">
   <link rel="stylesheet" href="./auction.css">
   <link rel="stylesheet" href="./chat.css">
   <script type="importmap">
     {
       "imports": {
-        "./game-ui.js": "./game-ui.js?v=setting-2",
-        "./session.js": "./session.js?v=setting-2",
-        "./table-deal.js": "./table-deal.js?v=setting-2",
-        "./score-ui.js": "./score-ui.js?v=setting-2"
+        "./game-ui.js": "./game-ui.js?v=1.1",
+        "./release.js": "./release.js?v=1.1",
+        "./session.js": "./session.js?v=1.1",
+        "./bot-setting.js": "./bot-setting.js?v=1.1",
+        "./table-claim.js": "./table-claim.js?v=1.1",
+        "./table-setting.js": "./table-setting.js?v=1.1",
+        "./table-deal.js": "./table-deal.js?v=1.1",
+        "./score-ui.js": "./score-ui.js?v=1.1"
       }
     }
   </script>
-  <script type="module" src="./app.js?v=setting-2"></script>
+  <script type="module" src="./app.js?v=1.1"></script>
 </head>
 <body>
   <header class="site-header" id="site-header">
@@ -85,7 +89,7 @@
     </button>
     <span id="chat-resize-help" hidden>모서리를 끌어 크기를 조절하세요. 누르면 크게 열거나 기본 크기로 돌아갑니다. 오른쪽·아래 방향키로 넓이·높이를 늘리고 왼쪽·위 방향키로 줄입니다. Home 키로 기본 크기를 복원합니다.</span>
   </section>
-  <footer class="site-footer" id="site-footer"><div><span class="footer-name">♠ &nbsp; Mighty Club</span><span class="footer-suits" aria-hidden="true">♠ <b>♥</b> ♣ <b>♦</b></span></div></footer>
+  <footer class="site-footer" id="site-footer"><div><span class="footer-name">♠ &nbsp; Mighty Club</span><small class="footer-release"><span id="release-version"></span> · 마지막 업데이트 <time id="release-date"></time></small></div></footer>
   <dialog class="modal" id="modal" aria-labelledby="modal-title"><div class="modal-inner"><button class="close-icon" id="close-modal" aria-label="닫기">×</button><div id="modal-content"></div></div></dialog>
   <div id="notice" role="status" class="toast" hidden></div>
 </body>

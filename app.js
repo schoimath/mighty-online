@@ -6,8 +6,14 @@ import {chatText, setupChat} from './chat.js';
 import {DEFAULT_RULES} from './engine.js';
 import {scoreTable, seatStanding} from './score-ui.js';
 import {bindModelSettings, modelLabel, modelSettings, modelSummary, readModelSettings} from './model-picker.js';
+import {UPDATED_ON, VERSION} from './release.js';
 
 const $ = id => document.getElementById(id);
+if ($('release-date')) {
+  $('release-version').textContent = 'v' + VERSION;
+  $('release-date').dateTime = UPDATED_ON;
+  $('release-date').textContent = UPDATED_ON;
+}
 const escape = text => String(text ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const icons = {
   user:'<circle cx="12" cy="8" r="3.3"/><path d="M5 20a7 7 0 0 1 14 0"/>',
@@ -377,28 +383,33 @@ function verifyClaim(session, position) {
     }
     publish();
   };
-  const finish = success => {
-    if (typeof success !== 'boolean') { failed(); return; }
-    if (session !== authority || !session.finishClaim(position, success)) return;
+  const finish = verdict => {
+    if (session !== authority) return;
+    try {
+      if (!session.finishClaim(position, verdict)) return;
+    } catch {
+      failed();
+      return;
+    }
     releaseWorker();
     publish();
   };
   const retryLocally = async () => {
     releaseWorker();
     try {
-      const {canSweepRemaining} = await import('./table-claim.js');
-      if (session === authority) finish(canSweepRemaining(position));
+      const {analyzeSetting} = await import('./table-claim.js');
+      if (session === authority) finish(analyzeSetting(position));
     } catch {
       failed();
     }
   };
   try {
-    worker = new Worker(new URL('./claim-worker.js', import.meta.url), {type:'module'});
+    worker = new Worker(new URL(`./claim-worker.js?v=${VERSION}`, import.meta.url), {type:'module'});
     claimWorker = worker;
     worker.onmessage = event => finish(event.data);
     worker.onerror = event => { event.preventDefault(); retryLocally(); };
     worker.onmessageerror = retryLocally;
-    worker.postMessage(position);
+    worker.postMessage({position});
   } catch {
     retryLocally();
   }
@@ -407,6 +418,12 @@ function verifyClaim(session, position) {
 function takeBotTurn() {
   const session = authority;
   if (!session?.botTurn) return;
+  const claim = session.tryBotClaim();
+  if (claim) {
+    publish();
+    verifyClaim(session, claim);
+    return;
+  }
   const revision = session.revision;
   // Each decision has its own random stream, including when the worker must retry locally.
   const seed = crypto.getRandomValues(new Uint32Array(1))[0];
