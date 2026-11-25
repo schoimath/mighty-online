@@ -671,6 +671,7 @@ function redraw(ui, newDeal = false) {
     progress.setAttribute("aria-label", `총 ${board.roundLimit}판 중 ${current}번째 판`);
   }
   const final = root.querySelector(".g-match-final");
+  const showFinal = finished && final.hidden;
   if (finished) {
     const action = options.isHost && options.onReplaySetup ? button(escapeHtml(options.replaySetupLabel), "replay-setup") : "";
     const summary = scoreTable(board, view.seat, {final:true, title:"최종 순위"}) + action;
@@ -715,6 +716,9 @@ function redraw(ui, newDeal = false) {
     const [attr, value] = oldFocus;
     const radio = focused.type === "radio" ? `[value="${focused.value}"]` : "";
     root.querySelector(`[data-${attr}="${value}"]${radio}`)?.focus({ preventScroll: true });
+  }
+  if (showFinal && !document.querySelector("dialog[open], #chat-panel:not([hidden])") && root.getBoundingClientRect().top < 0) {
+    root.scrollIntoView({block:"start", behavior:"instant"});
   }
 }
 function submit(ui, kind) {
