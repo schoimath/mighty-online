@@ -1,7 +1,8 @@
 import {applyAction, baselinePlay, botDecision, DECK, getView, mighty, pointsIn, sortHand} from '../engine.js';
 import {selectDiscard} from '../bot-exchange.js';
 import {settlements} from '../table-scoring.js';
-import {chooseModelAction} from './agents.js';
+import {protectPartner} from './partnership-policy.js';
+import {searchAction} from './search-policy.js';
 
 // Immediately after picking up the kitty the declarer knows all 13 of these
 // cards. Sample the four original ten-card hands conditional on the live
@@ -40,7 +41,7 @@ function playContract(view, hands, discard) {
 }
 
 export function contractSearchAction(view, rng = Math.random) {
-  if (view.phase !== 'discard') return chooseModelAction('legacy', view, rng);
+  if (view.phase !== 'discard') return searchAction(protectPartner(view));
   const original = view.bid;
   const candidates = view.choices.contracts.filter(({suit}) => suit === original.suit || suit === 'N'
     || view.hand.filter(card => card[0] === suit).length >= 4);

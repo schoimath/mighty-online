@@ -1,7 +1,7 @@
 import {botObservation, DEFAULT_RULES, validateRules} from './engine.js';
 import {applyAction, createGame, getView} from './table-deal.js';
 import {settlements, TABLE_SCORING_VERSION} from './table-scoring.js';
-import {decideTableTurn, DEFAULT_MODEL, hasSeatMemory, isModelId, memoryForReplacement} from './lab/table-agents.js';
+import {decideTableTurn, hasSeatMemory, isModelId, memoryForReplacement, randomSeatModels} from './lab/table-agents.js';
 
 const BOT_NAMES = ['솔', '달', '별', '구름', '바다'];
 const validSeat = seat => Number.isInteger(seat) && seat >= 0 && seat < BOT_NAMES.length;
@@ -24,7 +24,7 @@ export class HostSession {
   #botMemory = Array(5).fill(null);
   #guestDecisions = Array.from({length:5}, () => []);
 
-  constructor(hostName, rules = DEFAULT_RULES, botModels = BOT_NAMES.map(() => DEFAULT_MODEL)) {
+  constructor(hostName, rules = DEFAULT_RULES, botModels = randomSeatModels()) {
     this.players = [this.#player('host', hostName, false), null, null, null, null];
     this.hostSeat = 0;
     this.rules = validateRules(rules);

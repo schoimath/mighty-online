@@ -166,10 +166,11 @@ button.seat-place:hover { border-color:#47744d; background:#ecf4e8; }
 .model-summary dl > div { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; border-bottom: 1px solid #dce3da; padding: 7px 2px; font-size: .86rem; }
 .model-summary dt { color: #556b59; overflow-wrap: anywhere; }
 .model-summary dd { margin: 0; text-align: right; font-weight: 650; }
-.rules-summary { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 8px; margin: 14px 0 20px; }
+.rules-summary { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px; margin: 14px 0 20px; }
 .rules-summary > div { min-width: 0; padding: 8px 10px; background: #eef3e9; border-radius: 6px; }
 .rules-summary dt { color: #51664e; font-size: .8rem; }
 .rules-summary dd { margin: 3px 0 0; color: #25432f; font-size: .95rem; font-weight: 750; }
+.rules-summary .rule-detail { color: #51664e; font-size: .77rem; font-weight: 400; word-break: keep-all; }
 @media(forced-colors:active) {
   .rule-row input[role=switch] { appearance: auto; }
   .rule-row input[role=switch]::after { content: none; }

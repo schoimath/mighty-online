@@ -43,7 +43,7 @@ test('four identical models keep separate private memories through worker retrie
 });
 
 test('a five-pass redeal clears every seat memory including the last passer', () => {
-  const room = new HostSession('방장', undefined, Array(5).fill('recurrent_win'));
+  const room = new HostSession('방장', undefined, Array(5).fill('recurrent_balanced'));
   room.start();
   room.act(0, room.revision, {type:'pass'});
   for (let i=1;i<5;i++) {
@@ -60,7 +60,7 @@ test('a five-pass redeal clears every seat memory including the last passer', ()
 });
 
 test('a substitute reconstructs its own past decisions including the human’s revised contract', () => {
-  const room = new HostSession('방장', undefined, Array(5).fill('recurrent_score'));
+  const room = new HostSession('방장', undefined, Array(5).fill('recurrent_balanced'));
   room.addGuest('guest', '손님');
   room.start();
   const history = [];
@@ -74,7 +74,7 @@ test('a substitute reconstructs its own past decisions including the human’s r
   guest({type:'discard', cards:room.view(1).game.hand.slice(0,3), contract:{suit:'D', points:16}});
   room.removeGuest('guest');
   const request = room.botRequest(28);
-  assert.deepEqual(request.memory, replayRecurrentMemory(recurrentModels.score, 'score', history));
+  assert.deepEqual(request.memory, replayRecurrentMemory(recurrentModels.balanced, 'balanced', history));
   assert.ok(Array.isArray(request.memory));
   assert.equal(request.view.phase,'friend');
 });

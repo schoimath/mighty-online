@@ -3,8 +3,9 @@ import assert from 'node:assert/strict';
 import {Worker} from 'node:worker_threads';
 import {once} from 'node:events';
 import {botAction, botObservation} from '../engine.js';
-import {chooseModelAction} from '../lab/agents.js';
 import {rngFor} from '../lab/game.js';
+import {MODEL_CATALOG, decideTableTurn} from '../lab/table-agents.js';
+import {contractSearchAction} from '../lab/contract-search.js';
 import { HostSession } from '../session.js';
 import {settlements} from '../table-scoring.js';
 
@@ -97,7 +98,7 @@ test('a replacement finishes for the original member, then keeps a separate scor
   assert.deepEqual([byId(botId).total,byId(botId).lastDelta],[botPay,botPay]);
   room.returnToRoom();
   assert.equal(byId(botId).seat,null);
-  room.setBotModels(Array(5).fill('random'));
+  room.setBotModels(Array(5).fill('heuristic'));
   room.start();
   assert.equal(room.players[1].memberId,botId);
   assert.equal(byId(botId).total,botPay);
@@ -111,18 +112,29 @@ test('a replacement finishes for the original member, then keeps a separate scor
   assert.equal(board().members.reduce((sum,m) => sum + m.total,0),0);
 });
 
+test('each seat independently draws from just the three playable models when creating a room', t => {
+  const draws = [0, .34, .99, .8, .45];
+  const random = t.mock.method(Math, 'random', () => draws.shift());
+  const room = new HostSession('방장');
+  random.mock.restore();
+  assert.deepEqual(draws, []);
+  assert.deepEqual(MODEL_CATALOG.map(m => m.id), ['contract_search','recurrent_balanced','heuristic']);
+  const expected = ['contract_search','recurrent_balanced','heuristic','heuristic','recurrent_balanced'];
+  assert.deepEqual(room.view(0).botModels, expected);
+  assert.deepEqual(room.view(3).botModels, expected);
+});
+
 test('AI models follow their configured seats through replacements and rematches', () => {
   const room = fullRoom();
-  assert.deepEqual(room.view(0).botModels, Array(5).fill('legacy'));
-  const models = ['heuristic', 'random', 'conservative', 'aggressive', 'legacy'];
+  const models = ['heuristic', 'recurrent_balanced', 'contract_search', 'heuristic', 'contract_search'];
   room.setBotModels(models);
-  models[0] = 'random';
+  models[0] = 'recurrent_balanced';
   const snapshot = room.view(1);
   assert.equal(snapshot.botModels[0], 'heuristic');
-  snapshot.botModels[4] = 'random';
-  assert.equal(room.view(1).botModels[4], 'legacy');
+  snapshot.botModels[4] = 'heuristic';
+  assert.equal(room.view(1).botModels[4], 'contract_search');
   const revision = room.revision;
-  for (const invalid of [[], Array(5), Array(5).fill('other'), 'random']) {
+  for (const invalid of [[], Array(5), Array(5).fill('other'), Array(5).fill('legacy'), 'random']) {
     assert.throws(() => room.setBotModels(invalid), /모델/);
     assert.equal(room.revision, revision);
   }
@@ -130,33 +142,39 @@ test('AI models follow their configured seats through replacements and rematches
   assert.throws(() => room.setBotModels(models), /대기실/);
   finishWithFriend(room, 1);
   room.removeGuest(guests[0]);
-  assert.equal(room.players[1].modelId, 'random');
+  assert.equal(room.players[1].modelId, 'recurrent_balanced');
   room.start();
-  assert.equal(room.players[1].modelId, 'random');
+  assert.equal(room.players[1].modelId, 'recurrent_balanced');
   assert.equal(room.round.turn, 1);
   assert.equal(room.view(2).game.botModels, undefined);
 });
 
 test('the main-thread bot uses the seat model for the auction', () => {
-  const room = new HostSession('방장', undefined, ['legacy','aggressive','legacy','legacy','legacy']);
+  const room = new HostSession('방장', undefined, ['heuristic','recurrent_balanced','contract_search','heuristic','heuristic']);
   room.start();
   room.act(0, room.revision, {type:'pass'});
-  room.round.hands[1] = ['HA','HK','HQ','H6','H5','H4','S2','D3','C4','C5'];
-  room.runBot();
-  assert.deepEqual(room.round.bid, {suit:'H', points:15, seat:1});
+  room.round.hands[1] = ['SA','SK','S10','H9','H8','DK','CK','C9','C6','C2'];
+  // The search model bids clubs on this hand; the balanced GRU passes.
+  const request = room.botRequest(3);
+  assert.deepEqual(decideTableTurn({...request, modelId:'contract_search'}).action, {type:'bid', points:14, suit:'C'});
+  room.runBot(undefined, 3);
+  const last = room.round.bidHistory.at(-1);
+  assert.deepEqual([last.seat, last.pass], [1, true]);
 });
 
-test('a worker retry keeps the same random action for the seat', () => {
-  const room = new HostSession('방장', undefined, Array(5).fill('random'));
+test('a worker retry uses the same sampled deals for the post-kitty contract', () => {
+  const room = new HostSession('방장', undefined, Array(5).fill('contract_search'));
   room.start();
   room.act(0, room.revision, {type:'pass'});
+  room.runBot({type:'bid', suit:'H', points:14});
+  for (let i = 2; i < 5; i++) room.runBot({type:'pass'});
   const seed = 8421;
-  const expected = chooseModelAction('random', botObservation(room.round, 1), rngFor(seed));
+  const view = botObservation(room.round, 1);
+  const expected = contractSearchAction(view, rngFor(seed));
+  assert.deepEqual(decideTableTurn(room.botRequest(seed)).action, expected);
   room.runBot(undefined, seed);
-  const bid = room.round.bidHistory.at(-1);
-  assert.equal(bid.seat, 1);
-  if (expected.type === 'bid') assert.deepEqual([bid.suit, bid.points], [expected.suit, expected.points]);
-  else assert.equal(bid.pass, true);
+  assert.deepEqual(room.round.discarded, expected.cards);
+  assert.deepEqual(room.round.bid, {...expected.contract, seat:1});
 });
 
 test('the browser worker identifies the model that made each decision', async () => {
@@ -171,11 +189,11 @@ test('the browser worker identifies the model that made each decision', async ()
     const room = new HostSession('방장');
     room.start();
     const view = botObservation(room.round, room.round.turn), seed = 102;
-    for (const modelId of ['random','aggressive']) {
+    for (const {id:modelId} of MODEL_CATALOG) {
       const reply = once(worker,'message');
       worker.postMessage({revision:17, modelId, seed, view});
       const [packet] = await reply;
-      assert.deepEqual(packet, {revision:17, modelId, action:chooseModelAction(modelId, view, rngFor(seed))});
+      assert.deepEqual(packet, {revision:17, modelId, ...decideTableTurn({modelId, view, seed})});
     }
   } finally {
     await worker.terminate();

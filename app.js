@@ -44,24 +44,6 @@ let botWorker = null;
 let workerUnavailable = false;
 let pendingConnect = null;
 let roomCode = '';
-let lastRecordedRound = 0;
-const recentScoreKey = 'mighty-recent-score-v1';
-function showRecentScore(record) {
-  if (!record?.board?.rounds || !Array.isArray(record.board.members)) return;
-  const area = $('recent-match');
-  area.innerHTML = scoreTable(record.board, record.seat, {title:'최근 테이블 점수표', collapsed:true});
-  area.hidden = false;
-}
-try { showRecentScore(JSON.parse(localStorage.getItem(recentScoreKey))); } catch {}
-
-function recordFinishedRound(view) {
-  const board = view.scoreboard;
-  if (view.game?.phase !== 'result' || !board || board.rounds <= lastRecordedRound) return;
-  lastRecordedRound = board.rounds;
-  const record = {board, seat:view.seat};
-  showRecentScore(record);
-  try { localStorage.setItem(recentScoreKey, JSON.stringify(record)); } catch {}
-}
 const chat = setupChat(sendChat);
 
 function broadcastChat(seat, text) {
@@ -114,25 +96,25 @@ function activeRules() {
 function rulesSummary(rules) {
   return `<dl class="rules-summary">
     <div><dt>최저 공약</dt><dd data-rule-value="minBid">${escape(rules.minBid)}점</dd></div>
-    <div><dt>초구 프렌드</dt><dd data-rule-value="allowFirstFriend">${rules.allowFirstFriend ? '허용' : '미허용'}</dd></div>
-    <div><dt>초구 조커콜</dt><dd data-rule-value="allowFirstJokerCall">${rules.allowFirstJokerCall ? '허용' : '미허용'}</dd></div>
-    <div><dt>마지막 트릭 조커</dt><dd data-rule-value="allowLastJoker">${rules.allowLastJoker ? '효력 있음' : '효력 없음'}</dd></div>
+    <div><dt>초구 프렌드 가능</dt><dd data-rule-value="allowFirstFriend">${rules.allowFirstFriend ? '허용' : '미허용'}</dd></div>
+    <div><dt>초구 조커콜 효력</dt><dd data-rule-value="allowFirstJokerCall">${rules.allowFirstJokerCall ? '효력 있음' : '효력 없음'}</dd></div>
+    <div><dt>막구 조커 효력</dt><dd data-rule-value="allowLastJoker">${rules.allowLastJoker ? '효력 있음' : '효력 없음'}</dd><dd class="rule-detail">마지막 트릭 조커가 기루다를 이김</dd></div>
   </dl>`;
 }
 
 function ruleEditor(rules) {
   const options = Array.from({length:8}, (_, i) => i + 13).map(points =>
     `<option value="${points}"${points === rules.minBid ? ' selected' : ''}>${points}점</option>`).join('');
-  const toggle = (key, title, detail, label = title + ' 허용') => `<label class="rule-row">
+  const toggle = (key, title, detail) => `<label class="rule-row">
     <span><strong>${title}</strong><small>${detail}</small></span>
-    <input type="checkbox" role="switch" name="${key}" aria-label="${label}"${rules[key] ? ' checked' : ''}>
+    <input type="checkbox" role="switch" name="${key}" aria-label="${title}"${rules[key] ? ' checked' : ''}>
   </label>`;
   return `<fieldset class="rule-settings"><legend>테이블 규칙</legend>
     <label class="rule-row"><span><strong>최저 공약</strong><small>경매에서 처음 부를 수 있는 점수</small></span>
       <select name="minBid" aria-label="최저 공약">${options}</select></label>
-    ${toggle('allowFirstFriend','초구 프렌드','첫 트릭의 승자를 프렌드로 지정')}
-    ${toggle('allowFirstJokerCall','초구 조커콜','첫 트릭부터 조커콜 선언')}
-    ${toggle('allowLastJoker','마지막 트릭 조커','켜면 조커가 기루다를 이깁니다.','마지막 트릭 조커 효력')}
+    ${toggle('allowFirstFriend','초구 프렌드 가능','첫 트릭의 승자를 프렌드로 지정')}
+    ${toggle('allowFirstJokerCall','초구 조커콜 효력','첫 트릭부터 조커콜 선언')}
+    ${toggle('allowLastJoker','막구 조커 효력','마지막 트릭 조커가 기루다를 이김')}
   </fieldset>`;
 }
 
@@ -163,7 +145,6 @@ function stopSession(message) {
   transport = null;
   oldTransport?.close();
   authority = snapshot = null;
-  lastRecordedRound = 0;
   roomCode = '';
   mode = 'lobby';
   chat.reset();
@@ -325,7 +306,6 @@ function drawRoom() {
 
 function draw() {
   if (!snapshot) return;
-  recordFinishedRound(snapshot);
   if (!snapshot.game) { clearGame($('game')); showScreen('room'); drawRoom(); return; }
   showScreen('game');
   renderGame($('game'),snapshot.game,{
@@ -441,12 +421,12 @@ function openPracticeSetup() {
   };
 }
 
-async function connectRoom(kind, name, code, signal, rules, models) {
+async function connectRoom(kind, name, code, signal) {
   const token = ++generation;
   const active = () => token === generation && !signal.aborted;
   let link;
   if (kind === 'create') {
-    const session = new HostSession(name, rules, models);
+    const session = new HostSession(name);
     link = await hostRoom({
       signal,
       onJoin(id, guestName) {
@@ -525,10 +505,8 @@ function openForm(kind, code = '') {
   const intro = profile ? '' : '<p>' + (joining ? '친구에게 받은 6자리 방 코드를 입력하세요.' : '테이블을 열면 친구를 초대할 방 코드가 생깁니다. 게임 중에는 방장 탭을 열어 두세요.') + '</p>';
   modal(title, intro + '<form id="setup-form"><label class="field">닉네임<input id="name-field" name="nickname" maxlength="16" required autocomplete="nickname"></label>' +
     (joining ? '<label class="field">방 코드<input class="code-field" id="code-field" name="code" maxlength="12" placeholder="6자리 코드" required autocomplete="off" spellcheck="false"></label>' : '') +
-    (kind === 'create' ? modelSettings() + ruleEditor(DEFAULT_RULES) : '') +
     '<div class="form-error" role="alert" id="form-error"></div><button class="primary-button form-submit" id="submit-form">' + (profile ? '저장' : title) + '</button></form>');
   $('name-field').value = nickname;
-  if (kind === 'create') bindModelSettings($('setup-form'));
   if (joining) { $('code-field').value = code; (code ? $('name-field') : $('code-field')).focus(); }
   else { $('name-field').focus(); $('name-field').select(); }
   $('setup-form').onsubmit = async event => {
@@ -543,24 +521,16 @@ function openForm(kind, code = '') {
     const controller = new AbortController();
     pendingConnect = controller;
     const submit = $('submit-form');
-    const settings = event.currentTarget.querySelector('.rule-settings');
-    const modelGroup = event.currentTarget.querySelector('.model-settings');
-    const models = modelGroup ? readModelSettings(modelGroup) : undefined;
-    const rules = settings ? readRules(settings) : undefined;
-    if (settings) settings.disabled = true;
-    if (modelGroup) modelGroup.disabled = true;
     submit.disabled = true;
     submit.textContent = '연결 중…';
     $('form-error').textContent = '';
-    try { await connectRoom(kind,name,code,controller.signal,rules,models); }
+    try { await connectRoom(kind,name,code,controller.signal); }
     catch (error) {
       if (controller.signal.aborted) return;
       $('form-error').textContent = error.message;
     } finally {
       if (pendingConnect === controller) pendingConnect = null;
       if (mode === 'joining' && !transport) mode = 'lobby';
-      if (settings) settings.disabled = false;
-      if (modelGroup) modelGroup.disabled = false;
       submit.disabled = false;
       submit.textContent = title;
     }

@@ -160,7 +160,7 @@ function seatMarkup(ui, nameAt) {
     const details = role || (playing || inAuction ? "" : escapeHtml(view.counts[seat]) + "장");
     const status = [isTurn ? "차례" : "", details].filter(Boolean).join(" · ");
     const leader = inAuction && view.bid?.seat === seat;
-    const avatar = inAuction ? seat + 1 : Array.from(name.trim())[0] || "♠";
+    const avatar = inAuction ? seat + 1 : Array.from(name.trim().replace(/^AI\s+/i, ""))[0] || "♠";
     const standing = seatStanding(options.scoreboard, seat, beforeSettlement);
     const header = `<span class="g-avatar g-avatar-${seat}" aria-label="${seat + 1}번 자리">${escapeHtml(avatar)}</span><span class="g-seat-tag"><span class="g-seat-identity"><span class="g-seat-name">${escapeHtml(name)}${offset === 0 ? '<small>나</small>' : ""}</span>${standing}</span><span class="g-seat-detail">${isTurn ? '<i></i>' : ""}${status}</span></span>`;
     return `<div class="g-seat g-seat-${offset} ${isTurn ? "g-seat-active" : ""} ${leader ? "g-seat-bidder" : ""} ${resolving?.winner === seat ? "g-trick-winner" : ""}" data-seat="${seat}" data-seat-role="${visibleRole(view, seat)}" role="group" aria-label="${escapeHtml(name)} 자리${model ? ' · ' + escapeHtml(model) : ''}"${model ? ' title="' + escapeHtml(model) + '"' : ""}><div class="g-seat-head">${header}</div>${seatPile(view, seat)}</div>`;

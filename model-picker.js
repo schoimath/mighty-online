@@ -1,6 +1,5 @@
-import {DEFAULT_MODEL, MODEL_CATALOG} from './lab/table-agents.js';
+import {MODEL_CATALOG, randomSeatModels} from './lab/table-agents.js';
 
-const defaultSeats = () => Array(5).fill(DEFAULT_MODEL);
 const modelsById = new Map(MODEL_CATALOG.map(model => [model.id, model]));
 const resultsLink = '<a class="model-results" href="https://github.com/schoimath/mighty-online/blob/main/lab/results-live/final_test.md" target="_blank" rel="noopener noreferrer">모델별 대국 성적 ↗</a>';
 const escape = value => String(value ?? '').replace(/[&<>"']/g,
@@ -24,7 +23,7 @@ function description(id) {
   return modelsById.get(id)?.description ?? '자리별로 다른 모델을 사용합니다.';
 }
 
-export function modelSettings(models = defaultSeats(), hostSeat = 0, players = []) {
+export function modelSettings(models = randomSeatModels(), hostSeat = 0, players = []) {
   const shared = commonModel(models, hostSeat);
   const rows = models.map((model, seat) => {
     if (seat === hostSeat) return '<input type="hidden" data-ai-seat="' + seat + '" value="' + escape(model) + '">';
