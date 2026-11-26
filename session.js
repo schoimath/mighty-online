@@ -46,12 +46,14 @@ export class HostSession {
   chipHandId = null;
   #chipRevision = -1;
 
-  constructor(hostName, rules = DEFAULT_RULES, botModels = randomSeatModels(), roundLimit = null, {publicRoom = false, pace} = {}) {
+  constructor(hostName, rules = DEFAULT_RULES, botModels = randomSeatModels(), roundLimit = null, {publicRoom = false, hostSpectator = false, pace} = {}) {
     this.publicRoom = publicRoom === true;
     this.pace = normalizeGameSpeed(pace);
     this.#hostName = hostName;
-    this.players = [this.#player('host', hostName, false), null, null, null, null];
-    this.hostSeat = 0;
+    this.players = Array(5).fill(null);
+    this.hostSeat = this.publicRoom && hostSpectator ? -1 : 0;
+    if (this.hostSeat < 0) this.#observers.set(null,hostName);
+    else this.players[this.hostSeat] = this.#player('host', hostName, false);
     this.rules = validateRules(rules);
     this.botModels = validateBotModels(botModels);
     this.#roundLimit = validateRoundLimit(roundLimit);
@@ -62,6 +64,10 @@ export class HostSession {
 
   seatFor(id) {
     return this.connections.get(id) ?? -1;
+  }
+
+  hasSeatOrReservation(id) {
+    return (id === null ? this.hostSeat : this.seatFor(id)) >= 0 || this.#queue.some(entry => entry.id === id);
   }
 
   nameFor(id) {
@@ -159,9 +165,10 @@ export class HostSession {
   publicSummary() {
     if (!this.publicRoom) return null;
     const finished = this.round?.phase === 'result';
+    const seats = this.players.map(player => player && !player.bot ? player.name : null);
     return {
       hostName:this.#hostName, phase:!this.round ? 'waiting' : finished ? 'finished' : 'playing',
-      humanCount:this.players.filter(player => player && !player.bot).length, spectatorCount:this.#observers.size,
+      seats, humanCount:seats.filter(name => name !== null).length, spectatorCount:this.#observers.size,
       reservationCount:this.#queue.length, roundNumber:this.#completedRounds + (finished ? 0 : 1), roundLimit:this.#roundLimit
     };
   }

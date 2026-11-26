@@ -101,6 +101,25 @@ test('private heartbeat accepts an anonymous elected controller and a retired le
   assert.equal(calls.length,1);
 });
 
+test('publishes five ordered nickname slots and omits seat contents from legacy or malformed summaries',async t=>{
+  const calls=transport(t,()=>null);
+  const seats=[null,'동명',null,'동명',null];
+  let view={...summary,seats,players:[{id:'private',email:'private'}],observers:[{name:'관전자'}]};
+  const room=watchDirectoryRoom(client,{store,getSummary:()=>view});
+  t.after(()=>room.stop());
+  await room.refresh();
+  assert.deepEqual(calls.at(-1).args.p_summary,{...summary,seats});
+  view={...view,seats:[null,{name:'동명',id:'private'},null,'동명',null]};
+  await room.refresh();
+  assert.deepEqual(calls.at(-1).args.p_summary,summary);
+  view={...summary,seats:['동명',null,null,null,'동명']};
+  await room.refresh();
+  assert.deepEqual(calls.at(-1).args.p_summary,view);
+  view={...summary};
+  await room.refresh();
+  assert.deepEqual(calls.at(-1).args.p_summary,summary);
+});
+
 test('a departing document releases its last-person table once, using its current in-memory grant',async t=>{
   const events=new EventTarget(), oldWindow=globalThis.window;
   globalThis.window=events;

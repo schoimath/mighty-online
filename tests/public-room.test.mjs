@@ -28,9 +28,36 @@ function finish(room) {
   assert.equal(room.round.phase, 'result');
 }
 
+test('the public table creator and entrants can watch, sit or release a waiting-room seat', () => {
+  const models=Array(5).fill('heuristic');
+  const room=new HostSession('방장',undefined,models,10,{publicRoom:true,hostSpectator:true});
+  assert.equal(room.hostView().spectator,true);
+  assert.equal(room.publicSummary().humanCount,0);
+  assert.equal(room.publicSummary().spectatorCount,1);
+  assert.equal(room.hostView().scoreboard.members.length,0);
+  room.addGuest('visitor','손님','watch');
+  assert.equal(room.plannedTable().seats.every(p=>p.bot),true);
+  assert.equal(room.setReservation(null,true),true);
+  assert.equal(room.hostSeat,0);
+  assert.equal(room.sitOut(null),true);
+  assert.equal(room.setReservation('visitor',true),true);
+  assert.equal(room.seatFor('visitor'),0);
+  assert.equal(room.sitOut('visitor'),true);
+  assert.equal(room.publicSummary().spectatorCount,2);
+  room.setReservation('visitor',true);
+  room.start();
+  assert.equal(room.hostView().game.seat,-1);
+  assert.deepEqual(room.hostView().game.hand,[]);
+  room.addGuest('new','새 관전자','watch');
+  assert.equal(room.viewFor('new').reservation,null);
+  assert.equal(room.setReservation('new',true),true);
+  assert.deepEqual(room.viewFor('new').reservation,{position:1,seat:null});
+  assert.equal(new HostSession('초대 방장',undefined,models,10,{hostSpectator:true}).hostSeat,0);
+});
+
 test('public lobby seats, full-table FIFO and spectator-only membership', () => {
   const room = table(10);
-  assert.deepEqual(room.publicSummary(), {hostName:'방장', phase:'waiting', humanCount:1,
+  assert.deepEqual(room.publicSummary(), {hostName:'방장', phase:'waiting', seats:['방장',null,null,null,null], humanCount:1,
     spectatorCount:0, reservationCount:0, roundNumber:1, roundLimit:10});
   const revision = room.revision;
   assert.equal(room.addGuest('viewer','관전자','watch'), null);
@@ -46,10 +73,12 @@ test('public lobby seats, full-table FIFO and spectator-only membership', () => 
   assert.equal(room.seatFor('viewer'), 1);
   assert.equal(room.viewFor('viewer').spectator, false);
   assert.equal(room.nameFor('viewer'), '관전자');
+  assert.deepEqual(room.publicSummary().seats,['방장','관전자',null,null,null]);
   assert.throws(() => room.setReservation('viewer',true));
   for (const id of ['a','b','c','x','y']) assert.equal(room.addGuest(id,id), null);
   assert.deepEqual(room.viewFor('x').reservation, {position:1,seat:null});
   assert.equal(room.nameFor('y'), 'y');
+  assert.deepEqual(room.publicSummary().seats,['방장','관전자','a','b','c']);
   assert.equal(room.setReservation('y',true), false);
   room.removeGuest('b');
   assert.equal(room.seatFor('x'), 3);
@@ -216,6 +245,7 @@ test('the public host can run the table from the audience and return through FIF
   assert.equal(room.players[0].bot,true);
   assert.equal(room.botTurn,true);
   assert.equal(room.publicSummary().humanCount,0);
+  assert.deepEqual(room.publicSummary().seats,[null,null,null,null,null]);
   assert.equal(room.publicSummary().hostName,'방장');
   assert.equal(room.publicSummary().spectatorCount,2);
   assert.equal(room.connections.has(null),false);

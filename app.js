@@ -413,7 +413,7 @@ $('public-tables').addEventListener('click', event => {
   const button = event.target.closest('[data-public-code][data-public-intent]');
   if (!button) return;
   const kind = button.hasAttribute('data-public-empty') ? 'create' : 'join';
-  openForm(kind, button.dataset.publicCode, button.dataset.publicIntent, Number(button.dataset.publicSlot));
+  openForm(kind, button.dataset.publicCode, button.dataset.publicIntent, Number(button.dataset.publicSlot), true);
 });
 
 function pauseCountdownForDialog() {
@@ -806,6 +806,7 @@ function drawRoom() {
   const host = mode === 'host';
   const occupied = snapshot.players.filter(Boolean).length;
   const room = $('room');
+  const canWatch = snapshot.publicRoom && !snapshot.spectator;
   const board = snapshot.scoreboard;
   const canSetLimit = host && !board?.rounds;
   const focus = room.contains(document.activeElement) ? document.activeElement : null;
@@ -849,7 +850,7 @@ function drawRoom() {
     room.append(roomPanel);
   }
   roomPanel.innerHTML = '<h1>' + (snapshot.publicRoom ? '공개 게임 대기실' : '게임 대기실') + '</h1><p>' +
-    (snapshot.publicRoom ? '로비의 공개 테이블 목록에서 참가하거나 관전할 수 있습니다.' : '친구에게 방 코드나 초대 링크를 보내 주세요.') + '</p>' +
+    (snapshot.publicRoom ? '관전 중에도 빈자리에 앉을 수 있습니다.' : '친구에게 방 코드나 초대 링크를 보내 주세요.') + '</p>' +
     '<div class="room-code-section"><span>방 코드</span><strong class="room-code">' + escape(roomCode) + '</strong><button id="copy-invite" class="plain-button">초대 링크 복사</button></div>' +
     '<div class="seat-heading"><h2>' + (canChoose ? '자리 선택' : '참가자') + '</h2><span>참가 ' + occupied + ' / 5</span></div>' +
     (canChoose ? '<p class="seat-hint">자리 번호 순으로 진행합니다. 빈자리에 앉거나 다른 참가자에게 교환을 요청하세요.</p>' : '') +
@@ -857,13 +858,19 @@ function drawRoom() {
     (canSetLimit ? seriesPicker(board?.roundLimit) : seriesSummary(board)) + paceSetting(snapshot.pace, host) +
     (host ? modelSettings(snapshot.botModels, hostSeat, snapshot.players) : modelSummary(snapshot)) +
     (host ? ruleEditor(activeRules()) : '<h2 class="room-heading">테이블 규칙</h2>' + rulesSummary(activeRules())) +
-    '<section class="public-audience" hidden></section><p>' + (host ? (occupied < 5 ? '지금 시작하면 빈자리 ' + (5-occupied) + '곳은 AI가 맡습니다.' : '다섯 명이 모였습니다. 게임을 시작하세요.') : snapshot.spectator ? '방장이 게임을 시작하면 보드에서 관전할 수 있습니다.' : '방장이 게임을 시작하면 카드를 받습니다.') +
-    '</p><div class="room-actions">' + (host ? '<button class="primary-button" id="start-round">게임 시작</button>' : '') +
+    '<section class="public-audience" hidden></section><p>' + (host && !occupied ? '한 명 이상 자리에 앉으면 게임을 시작할 수 있습니다.' : host ? (occupied < 5 ? '지금 시작하면 빈자리 ' + (5-occupied) + '곳은 AI가 맡습니다.' : '다섯 명이 모였습니다. 게임을 시작하세요.') : snapshot.spectator ? '방장이 게임을 시작하면 보드에서 관전할 수 있습니다.' : '방장이 게임을 시작하면 카드를 받습니다.') +
+    '</p><div class="room-actions">' + (host ? '<button class="primary-button" id="start-round"' + (!occupied ? ' disabled' : '') + '>게임 시작</button>' : '') +
+    (canWatch ? '<button class="plain-button" id="lobby-watch">관전석으로</button>' : '') +
     '<button class="plain-button" id="room-leave">나가기</button></div>' +
     scoreTable(snapshot.scoreboard, snapshot.seat, {collapsed:!snapshot.scoreboard?.rounds});
   if (standingsOpen && room.querySelector('details.match-standings')) room.querySelector('details.match-standings').open = true;
   $('copy-invite').onclick = copyInvite;
   $('room-leave').onclick = requestLeave;
+  if (canWatch) $('lobby-watch').onclick = () => {
+    if (host) {
+      if (!preparing && !authority.round && authority.sitOut(null)) publish();
+    } else if (!transport?.send({type:'lobby-watch',revision:snapshot.revision})) toast('방장과의 연결을 확인해 주세요.');
+  };
   room.querySelectorAll('[data-choose-seat]').forEach(button => {
     button.onclick = () => requestSeat(Number(button.dataset.chooseSeat));
   });
@@ -933,15 +940,27 @@ function drawAudience() {
 
 async function changeReservation(wanted) {
   if (!snapshot?.spectator) return;
+  const token = generation;
   if (wanted && !await mayPlay()) return;
+  if (token !== generation || !snapshot?.spectator) return;
   if (mode === 'host') {
     try { applyReservation(authority, null, wanted); }
     catch (error) { toast(error.message); }
   } else if (!transport?.send({type:'reservation', wanted, accountId:accountClient.state.user?.id})) toast('방장과의 연결을 확인해 주세요.');
 }
 
-function applyReservation(session, id, wanted) {
+function applyReservation(session, id, wanted, accountId = roomAccounts.get(id)) {
   const revision = session.revision;
+  if (wanted) {
+    if (!accountIdValid(accountId)) throw new Error('먼저 인증된 계정으로 로그인해 주세요.');
+    if ((id === null ? session.hostSeat : session.seatFor(id)) >= 0 ||
+        (roomAccounts.get(id) && roomAccounts.get(id) !== accountId)) throw new Error('참가 계정과 자리를 다시 확인해 주세요.');
+    if ([...roomAccounts].some(([peer,actor]) => peer !== id && actor === accountId && session.hasSeatOrReservation(peer))) {
+      throw new Error('이 계정은 이미 착석했거나 자리를 예약했습니다.');
+    }
+    roomAccounts.set(id,accountId);
+    if (id?.length === 64) backups.include(id,accountId);
+  }
   if (!session.setReservation(id, wanted)) return;
   if (revision === session.revision) publishAudience();
   else publish();
@@ -1355,7 +1374,8 @@ async function connectRoom(kind, name, code, signal, {roundLimit, publicRoom, in
   if (kind === 'create') {
     const preferences = roomPreferences();
     let session, committedDeal;
-    const createSession = () => new HostSession(name, preferences.rules, roomModels(preferences.models), roundLimit, {publicRoom, pace:preferences.pace});
+    const createSession = () => new HostSession(name, preferences.rules, roomModels(preferences.models), roundLimit,
+      {publicRoom, hostSpectator:intent === 'watch', pace:preferences.pace});
     let store;
     let reservedPublic = false, reservedPrivate = false;
     if (!recovery && slot) {
@@ -1426,16 +1446,10 @@ async function connectRoom(kind, name, code, signal, {roundLimit, publicRoom, in
         try {
           if (preparing) throw new Error('배패를 준비하고 있습니다. 잠시 후 다시 시도해 주세요.');
           if (packet.type === 'reservation') {
-            if (packet.wanted) {
-              if (!accountIdValid(packet.accountId)) throw new Error('먼저 인증된 계정으로 로그인해 주세요.');
-              if ([...roomAccounts].some(([other, uid]) => other !== id && uid === packet.accountId &&
-                  (other === null ? session.hostSeat : session.seatFor(other)) >= 0)) {
-                throw new Error('이 계정은 이미 착석했습니다.');
-              }
-              roomAccounts.set(id, packet.accountId);
-              if (id.length === 64) backups.include(id,packet.accountId);
-            }
-            applyReservation(session, id, packet.wanted);
+            applyReservation(session, id, packet.wanted, packet.accountId);
+          } else if (packet.type === 'lobby-watch' && publicRoom && seat >= 0 && !session.round) {
+            if (packet.revision !== session.revision) throw new Error('자리가 바뀌었습니다. 다시 선택해 주세요.');
+            if (session.sitOut(id)) publish();
           } else if (seat < 0) return;
           else if (packet.type === 'seat-choice') {
             if (applySeatChoice(session, id, packet)) publish();
@@ -1631,11 +1645,17 @@ async function enterPublicTable(name, code, signal, options, showStatus) {
     if (!room) throw new Error('공개 테이블 목록을 다시 확인해 주세요.');
     if (room.phase === 'settling') throw new Error('이 테이블은 이전 판을 정산 중입니다. 다른 테이블을 선택할 수 있습니다.');
     const empty = room.phase === 'empty';
-    if (empty && options.intent !== 'play') throw new Error('이 테이블의 대국이 끝났습니다. 목록에서 빈 테이블에 입장할 수 있습니다.');
+    if (empty) {
+      await accountClient.ready;
+      signal.throwIfAborted();
+      if (!accountClient.state.user) throw Object.assign(
+        new Error('빈 테이블을 처음 열려면 이메일 인증을 마친 계정으로 로그인해 주세요. 열린 테이블은 로그인 없이 관전할 수 있습니다.'),
+        {code:'host_login'});
+    }
     if (failure && !empty && (attempt === 3 || Date.now()-started >= 8000)) break;
     showStatus(empty ? '빈 테이블을 여는 중…' : failure ? '방장 연결을 다시 확인하는 중…' : '방장에게 연결 중…');
     try {
-      return await connectRoom(empty ? 'create' : 'join', name, code, signal, options);
+      return await connectRoom(empty ? 'create' : 'join', name, code, signal, {...options,intent:'watch'});
     } catch (error) {
       if (!error.retryable || signal.aborted) throw error;
       failure = error;
@@ -1645,17 +1665,26 @@ async function enterPublicTable(name, code, signal, options, showStatus) {
   throw new Error('아직 방장에게 연결되지 않습니다. 다시 시도하거나 다른 테이블을 선택해 주세요.');
 }
 
-async function openForm(kind, code = '', publicIntent = null, slot = null) {
+function publicSlotFromCode(code) {
+  const match = /^PUB00([1-4])$/.exec(code);
+  return match ? Number(match[1]) : null;
+}
+
+async function openForm(kind, code = '', publicIntent = null, slot = null, fromPublicList = false) {
   if (mode !== 'lobby' || pendingConnect) return;
+  if (kind === 'join' && !slot) {
+    slot = publicSlotFromCode(code);
+    if (slot) publicIntent = 'enter';
+  }
   const opening = ++dialogRevision;
-  if (kind !== 'profile' && publicIntent !== 'watch' && !await mayPlay()) return;
+  if (kind === 'create' && !publicIntent && !await mayPlay()) return;
+  if (publicIntent) await accountClient.ready;
   if (dialogRevision !== opening || mode !== 'lobby') return;
   const profile = kind === 'profile';
   const joining = kind === 'join';
-  const publicTitles = {play:'테이블 입장', watch:'테이블 관전', reserve:'자리 예약'};
-  const title = profile ? '닉네임 변경' : publicTitles[publicIntent] ?? (joining ? '방 참가하기' : '비공개 방 만들기');
+  const title = profile ? '닉네임 변경' : publicIntent ? '테이블 입장' : joining ? '방 참가하기' : '비공개 방 만들기';
   const intro = profile ? '' : '<p>' + (publicIntent ? publicTableName(slot) +
-    (publicIntent === 'reserve' ? '에서 관전하며 다음 자리를 기다립니다.' : '에 입장할 닉네임을 확인하세요.') :
+    '에 입장할 닉네임을 확인하세요.' :
     joining ? '친구에게 받은 6자리 방 코드를 입력하세요.' : '방 코드로 친구를 초대하세요. 비공개 방은 동시에 6개까지 열 수 있습니다.') + '</p>';
   modal(title, intro + '<form id="setup-form"><label class="field">닉네임<input id="name-field" name="nickname" maxlength="16" required autocomplete="nickname"></label>' +
     (publicIntent ? '<input type="hidden" id="code-field">' : joining ? '<label class="field">방 코드<input class="code-field" id="code-field" name="code" maxlength="12" placeholder="6자리 코드" required autocomplete="off" spellcheck="false"></label>' : '') +
@@ -1670,7 +1699,7 @@ async function openForm(kind, code = '', publicIntent = null, slot = null) {
   $('setup-form').onsubmit = async event => {
     event.preventDefault();
     if (pendingConnect) return;
-    const name = $('name-field').value.trim();
+    const name = (accountClient.state.user?.nickname || $('name-field').value).trim();
     const code = normalizeRoomCode($('code-field')?.value);
     if (!name || name.length > 16) { $('form-error').textContent = '닉네임은 1~16자로 입력해 주세요.'; return; }
     if (joining && !/^[A-Z0-9]{6}$/.test(code)) { $('form-error').textContent = '영문과 숫자로 된 6자리 방 코드를 입력해 주세요.'; return; }
@@ -1684,14 +1713,20 @@ async function openForm(kind, code = '', publicIntent = null, slot = null) {
     $('form-error').textContent = '';
     try {
       const form = event.currentTarget;
-      const options = {roundLimit:publicIntent ? roomPreferences().roundLimit : selectedLimit(form),
-        publicRoom:Boolean(publicIntent), slot, intent:publicIntent ?? 'play'};
-      if (publicIntent) {
+      const selectedSlot = slot ?? (joining ? publicSlotFromCode(code) : null);
+      if (!selectedSlot && joining && !await mayPlay()) return;
+      controller.signal.throwIfAborted();
+      const options = {roundLimit:selectedSlot ? roomPreferences().roundLimit : selectedLimit(form),
+        publicRoom:Boolean(selectedSlot), slot:selectedSlot, intent:selectedSlot ? 'watch' : 'play'};
+      if (selectedSlot) {
         await enterPublicTable(name,code,controller.signal,options,message => { submit.textContent=message; });
       } else await connectRoom(kind,name,code,controller.signal,options);
     }
     catch (error) {
-      if (pendingConnect === controller && errorLine.isConnected) errorLine.textContent = error.message;
+      if (pendingConnect === controller && errorLine.isConnected) {
+        errorLine.textContent = error.message;
+        if (error.code === 'host_login') accountUI.open(error.message);
+      }
     } finally {
       if (pendingConnect === controller) {
         pendingConnect = null;
@@ -1702,6 +1737,7 @@ async function openForm(kind, code = '', publicIntent = null, slot = null) {
       }
     }
   };
+  if (fromPublicList && publicIntent && accountClient.state.user) $('setup-form').requestSubmit();
 }
 
 $('create-btn').onclick = () => openForm('create');

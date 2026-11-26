@@ -59,7 +59,12 @@ export async function reserveDirectoryRoom(client,{store,code,slot = null,name,h
 function publicSummary(summary) {
   if (!summary?.phase) return null;
   const {hostName,phase,humanCount,spectatorCount,reservationCount,roundNumber,roundLimit} = summary;
-  return {hostName,phase,humanCount,spectatorCount,reservationCount,roundNumber,roundLimit};
+  const fields = {hostName,phase,humanCount,spectatorCount,reservationCount,roundNumber,roundLimit};
+  const seats = summary.seats;
+  if (Array.isArray(seats) && seats.length === 5 &&
+      seats.every(name => name === null || (typeof name === 'string' && name.trim() && name.length <= 16)) &&
+      seats.filter(name => name !== null).length === humanCount) fields.seats = seats;
+  return fields;
 }
 
 export function watchDirectoryRoom(client,{store,getSummary,onError,canReleaseOnPageHide}) {

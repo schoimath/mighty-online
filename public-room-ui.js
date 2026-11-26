@@ -13,44 +13,27 @@ export function publicTableName(slot) {
 
 function tableTile(suit, slot, room, loading) {
   const code = 'PUB00' + slot, name = publicTableName(slot);
-  const phase = room?.phase, empty = phase === 'empty', waiting = phase === 'waiting';
-  const active = ['waiting', 'playing', 'finished'].includes(phase);
-  const state = {empty:'빈 테이블', waiting:'대기 중', playing:'게임 중', finished:'판 종료', settling:'정산 중'}[phase] ||
-    (loading ? '확인 중' : '확인 불가');
-  const stateClass = phase === 'playing' ? 'is-playing' : !active ? 'is-idle' : '';
-  const canJoin = waiting && room.humanCount < 5;
-  const tableAction = empty || canJoin ? 'play' : 'watch';
-  const join = (intent, text) => `<button type="button" class="${intent === 'watch' ? 'public-watch' : 'public-join'}" data-public-code="${code}" data-public-slot="${slot}" data-public-intent="${intent}"${intent === tableAction ? ' data-table-surface' : ''}${empty ? ' data-public-empty' : ''} aria-label="${name} ${text}">${text}</button>`;
-  const people = empty ? 0 : active ? room.humanCount : null;
-  // The directory publishes a headcount. These five chairs illustrate the
-  // count without assigning anyone a seat number or revealing their name.
-  const chairs = Array.from({length:5}, (_, i) =>
-    '<i class="table-chair' + (people !== null && i < people ? ' is-seated' : '') + '"></i>').join('');
-  let details = '';
-  let actions = '';
-  if (active) {
-    const series = room.roundLimit ? escape(room.roundLimit) + '판 경기' : '무제한 경기';
-    const progress = !waiting && room.roundNumber > 0 ? escape(room.roundNumber) + '번째 판 · ' + series : series;
-    details = `<div class="public-game-info"><span>방장 <bdi>${escape(room.hostName)}</bdi></span><span>${progress}</span></div>
-      <div class="public-audience-count">관전 ${escape(room.spectatorCount)}명${room.reservationCount ? ' · 예약 ' + escape(room.reservationCount) + '명' : ''}</div>`;
-    actions = join('watch', '관전하기') + (canJoin ? join('play', '참가하기') : join('reserve', waiting ? '자리 예약' : '다음 판 예약'));
-  } else if (empty) {
-    actions = join('play', '입장하기');
-  } else if (phase === 'settling') {
-    details = '<div class="public-game-info">정산 후 입장할 수 있습니다.</div>';
-  }
+  const phase = room?.phase;
+  const state = {empty:'빈 테이블', waiting:'대기 중', playing:'게임 중', finished:'판 종료', settling:'정산 중'}[phase]
+    || (loading ? '확인 중' : '확인 불가');
+  const canEnter = ['empty','waiting','playing','finished'].includes(phase);
+  const seats = Array.isArray(room?.seats) && room.seats.length === 5 ? room.seats : [];
+  const chairs = Array.from({length:5}, (_, seat) => {
+    const nickname = typeof seats[seat] === 'string' ? seats[seat].trim() : '';
+    return `<div class="public-seat" data-seat="${seat}"><i class="table-chair${nickname ? ' is-seated' : ''}" data-seat="${seat}" aria-hidden="true"></i>
+      ${nickname ? '<span class="public-seat-name"><span class="public-sr-only">' + (seat + 1) + '번 자리 </span><bdi>' + escape(nickname) + '</bdi></span>' : ''}</div>`;
+  }).join('');
+  const action = canEnter ? `<button type="button" class="public-table-enter" data-table-surface data-public-code="${code}"
+    data-public-slot="${slot}" data-public-intent="enter"${phase === 'empty' ? ' data-public-empty' : ''} aria-label="${name} 입장하기">입장하기</button>` : '';
   return `<li class="public-table-tile" data-suit="${slot}" aria-labelledby="public-table-title-${slot}">
-    <div class="public-table-scene">
-      <div class="public-table-chairs" aria-hidden="true">${chairs}</div>
+    <h3 class="public-sr-only" id="public-table-title-${slot}">${name}</h3>
+    <div class="public-table-scene">${chairs}
       <div class="public-table-rail"><div class="public-table-felt">
-        <span class="public-table-mark${suit.red ? ' red' : ''}" aria-hidden="true">${suit.mark}</span>
-        <h3 id="public-table-title-${slot}">${name}</h3>
+        <div class="public-table-caption"><span class="public-table-mark${suit.red ? ' red' : ''}" aria-hidden="true">${suit.mark}</span>
+          <span class="public-phase">${state}</span></div>
+        ${action}
       </div></div>
-    </div>
-    <div class="public-table-status"><span class="public-phase ${stateClass}">${state}</span>
-      ${people === null ? '' : '<span class="public-counts">참가 <strong>' + escape(people) + '</strong> / 5</span>'}</div>
-    ${details}
-    <div class="public-row-actions">${actions}</div></li>`;
+    </div></li>`;
 }
 
 const listMarkup = new WeakMap();
