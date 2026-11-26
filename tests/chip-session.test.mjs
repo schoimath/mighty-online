@@ -28,6 +28,99 @@ function guestSnapshot(table, connection) {
   return {...table.viewFor(connection), chipHost:owner, nextDeal};
 }
 
+test('room handoff preserves the waiting roster, rule settings, an unrelated seat swap and the admission sequence', () => {
+  const table=new HostSession('처음',undefined,models,20,{publicRoom:false,pace:'fast'});
+  for (const id of ['successor','other','third']) assert.equal(table.addGuest(id,id),null);
+  table.requestSeatSwap('other',3,table.revision);
+  const checkpoint=JSON.parse(JSON.stringify(table.handoffState()));
+  assert.equal(checkpoint.round,null);
+  assert.throws(() => HostSession.takeOver(checkpoint,'unknown'));
+  const room=HostSession.takeOver(checkpoint,'successor');
+  assert.equal(room.hostSeat,1);
+  assert.equal(room.nameFor(null),'successor');
+  assert.equal(room.players[0],null);
+  assert.equal(room.connections.has('successor'),false);
+  assert.equal(room.players[1].memberId,table.players[1].memberId);
+  assert.deepEqual(room.viewFor('other').swap,{from:2,to:3});
+  room.answerSeatSwap('third',true,room.revision);
+  assert.equal(room.seatFor('other'),3);
+  assert.equal(room.addGuest('next','새 손님'),null);
+  assert.equal(room.seatFor('next'),0);
+  assert.equal(new Set(room.players.filter(Boolean).map(p=>p.memberId)).size,4);
+  assert.equal(room.hostView().scoreboard.roundLimit,20);
+  assert.equal(room.pace,'fast');
+  assert.equal(table.hostSeat,0);
+  assert.equal(table.players[0].name,'처음');
+});
+
+test('mid-hand takeover has no private cards, settles original seats once, and can hand off again after settlement', () => {
+  const {table,accounts}=signedRoom();
+  table.addGuest('remaining','다른 참가자');
+  accounts.set('remaining','ce71018b-3eb5-402c-a3fd-220c214c4122');
+  const spec=chipManifest(table.plannedTable(),code,owner,accounts), bots=[false,false,false,true,true];
+  const raw=createGame({firstSeat:spec.firstSeat,rules:spec.rules});
+  table.startChipHand(packet(raw,spec.handId,0,bots));
+  table.addGuest('waiting','대기','reserve');
+  assert.equal(table.setGuestDeparture('remaining',spec.handId,true),true);
+  const checkpoint=JSON.parse(JSON.stringify(table.handoffState()));
+  assert.equal(checkpoint.round.seat,-1);
+  assert.deepEqual(checkpoint.round.hand,[]);
+  assert.deepEqual(checkpoint.round.discarded,[]);
+  for (const key of ['hands','knownKitty','kitty','botMemory','guestDecisions','claim','seats','token','secret']) {
+    assert.ok(!Object.hasOwn(checkpoint,key) && !Object.hasOwn(checkpoint.round,key));
+  }
+  const room=HostSession.takeOver(checkpoint,'connection');
+  assert.equal(room.players[0].bot,true);
+  assert.equal(room.nameFor(null),'참가자');
+  assert.equal(room.players[1].memberId,table.players[1].memberId);
+  const changes=finish(raw), result=packet(raw,spec.handId,1,[true,false,false,true,true]);
+  assert.equal(room.syncChipHand(result),true);
+  assert.equal(room.syncChipHand(result),false);
+  const board=room.hostView().scoreboard;
+  assert.equal(board.rounds,1);
+  for(let i=0;i<5;i++) {
+    const id=table.players[i].memberId;
+    assert.equal(board.members.find(m=>m.id===id).total,changes[i]);
+    assert.equal(board.panelMemberIds[i],id);
+  }
+  assert.equal(room.seatFor('remaining'),-1);
+  assert.equal(room.viewFor('waiting').reservation.seat,0);
+  // A reserved spectator can inherit a settled table and take its original reservation.
+  const again=HostSession.takeOver(JSON.parse(JSON.stringify(room.handoffState())),'waiting');
+  assert.equal(again.hostSeat,-1);
+  assert.equal(again.nameFor(null),'대기');
+  assert.equal(again.hostView().reservation.seat,0);
+  assert.equal(again.syncChipHand({...result,revision:2}),true);
+  assert.equal(again.hostView().scoreboard.rounds,1);
+  const plan=again.plannedTable();
+  assert.equal(plan.seats[0].id,null);
+  assert.equal(plan.firstSeat,raw.result.friend ?? raw.result.declarer);
+  assert.equal(plan.seats[1].bot,true);
+  again.returnToRoom();
+  assert.equal(again.hostSeat,0);
+  assert.notEqual(again.players[0].memberId,'host');
+  assert.equal(again.hostView().scoreboard.members.find(m=>m.id==='host').total,changes[0]);
+});
+
+test('promoted guest keeps its scoring identity after yielding to AI and reclaiming a seat as host', () => {
+  const {table,accounts}=signedRoom(), spec=chipManifest(table.plannedTable(),code,owner,accounts);
+  const raw=createGame({firstSeat:1,rules:spec.rules}), bots=[false,false,true,true,true];
+  table.startChipHand(packet(raw,spec.handId,0,bots));
+  const id=table.players[1].memberId;
+  const room=HostSession.takeOver(table.handoffState(),'connection');
+  room.leaveHostSeat();
+  room.setReservation(null,true);
+  finish(raw);
+  room.syncChipHand(packet(raw,spec.handId,1,[true,true,true,true,true]));
+  assert.equal(room.plannedTable().firstSeat,room.hostView().reservation.seat);
+  room.returnToRoom();
+  assert.equal(room.players[room.hostSeat].memberId,id);
+  assert.equal(room.hostView().scoreboard.members.filter(m=>m.id===id).length,1);
+  const practice=new HostSession('연습');
+  practice.start();
+  assert.equal(practice.handoffState(),null);
+});
+
 function finish(raw) {
   const step = action => applyAction(raw,raw.turn,action);
   step({type:'bid',points:14,suit:'H'});
@@ -37,6 +130,34 @@ function finish(raw) {
   while (raw.phase==='play') step({type:'play',...getView(raw,raw.turn).choices.plays[0]});
   return settlements(raw.result,raw.bid.suit);
 }
+
+test('handoff recovers an already committed deal under its original roster including a newly seated reservation', () => {
+  const {table}=signedRoom();
+  const first=crypto.randomUUID(), firstRaw=createGame(), bots=[false,false,true,true,true];
+  table.startChipHand(packet(firstRaw,first,0,bots));
+  table.addGuest('waiting','예약 참가자','reserve');
+  finish(firstRaw);
+  table.syncChipHand(packet(firstRaw,first,1,bots));
+  const before=table.handoffState(), reservation=table.viewFor('waiting').reservation.seat;
+  const next=crypto.randomUUID(), raw=createGame({firstSeat:table.plannedTable().firstSeat});
+  const nextBots=Array.from({length:5},(_,i)=>![0,1,reservation].includes(i));
+  const committed=packet(raw,next,0,nextBots);
+  table.startChipHand(committed);
+  const expected=table.players.map(p=>p.memberId);
+  const room=HostSession.takeOver(before,'waiting',committed);
+  assert.equal(room.hostSeat,reservation);
+  assert.equal(room.players[reservation].name,'예약 참가자');
+  assert.equal(room.nameFor(null),'예약 참가자');
+  assert.equal(room.players[0].bot,true);
+  assert.deepEqual(room.handoffState().roundMembers,expected);
+  assert.deepEqual(room.handoffState().round.hand,[]);
+  finish(raw);
+  const result=packet(raw,next,1,nextBots.map((bot,i)=>bot || i===0));
+  room.syncChipHand(result);
+  assert.equal(room.syncChipHand(result),false);
+  assert.equal(room.hostView().scoreboard.rounds,2);
+  assert.deepEqual(room.hostView().scoreboard.panelMemberIds,expected);
+});
 
 test('chip seats bind a verified account, its room, seat, host and table settings', () => {
   const {table,accounts} = signedRoom();

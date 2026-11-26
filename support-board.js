@@ -1,17 +1,15 @@
-import {element,button,meta,pagination,boardRPC,boardError} from './board-ui.js';
+import {element,button,meta,pagination,boardRPC,boardError,authorActions} from './board-ui.js';
 const statusLabel = answered => answered ? '답변 완료' : '답변 대기';
 
-export function setupSupportBoard(client, openAccount) {
-  const dialog = document.getElementById('support-dialog');
+export function setupSupportBoard(client, openAccount, route) {
   const body = document.getElementById('support-body');
   const errorLine = document.getElementById('support-error');
-  let revision = 0, page = 1, user = client.state.user?.id;
+  let revision = 0, user = client.state.user?.id;
 
   function clear() {
     revision++;
     body.replaceChildren();
     errorLine.textContent = '';
-    dialog.scrollTop = 0;
   }
 
   const rpc = (name,args) => boardRPC(client,'mighty_support_'+name,args);
@@ -22,7 +20,13 @@ export function setupSupportBoard(client, openAccount) {
       body.append(element('p','로그인하면 문의를 남기고 답변을 확인할 수 있습니다.'),button('로그인',openAccount,'primary-button'));
       return;
     }
-    load('list',{p_page:page},list,refresh);
+    if (route.id) {
+      load('thread',{p_thread:route.id},data => {
+        if (route.compose && !data.deleted) compose(data);
+        else thread(data);
+      }, refresh);
+    } else if (route.compose) compose();
+    else load('list',{p_page:route.page},list,refresh);
   }
 
   async function load(name, args, paint, retry) {
@@ -33,18 +37,21 @@ export function setupSupportBoard(client, openAccount) {
     body.append(progress);
     try {
       const result = await rpc(name,args);
-      if (dialog.open && current === revision) { clear(); paint(result); }
+      if (current === revision) { clear(); paint(result); }
     } catch (err) {
-      if (!dialog.open || current !== revision) return;
+      if (current !== revision) return;
       body.replaceChildren(button('다시 조회',retry));
-      if (name !== 'list') body.append(button('목록으로',refresh));
+      if (name !== 'list') body.append(button('목록으로',back));
       errorLine.textContent = boardError(err);
     }
   }
 
   function list(result) {
+    if (route.page>1 && !result.items.length) {
+      route.go({page:Math.max(1,Math.ceil(result.total/result.pageSize))},true); return;
+    }
     const actions = element('div', null, 'support-actions');
-    actions.append(button('문의 작성',() => compose(),'primary-button'),button('새로고침',refresh));
+    actions.append(button('문의 작성',() => route.go({compose:true}),'primary-button'),button('새로고침',refresh));
     body.append(actions);
     if (!result.items.length) {
       body.append(element('p','등록한 문의가 없습니다.'));
@@ -52,26 +59,41 @@ export function setupSupportBoard(client, openAccount) {
     }
     const rows = element('ul',null,'support-rows');
     for (const item of result.items) {
-      const row = element('li'), open = button('',() => openThread(item.id),'');
+      const row = element('li'), open = element('a');
+      open.href = route.url({id:item.id});
       open.append(element('strong',item.title),meta(statusLabel(item.answered),item.updatedAt));
       row.append(open); rows.append(row);
     }
     body.append(rows);
-    body.append(pagination(result,nextPage => {page=nextPage; refresh();}));
+    body.append(pagination(result,nextPage => route.go({page:nextPage})));
   }
 
-  function openThread(id) { load('thread',{p_thread:id},thread,() => openThread(id)); }
+  function back() { route.go({id:null}); }
   function thread(data) {
+    document.title = '비공개 문의 · Mighty Club';
     const actions = element('div',null,'support-actions');
-    actions.append(button('목록으로',refresh),button('새로고침',() => openThread(data.id)));
+    actions.append(button('목록으로',back),button('새로고침',refresh));
     body.append(actions,element('h3',data.title));
     const messages = element('ol',null,'support-messages');
     for (const message of data.messages) {
       const row = element('li',null,message.isAdmin ? 'admin' : '');
-      row.append(meta(message.isAdmin ? '관리자' : '나',message.createdAt),element('p',message.body));
+      const writer=message.isAdmin ? '관리자' : '나';
+      row.append(meta(writer+(message.revision && !message.deleted ? ' · 수정됨' : ''),message.createdAt),element('p',message.body));
+      if (!message.isAdmin && !message.deleted && Number.isInteger(message.revision)) {
+        const first=message.id===data.id;
+        row.append(authorActions({name:first ? '문의' : '추가 문의',title:first ? data.title : undefined,body:message.body,limit:4000,
+          removal:first ? '이 문의의 제목과 내용을 삭제할까요? 추가 문의와 관리자 답변은 남습니다.' : '이 추가 문의를 삭제할까요?',
+          change:args => rpc('change',{p_thread:data.id,p_message:message.id,p_revision:message.revision,...args}),
+          saved:deleted => {
+            if (deleted && (first || data.messages.filter(m=>!m.deleted).length===1)) back();
+            else refresh();
+          }
+        }));
+      }
       messages.append(row);
     }
-    body.append(messages,button('추가 문의',() => compose(data)));
+    body.append(messages);
+    if (!data.deleted) body.append(button('추가 문의',() => route.go({compose:true})));
   }
 
   function compose(previous) {
@@ -90,12 +112,12 @@ export function setupSupportBoard(client, openAccount) {
     label.append(message);
     const actions = element('div',null,'support-actions');
     const submit = element('button','등록','primary-button'); submit.type = 'submit';
-    const cancel = button('취소',() => previous ? openThread(previous.id) : refresh());
+    const cancel = button('취소',() => route.go({},true));
     actions.append(submit,cancel); form.append(label,actions); body.append(form);
     (title ?? message).focus();
     form.onsubmit = async event => {
       event.preventDefault();
-      if (submit.disabled || current !== revision || !dialog.open) return;
+      if (submit.disabled || current !== revision) return;
       const content = message.value.trim(), subject = title?.value.trim();
       if (!content || (title && !subject)) { errorLine.textContent='제목과 내용을 확인해 주세요.'; return; }
       for (const field of form.elements) field.disabled = true;
@@ -103,10 +125,10 @@ export function setupSupportBoard(client, openAccount) {
       try {
         const result = previous ? await rpc('reply',{p_thread:previous.id,p_message:id,p_body:content})
           : await rpc('create',{p_thread:id,p_title:subject,p_body:content});
-        if (!dialog.open || current !== revision) return;
-        page = 1; clear(); thread(result);
+        if (current !== revision) return;
+        route.go({id:result.id},true);
       } catch (err) {
-        if (dialog.open && current === revision) {
+        if (current === revision) {
           for (const field of form.elements) field.disabled = false;
           errorLine.textContent = boardError(err);
         }
@@ -114,15 +136,11 @@ export function setupSupportBoard(client, openAccount) {
     };
   }
 
-  function open() { page=1; dialog.showModal(); refresh(); }
-  document.getElementById('developer-contact').onclick = open;
-  document.getElementById('support-close').onclick = () => dialog.close();
-  dialog.addEventListener('close',clear);
-  dialog.addEventListener('click',event => { if (event.target === dialog) dialog.close(); });
   client.subscribe(state => {
     if (user === state.user?.id) return;
-    user = state.user?.id; page = 1;
-    if (dialog.open) refresh();
+    user = state.user?.id;
+    refresh();
   });
-  return open;
+  refresh();
+  return refresh;
 }

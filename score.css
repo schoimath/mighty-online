@@ -53,7 +53,6 @@
 .match-final thead th:nth-child(2), .match-final tbody th { text-align: left; overflow-wrap: anywhere; }
 .match-final thead th:nth-child(2) { width: 41%; }
 .match-final .standing-rank { color: #f0d69a; font-weight: 650; text-align: left; }
-.g-match-final .g-btn { width: auto; margin-top: 14px; }
 .g-settlement-formula {
   margin: 12px 0 4px; padding: 9px 11px; border-inline-start: 2px solid #b59a63;
   background: #112c23; border-radius: 0 6px 6px 0;

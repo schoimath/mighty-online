@@ -25,10 +25,12 @@ export class HostSession {
   #swaps = [];
   #nextBidder = {seat: 0, memberId: null};
   #hostName;
+  #hostMemberId = 'host';
   #nextGuest = 1;
   #botIds = BOT_NAMES.map((_, seat) => 'bot-' + seat);
   #nextBot = 1;
   #observers = new Map();
+  #observerMembers = new Map();
   #queue = [];
   #departingGuests = new Set();
   #dealtPlayers = null;
@@ -65,6 +67,93 @@ export class HostSession {
   nameFor(id) {
     if (id === null) return this.#hostName;
     return this.#observers.get(id) ?? this.players[this.seatFor(id)]?.name;
+  }
+
+  // Only a server-owned hand has a transferable round. The local practice
+  // engine contains the deck, all hands and the private claim solver position.
+  handoffState() {
+    let round = null;
+    if (this.round) {
+      const game = this.round;
+      if (!this.chipHandId || game.seat !== -1 || game.selfRole !== 'spectator' ||
+          game.hand?.length !== 0 || game.discarded?.length !== 0) return null;
+      const fields = ['phase','turn','dealNo','rules','counts','passed','bid','bidHistory','declarer','friendKnown',
+        'friend','call','trick','trickNo','lastTrick','result','scores','captured','misdealCount','settingAwaitingFriend',
+        'settingPenaltyCards','jokerPlayed'];
+      round = {seat:-1, selfRole:'spectator', hand:[], discarded:[],
+        choices:{canPass:false, bids:[], discard:false, contracts:[], friends:[], plays:[], canDeclareSetting:false}};
+      for (const key of fields) if (Object.hasOwn(game,key)) round[key] = game[key];
+    }
+    return structuredClone({version:1, publicRoom:this.publicRoom, rules:this.rules, pace:this.pace,
+      models:this.botModels, roundLimit:this.#roundLimit, revision:this.revision, hostSeat:this.hostSeat,
+      hostMemberId:this.#hostMemberId,
+      players:this.players, connections:[...this.connections], observers:[...this.#observers],
+      observerMembers:[...this.#observerMembers], queue:this.#queue, departing:[...this.#departingGuests],
+      swaps:this.#swaps, nextGuest:this.#nextGuest, botIds:this.#botIds, nextBot:this.#nextBot,
+      members:[...this.#members], roundMembers:this.#roundMembers, dealtPlayers:this.#dealtPlayers,
+      completedRounds:this.#completedRounds, lastSettlement:[...this.#lastSettlement], nextBidder:this.#nextBidder,
+      chipHandId:this.chipHandId, chipRevision:this.#chipRevision, round});
+  }
+
+  isDeparting(id) { return this.#departingGuests.has(id); }
+
+  static takeOver(checkpoint, connectionId, committedDeal = null) {
+    const state = structuredClone(checkpoint);
+    if (state?.version !== 1 || connectionId == null || state.players?.length !== BOT_NAMES.length ||
+        (state.round && (!state.chipHandId || state.round.seat !== -1 || state.round.selfRole !== 'spectator' ||
+          state.round.hand?.length !== 0 || state.round.discarded?.length !== 0))) {
+      throw new Error('이어받을 방 정보를 확인해 주세요.');
+    }
+    const peers = new Map(state.connections), observers = new Map(state.observers);
+    const name = state.players[state.hostSeat]?.name ?? observers.get(null);
+    const session = new HostSession(name,state.rules,state.models,state.roundLimit,{publicRoom:state.publicRoom,pace:state.pace});
+    session.hostSeat = state.hostSeat;
+    session.players = state.players;
+    session.connections = peers;
+    session.#observers = observers;
+    session.#observerMembers = new Map(state.observerMembers);
+    session.#nextGuest = state.nextGuest;
+    session.#hostMemberId = state.hostMemberId ?? state.players[state.hostSeat]?.memberId ?? 'host';
+    session.#queue = state.queue;
+    session.#departingGuests = new Set(state.departing);
+    session.#swaps = state.swaps;
+    session.#botIds = state.botIds;
+    session.#nextBot = state.nextBot;
+    session.#members = new Map(state.members);
+    session.#roundMembers = state.roundMembers;
+    session.#dealtPlayers = state.dealtPlayers;
+    session.#completedRounds = state.completedRounds;
+    session.#lastSettlement = new Map(state.lastSettlement);
+    session.#nextBidder = state.nextBidder;
+    session.chipHandId = state.chipHandId;
+    session.#chipRevision = state.chipRevision;
+    session.round = state.round;
+    session.revision = state.revision;
+    // A deal can commit between the last checkpoint and the founder leaving.
+    // Seat reservations and record the original roster before transferring control.
+    if (committedDeal) session.startChipHand(committedDeal);
+    const formerSeat = session.hostSeat, seat = peers.get(connectionId);
+    if (!(validSeat(seat) && session.players[seat] && !session.players[seat].bot) && !(seat === -1 && observers.has(connectionId))) {
+      throw new Error('방을 이어받을 참가자를 확인해 주세요.');
+    }
+    session.#hostName = session.nameFor(connectionId);
+    session.#hostMemberId = validSeat(seat) ? session.players[seat].memberId :
+      session.#observerMembers.get(connectionId) ?? 'guest-' + session.#nextGuest++;
+    peers.delete(connectionId);
+    observers.delete(null);
+    observers.delete(connectionId);
+    session.#observerMembers.delete(null);
+    session.#observerMembers.delete(connectionId);
+    session.hostSeat = seat;
+    if (seat === -1) observers.set(null,session.#hostName);
+    session.#queue = session.#queue.filter(entry => entry.id !== null)
+      .map(entry => entry.id === connectionId ? {...entry,id:null} : entry);
+    session.#departingGuests.delete(null);
+    if (session.#departingGuests.delete(connectionId)) session.#departingGuests.add(null);
+    session.revision++;
+    if (validSeat(formerSeat)) session.#releaseSeat(formerSeat);
+    else session.#updateReservations();
+    return session;
   }
 
   publicSummary() {
@@ -134,10 +223,11 @@ export class HostSession {
     const ready = this.#queue.filter(entry => entry.seat !== null);
     for (const {id, seat} of ready) {
       const isHost = id === null;
-      this.players[seat] = this.#player(isHost ? 'host' : 'guest-' + this.#nextGuest++, this.#observers.get(id), false);
+      this.players[seat] = this.#player(isHost ? this.#hostMemberId : 'guest-' + this.#nextGuest++, this.#observers.get(id), false);
       if (isHost) this.hostSeat = seat;
       else this.connections.set(id, seat);
       this.#observers.delete(id);
+      this.#observerMembers.delete(id);
     }
     this.#queue = this.#queue.filter(entry => entry.seat === null);
     return ready.length;
@@ -146,6 +236,7 @@ export class HostSession {
   removeGuest(id) {
     if (id == null) return;
     this.#departingGuests.delete(id);
+    this.#observerMembers.delete(id);
     if (this.#observers.delete(id)) {
       this.connections.delete(id);
       this.#queue = this.#queue.filter(entry => entry.id !== id);
@@ -189,6 +280,7 @@ export class HostSession {
       return false;
     }
     this.#observers.set(id, this.players[seat].name);
+    if (id !== null) this.#observerMembers.set(id,this.players[seat].memberId);
     if (id === null) this.hostSeat = -1;
     else this.connections.set(id, -1);
     this.#releaseSeat(seat);
@@ -320,7 +412,7 @@ export class HostSession {
   plannedTable() {
     if (this.#complete) throw new Error('목표 판수를 모두 마쳤습니다. 새 대국을 시작해 주세요.');
     if (this.round && this.round.phase !== 'result') throw new Error('이미 게임이 진행 중입니다.');
-    const returningHostSeat = this.#nextBidder.memberId === 'host' ? this.#queue.find(entry => entry.id === null)?.seat : null;
+    const returningHostSeat = this.#nextBidder.memberId === this.#hostMemberId ? this.#queue.find(entry => entry.id === null)?.seat : null;
     const bidderSeat = returningHostSeat ?? this.players.findIndex(p => p && p.memberId === this.#nextBidder.memberId);
     const firstSeat = bidderSeat < 0 ? this.#nextBidder.seat : bidderSeat;
     const seats = this.players.map((player, seat) => {

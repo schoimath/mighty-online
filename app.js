@@ -2,10 +2,13 @@ import {clearGame, renderGame, rulesContent, updateGamePace, updateSeatBalances}
 import {botTurnDelay, normalizeGameSpeed, paceMultiplier} from './table-timing.js';
 import {createNextRoundTimer} from './next-round.js';
 import {hostRoom, joinRoom, normalizeRoomCode} from './network.js';
-import {listPublicRooms, publishPublicRoom, PUBLIC_ROOM_LIMIT} from './public-directory.js';
-import {renderPublicTables, renderPublicAudience, visibilityPicker} from './public-room-ui.js';
+import {listPublicRooms, reserveDirectoryRoom, watchDirectoryRoom} from './public-directory.js';
+import {renderPublicTables, renderPublicAudience, publicTableName} from './public-room-ui.js';
 import {HostSession} from './session.js';
+import {hostBackups, validBackup} from './host-transfer.js';
 import {chatText, setupChat} from './chat.js';
+import {createRoomChatStore} from './room-chat-store.js';
+import {createRoomChatRelay} from './room-chat-relay.js';
 import {DEFAULT_RULES} from './engine.js';
 import {scoreTable, seatStanding} from './score-ui.js';
 import {bindModelSettings, modelLabel, modelSettings, modelSummary, readModelSettings} from './model-picker.js';
@@ -13,8 +16,6 @@ import {VERSION} from './release.js';
 import {rememberRoom, roomModels, roomPreferences} from './room-preferences.js';
 import {accountClient} from './account-client.js';
 import {setupAccountUI} from './account-ui.js';
-import {setupSupportBoard} from './support-board.js';
-import {setupCommunityBoard} from './community-board.js';
 import {accountIdValid, callChipService, chipManifest, consentWindow, followChipHand, offeredSeat} from './chip-play.js';
 
 const $ = id => document.getElementById(id);
@@ -57,10 +58,18 @@ let workerUnavailable = false;
 let pendingConnect = null;
 let roomCode = '';
 let publicListing = null;
+let backups, backupTicket, reconnecting, restoreTimer, memberKey;
+let missingPeers = new Set();
+let publicReader = null, inheritedHand = null;
+let pausedAfterTransfer = null;
 let directoryScan = null;
 let directoryTimer;
 let listedRooms = [];
 const chat = setupChat(sendChat);
+let chatRoomId = null;
+const roomChat = createRoomChatRelay({chat, peers:() => authority?.connections.keys() ?? [],
+  sendPeer:(id,packet) => transport?.send(id,packet), sendHost:packet => transport?.send(packet),
+  accountId:() => accountClient.state.user?.id});
 const roomAccounts = new Map();
 const chipRequest = payload => callChipService(accountClient, payload);
 let chipReader = null, preparing = null, acceptedOffer = null, resumeHand = null;
@@ -86,7 +95,8 @@ const nextRound = createNextRoundTimer({
 });
 
 function resultKey() {
-  if (departureHand || !authority || snapshot?.game?.phase !== 'result' || snapshot.scoreboard?.complete) return null;
+  if (departureHand || !authority || missingPeers.size ||
+      (mode === 'host' && !roomAccounts.get(null)) || snapshot?.game?.phase !== 'result' || snapshot.scoreboard?.complete) return null;
   return snapshot.chipHandId || `practice-${generation}-${snapshot.scoreboard.rounds}`;
 }
 
@@ -158,7 +168,11 @@ function onAccount(state) {
   activeRead = settlingHand = null;
   setActiveHand(null);
   if ($('modal').open && $('confirm-hand-leave')) closeModal();
-  if (lastAccount && ['host','guest','resume'].includes(mode)) stopSession('계정이 바뀌어 테이블에서 나왔습니다.');
+  if (lastAccount && ['host','guest','resume'].includes(mode)) {
+    if (mode === 'host' && backups?.size) { publicListing?.stop(); publicListing=null; }
+    stopSession('계정이 바뀌어 테이블에서 나왔습니다.');
+  }
+  if (chatRoomId) chat.enterRoom(chatRoomId,id);
   lastAccount = id;
   if (id) saveName(state.user.nickname);
   refreshActiveHand();
@@ -194,7 +208,8 @@ function serverOnlySnapshot(data) {
 function trackChipHand(handId, initial = null, hintRevision) {
   if (chipReader?.handId === handId) { chipReader.wake(hintRevision); return; }
   chipReader?.close();
-  const watch = !accountClient.state.user || (!authority && mode !== 'resume' && snapshot?.spectator);
+  const watch = !accountClient.state.user || (mode !== 'resume' &&
+    (authority ? authority.hostSeat < 0 && inheritedHand === handId : snapshot?.spectator));
   let lastSeatBalance, lastSeenRevision;
   const reader = followChipHand(chipRequest, handId, watch ? 'watch' : 'view', (data, balancesOnly, paceOnly) => {
     if (reader !== chipReader) return;
@@ -275,7 +290,14 @@ async function changeGamePace(value) {
   pendingPace = request;
   updateGamePace($('game'), reader.current?.pace, pace);
   try {
-    await reader.changePace(pace);
+    if (inheritedHand === reader.handId && mode === 'host') {
+      const store = roomChat.archive;
+      const data = await chipRequest({op:'room-pace',handId:reader.handId,term:store.term,credential:store.credential,pace});
+      if (authority && chipReader === reader) {
+        authority.syncChipHand(data); broadcastPace(reader.handId,pace,data.revision);
+        publicReader?.wake(data.revision); reader.wake(data.revision); rememberRoom({pace}); publish();
+      }
+    } else await reader.changePace(pace);
     if (chipReader === reader && reader.current?.pace === pace) rememberRoom({pace});
   } catch (error) {
     if (chipReader === reader) toast(error.message);
@@ -285,19 +307,41 @@ async function changeGamePace(value) {
   }
 }
 
-function broadcastChat(seat, text, senderId = null) {
-  const name = authority.nameFor(senderId);
-  if (!name || !chatText(text)) return false;
-  const message = {id: chat.log.lastId + 1, time: Date.now(), seat, name, text: text.trim()};
-  if (!chat.receive(message, senderId === null)) return false;
-  for (const id of authority.connections.keys()) {
-    transport.send(id, {type:'chat-message', message, own:id === senderId});
-  }
+function startHostChat(code,id,{store} = {}) {
+  const archive = store ?? createRoomChatStore(accountClient,code,id ?? undefined);
+  chatRoomId = archive.id;
+  return roomChat.startHost(archive);
+}
+function deliverRoomHistory(id) {
+  roomChat.greet(id);
+}
+function resetRoomChat() {
+  roomChat.reset();
+  chatRoomId = null;
+  chat.reset();
+}
+function broadcastChat(seat, text, senderId, requestId) {
+  const name = authority?.nameFor(senderId);
+  if (!name || !chatText(text)) return Promise.resolve(false);
+  const account = senderId === null ? accountClient.state.user?.id : roomAccounts.get(senderId);
+  return roomChat.persist(seat,name,text,senderId,account || 'observer:'+name,requestId);
+}
+function handleRoomChatPacket(id, packet) {
+  if (packet?.type !== 'chat-send') return false;
+  const link = transport;
+  const requestId = packet.requestId ?? crypto.randomUUID();
+  void broadcastChat(authority.seatFor(id),packet.text,id,requestId).then(ok => {
+    if (!ok) throw new Error();
+  }).catch(() => {
+    if (link && link === transport) link.send(id,packet.requestId
+      ? {type:'chat-failed',requestId}
+      : {type:'error',message:'채팅을 저장하지 못했습니다. 다시 보내 주세요.'});
+  });
   return true;
 }
-function sendChat(text) {
-  if (mode === 'host') return broadcastChat(authority.hostSeat, text);
-  return mode === 'guest' && Boolean(transport?.send({type:'chat-send', text}));
+function sendChat(text, requestId) {
+  if (mode === 'host') return broadcastChat(authority.hostSeat,text,null,requestId);
+  return mode === 'guest' && roomChat.sendGuest(text,requestId);
 }
 
 function toast(message, duration = 4500) {
@@ -311,6 +355,7 @@ function showScreen(screen) {
   for (const name of ['lobby','room','game']) $(name).hidden = screen !== name;
   $('site-header').hidden = $('site-footer').hidden = screen === 'game';
   $('profile-btn').disabled = screen !== 'lobby';
+  $('community-open').hidden = $('developer-contact').hidden = screen !== 'lobby';
 }
 
 function pauseDirectory() {
@@ -326,16 +371,16 @@ async function refreshDirectory() {
   const controller = new AbortController();
   directoryScan = controller;
   let nextScan = 45000;
-  renderPublicTables(listedRooms, {loading:true, capacity:PUBLIC_ROOM_LIMIT});
+  renderPublicTables(listedRooms, {loading:true});
   try {
     const rooms = await listPublicRooms({signal:controller.signal});
     if (controller.signal.aborted) return;
     listedRooms = rooms;
-    renderPublicTables(rooms, {capacity:PUBLIC_ROOM_LIMIT});
+    renderPublicTables(rooms);
   } catch (error) {
     if (!controller.signal.aborted) {
       listedRooms = [];
-      renderPublicTables(listedRooms, {error:error.message, capacity:PUBLIC_ROOM_LIMIT});
+      renderPublicTables(listedRooms, {error:error.message});
       nextScan = 15000;
     }
   } finally {
@@ -354,7 +399,9 @@ document.addEventListener('visibilitychange', () => {
 $('public-refresh').onclick = () => { refreshActiveHand(); refreshDirectory(); };
 $('public-tables').addEventListener('click', event => {
   const button = event.target.closest('[data-public-code][data-public-intent]');
-  if (button) openForm('join', button.dataset.publicCode, button.dataset.publicIntent);
+  if (!button) return;
+  const kind = button.hasAttribute('data-public-empty') ? 'create' : 'join';
+  openForm(kind, button.dataset.publicCode, button.dataset.publicIntent, Number(button.dataset.publicSlot));
 });
 
 function pauseCountdownForDialog() {
@@ -456,6 +503,13 @@ $('nav-rules').onclick = showRules;
 
 function stopSession(message) {
   generation++;
+  reconnecting?.abort(); reconnecting = null;
+  clearTimeout(restoreTimer);
+  missingPeers.clear();
+  backups?.close(); backups = null;
+  backupTicket = memberKey = inheritedHand = null;
+  pausedAfterTransfer = null;
+  publicReader?.close(); publicReader = null;
   clearTimeout(departureTimer);
   departureHand = null;
   nextRound.sync(null);
@@ -481,7 +535,7 @@ function stopSession(message) {
   authority = snapshot = null;
   roomCode = '';
   mode = 'lobby';
-  chat.reset();
+  resetRoomChat();
   if ($('modal').open) closeModal();
   $('room').replaceChildren();
   clearGame($('game'));
@@ -494,7 +548,7 @@ function stopSession(message) {
   // The last scan predates the entire visit. In particular our former host
   // may just have closed; only show tables confirmed by a fresh scan.
   listedRooms = [];
-  renderPublicTables(listedRooms, {loading:true, capacity:PUBLIC_ROOM_LIMIT});
+  renderPublicTables(listedRooms, {loading:true});
   refreshDirectory();
   refreshActiveHand();
   window.scrollTo(0,0);
@@ -563,10 +617,21 @@ function currentHandKey() {
   return snapshot?.chipHandId ?? (mode === 'practice' && snapshot?.game ? 'practice' : null);
 }
 
+async function leaveTable(message) {
+  const token = generation;
+  if (mode === 'host' && backups?.size) {
+    backups.share();
+    publicListing?.stop(); publicListing = null;
+    await backups.giveToNext();
+  }
+  if (token === generation) stopSession(message);
+}
 function finishReservedDeparture() {
   const message = mode === 'practice' ? '이번 연습 판을 마치고 로비로 돌아왔습니다.' :
-    mode === 'host' ? '이번 판의 칩 정산이 끝나 방을 닫았습니다.' : '이번 판의 칩 정산을 마치고 방에서 나왔습니다.';
-  stopSession(message);
+    '이번 판의 칩 정산을 마치고 방에서 나왔습니다.';
+  if (leavingGeneration === generation) return;
+  leavingGeneration = generation;
+  void leaveTable(message).finally(() => { leavingGeneration = null; });
 }
 
 function requestLeave() {
@@ -581,7 +646,7 @@ function requestLeave() {
   const leavingOwnHand = playing && (!snapshot.spectator || resumeHand === snapshot.chipHandId);
   let reason = '이 방에서 나갑니다.';
   if (mode === 'host') {
-    reason = playing ? '대기실과 채팅은 닫히고, 남은 참가자는 이 판을 계속합니다.' : '방을 닫고 로비로 돌아갑니다.';
+    reason = backups?.size ? '남아 있는 참가자가 방장을 이어받습니다.' : '테이블에서 나와 로비로 돌아갑니다.';
   } else if (mode === 'practice') reason = '현재 연습 게임이 종료됩니다.';
   else if (snapshot?.spectator) reason = '관전을 끝냅니다. 신청한 자리 예약도 취소됩니다.';
   if (playing && !snapshot.spectator) reason += ' AI가 내 패를 마저 치고, 이 판의 칩은 내 계정에 정산됩니다.';
@@ -590,10 +655,10 @@ function requestLeave() {
     (departureHand ? '나가기 예약 취소' : '나가기 예약') + '</button>' : '';
   const scheduleHint = !canReserve ? '' : departureHand ? '<p>이번 판이 끝나면 자동으로 나가도록 예약했습니다.</p>' :
     '<p>나가기 예약을 선택하면 이번 판을 직접 마치고 ' +
-    (mode === 'host' ? '칩 정산 후 방을 닫습니다.' : mode === 'practice' ? '로비로 돌아갑니다.' : '칩 정산 후 방에서 나갑니다.') + '</p>';
-  modal('로비로 나갈까요?', '<p>' + reason + (canWatch ? ' 방을 유지하려면 AI에게 자리를 맡기고 이 탭에서 관전하세요.' : '') +
+    (mode === 'practice' ? '로비로 돌아갑니다.' : '칩 정산 후 방에서 나갑니다.') + '</p>';
+  modal('로비로 나갈까요?', '<p>' + reason +
     '</p>' + scheduleHint + '<p class="form-error" role="alert" id="quit-error"></p><div class="room-actions"><button class="plain-button" id="stay">계속하기</button>' + schedule + stepAside +
-    '<button class="' + (canWatch ? 'plain-button' : 'primary-button') + '" id="quit">' + (mode === 'host' ? '방 닫기' : '나가기') + '</button></div>');
+    '<button class="' + (canWatch ? 'plain-button' : 'primary-button') + '" id="quit">나가기</button></div>');
   $('stay').onclick = closeModal;
   const buttons = $('quit').parentElement.querySelectorAll('button');
   const errorLine = $('quit-error');
@@ -634,7 +699,7 @@ function requestLeave() {
       }
       if (watch) {
         authority.leaveHostSeat(); departureHand = null; closeModal(); clearGame($('game')); publish();
-      } else stopSession();
+      } else await leaveTable();
     } catch (error) {
       if (generation !== token) return;
       if ($('modal').open && errorLine.isConnected) errorLine.textContent = error.message;
@@ -851,7 +916,7 @@ function draw() {
   renderGame($('game'),remote?.game ?? snapshot.game,{
     names:remote?.names ?? snapshot.players.map(p => p?.name), isHost: Boolean(authority), scoreboard:snapshot.scoreboard,
     seatBalances:mode === 'practice' ? practiceSeatBalances(accountClient.state) : remote?.seatBalances,
-    chipDelta:remote?.myDelta, settlementSeat:remote?.mySettlementSeat, resumed:mode === 'resume',
+    chipDelta:remote?.myDelta, handDeltas:remote?.deltas, settlementSeat:remote?.mySettlementSeat, resumed:mode === 'resume',
     turnDeadline:remote ? chipReader.localTurnDeadline : null,
     pace:remote?.game.result && mode !== 'resume' ? snapshot.pace : remote?.pace ?? snapshot.pace,
     pendingPace:pendingPace && pendingPace.reader === chipReader ? pendingPace.pace : null,
@@ -873,6 +938,7 @@ function draw() {
       const key = resultKey();
       if (key) {
         nextRound.sync(key);
+        if (pausedAfterTransfer === key) { pausedAfterTransfer=null; nextRound.pause(); }
         if ($('modal').open) pauseCountdownForDialog();
       }
     },
@@ -881,7 +947,6 @@ function draw() {
       if (nextRound.state?.status === 'paused') nextRound.resume();
       else nextRound.pause();
     },
-    onCommunity:openCommunityBoard, onSupport:openSupportBoard,
     onRules:showRules, onLeave:requestLeave, onReplay() {
       const key = resultKey();
       if (!key) return;
@@ -922,7 +987,8 @@ function draw() {
   });
   if (mode === 'host' || mode === 'guest') {
     const game = $('game');
-    chat.attach(game.querySelector('.g-nav-actions'), game.querySelector('.g-match-final'));
+    const location = (remote?.game ?? snapshot.game).phase === 'result' ? '.g-match-final' : '.g-hand';
+    chat.attach(game.querySelector('.g-nav-actions'), game.querySelector(location));
   }
   accountUI.attach($('game').querySelector('.g-nav-actions'));
   drawAudience();
@@ -933,12 +999,13 @@ function publishAudience(joinedId) {
   const nextDeal = expectedChipTable();
   for (const id of authority.connections.keys()) {
     const view = authority.viewFor(id);
-    const packet = id === joinedId ? {type:'state', view:{...view,chipHost:roomAccounts.get(null),nextDeal,nextRound:nextRound.state},sentAt:Date.now()} :
+    const packet = id === joinedId ? {type:'state', view:{...view,hostTransfer:true,chipHost:roomAccounts.get(null),nextDeal,nextRound:nextRound.state},sentAt:Date.now()} :
       {type:'audience', spectators:view.spectators, reservation:view.reservation,nextDeal};
     transport.send(id, packet);
   }
   snapshot = authority.hostView();
   drawAudience();
+  backups?.share(); publicListing?.refresh();
 }
 
 function expectedChipTable() {
@@ -959,10 +1026,11 @@ function publish() {
   if (authority.round?.phase !== 'result') nextRound.sync(null);
   const nextDeal = expectedChipTable();
   for (const id of authority.connections.keys()) {
-    transport?.send(id,{type:'state',view:{...authority.viewFor(id),chipHost:roomAccounts.get(null),nextDeal,nextRound:nextRound.state},sentAt:Date.now()});
+    transport?.send(id,{type:'state',view:{...authority.viewFor(id),hostTransfer:true,chipHost:roomAccounts.get(null),nextDeal,nextRound:nextRound.state},sentAt:Date.now()});
   }
   snapshot = authority.hostView();
   draw();
+  backups?.share(); publicListing?.refresh();
   if (mode === 'practice' && authority.botTurn) {
     schedulePracticeBot(botTurnDelay(snapshot.game, authority.pace));
   }
@@ -1078,6 +1146,8 @@ async function startRound() {
     return true;
   }
   if (mode !== 'host' || preparing) return false;
+  if (missingPeers.size) { toast('참가자들이 테이블에 다시 연결되고 있습니다.'); return false; }
+  if (!roomAccounts.get(null)) { toast('칩 대국을 시작하려면 로그인한 참가자가 필요합니다.'); return false; }
   const table = authority;
   let pending;
   try {
@@ -1097,6 +1167,10 @@ async function startRound() {
       throw error;
     })]);
     if (preparing !== pending || table.revision !== revision) throw new Error('자리가 바뀌었습니다. 다시 시작해 주세요.');
+    await roomChat.archive.linkHand(spec.handId);
+    if (preparing !== pending || table !== authority) return false;
+    pending.committing = true;
+    backups?.share();
     let initial;
     try { initial = await chipRequest({...spec, op:'start'}); }
     catch (error) {
@@ -1106,6 +1180,7 @@ async function startRound() {
       if (!initial) throw error;
     }
     if (preparing !== pending) return;
+    publicReader?.close(); publicReader = null; inheritedHand = null;
     table.startChipHand(initial);
     trackChipHand(spec.handId, initial);
     publish();
@@ -1117,6 +1192,7 @@ async function startRound() {
   } finally {
     if (pending && preparing === pending) {
       preparing = null;
+      backups?.share();
       $('room').inert = $('game').inert = false;
       pending.consent.close();
       pending.denied.forEach(id => table.sitOut(id));
@@ -1158,32 +1234,134 @@ function openPracticeSetup() {
   };
 }
 
-async function connectRoom(kind, name, code, signal, {roundLimit, publicRoom, intent}) {
-  const token = ++generation;
+const sleep = ms => new Promise(resolve => setTimeout(resolve,ms));
+
+async function recoverRoom(ticket, name, code, intent) {
+  if (reconnecting || !ticket) return;
+  const token = generation, controller = new AbortController();
+  reconnecting = controller;
+  transport = null; acceptedOffer = null;
+  toast('방장이 나가서 테이블을 다시 연결하고 있습니다.',5000);
+  try {
+    const index = Math.max(0,ticket.order.indexOf(ticket.self));
+    await sleep(Math.min(index,8)*330);
+    while (generation === token && !controller.signal.aborted) {
+      const options = {recovery:ticket,publicRoom:ticket.table.publicRoom,intent,slot:ticket.slot};
+      try {
+        await connectRoom('create',name,code,controller.signal,options);
+        return;
+      } catch { /* The active host or another successor may own the room. */ }
+      if (generation !== token || controller.signal.aborted) return;
+      try {
+        await connectRoom('join',name,code,controller.signal,options);
+        return;
+      } catch { /* The successor may still be restoring its table. */ }
+      await sleep(1300 + Math.random()*450 + Math.min(index,5)*200);
+    }
+  } finally { if (reconnecting === controller) reconnecting = null; }
+}
+
+async function passObserverHost(session,name,code) {
+  if (authority !== session || roomAccounts.get(null) || leavingGeneration === generation ||
+      ![...roomAccounts].some(([id,actor]) => id !== null && actor)) return;
+  const token = generation;
+  leavingGeneration = token;
+  try {
+    if (!await backups.giveToNext() || generation !== token) return;
+    publicListing?.stop(); publicListing = null;
+    stopSession();
+    const controller = new AbortController();
+    pendingConnect=controller;
+    const deadline=Date.now()+60000;
+    try {
+      while (!controller.signal.aborted && pendingConnect===controller && Date.now()<deadline) {
+        try { await connectRoom('join',name,code,controller.signal,{publicRoom:true,intent:'watch'}); return; }
+        catch { await sleep(1400); }
+      }
+    } finally {
+      if (pendingConnect===controller) { pendingConnect=null; mode='lobby'; refreshDirectory(); }
+    }
+  } finally { if (leavingGeneration === token) leavingGeneration=null; }
+}
+
+function followInheritedHand(session, handId, store) {
+  inheritedHand = handId;
+  publicReader?.close();
+  let passed = false, claiming = false;
+  publicReader = followChipHand(chipRequest,handId,'watch',data => {
+    if (session !== authority || handId !== inheritedHand) return;
+    if (session.syncChipHand({...data,publicGame:data.game})) publish();
+    if (passed || claiming || data.game.result) return;
+    claiming = true;
+    chipRequest({op:'room-takeover',handId,term:store.term,credential:store.credential}).then(reply => {
+      if (session !== authority || handId !== inheritedHand) return;
+      passed = true;
+      if (session.syncChipHand(reply)) publish();
+      chipReader?.wake(reply.revision);
+    }).catch(() => {}).finally(() => { claiming=false; });
+  },error => { if (session === authority) toast(error.message); });
+  publicReader.start();
+  trackChipHand(handId);
+}
+
+async function connectRoom(kind, name, code, signal, {roundLimit, publicRoom, intent, slot=null, recovery=null}) {
+  const token = recovery ? generation : ++generation;
+  memberKey ??= crypto.randomUUID()+crypto.randomUUID();
   const active = () => token === generation && !signal.aborted;
   let link;
   pauseDirectory();
   if (kind === 'create') {
     const preferences = roomPreferences();
-    const session = new HostSession(name, preferences.rules, roomModels(preferences.models), roundLimit, {publicRoom, pace:preferences.pace});
+    let session, committedDeal;
+    const createSession = () => new HostSession(name, preferences.rules, roomModels(preferences.models), roundLimit, {publicRoom, pace:preferences.pace});
+    let store;
+    let reservedPublic = false;
+    if (!recovery && slot) {
+      store = createRoomChatStore(accountClient,code);
+      const claim = await reserveDirectoryRoom(accountClient,{store,code,slot,name,hostName:name});
+      if (!active()) {
+        if (claim.claimed) { await store.open(); watchDirectoryRoom(accountClient,{store,getSummary:()=>null}).close(); }
+        return;
+      }
+      if (!claim.claimed) {
+        // Both players may have clicked the empty table before its host opened the channel.
+        let failure;
+        for (let attempt=0; attempt<10 && !signal.aborted; attempt++) {
+          try { return await connectRoom('join',name,code,signal,{roundLimit,publicRoom,intent,slot}); }
+          catch (error) { failure=error; await sleep(650); }
+        }
+        throw failure || new Error('테이블 연결을 취소했습니다.');
+      }
+      reservedPublic = true;
+    }
+    session = recovery ? HostSession.takeOver(recovery.table,recovery.self) : createSession();
+    try {
     link = await hostRoom({
-      signal,
-      onJoin(id, guestName, guestIntent, accountId) {
+      signal, reclaimCode:recovery || slot ? code : null,
+      onJoin(id, guestName, guestIntent, accountId, meta) {
         if (!active() || authority !== session) return '테이블을 준비하고 있습니다. 잠시 후 다시 시도해 주세요.';
         if (preparing) return '새 판의 배패를 준비하고 있습니다. 잠시 후 입장해 주세요.';
         if (guestIntent !== 'watch' && !accountIdValid(accountId)) return '새로고침하고 인증된 게임 계정으로 입장해 주세요.';
-        if (guestIntent !== 'watch' && [...roomAccounts.values()].includes(accountId)) return '이미 이 계정이 테이블에 있습니다.';
+        if (meta?.roomId && meta.roomId !== chatRoomId) return '이미 종료된 테이블입니다.';
+        const returning = meta?.roomId === chatRoomId && missingPeers.has(id);
+        if (!returning && guestIntent !== 'watch' && [...roomAccounts.values()].includes(accountId)) return '이미 이 계정이 테이블에 있습니다.';
         // Earlier clients can take a seat but cannot display an observer projection.
         if (publicRoom && guestIntent === undefined && (session.round || session.players.every(Boolean))) {
           return '로비를 새로고침한 뒤 관전하거나 다음 판을 예약해 주세요.';
         }
         const revision = session.revision;
-        const reason = session.addGuest(id,guestName,guestIntent);
+        const reason = returning ? null : session.addGuest(id,guestName,guestIntent);
         if (reason) return reason;
         if (accountIdValid(accountId)) roomAccounts.set(id,accountId);
+        if (meta?.canInherit) backups.include(id,roomAccounts.get(id));
+        if (returning) missingPeers.delete(id);
         if (session.revision === revision) publishAudience(id);
         else publish();
-        transport.send(id, {type:'chat-history', messages:chat.log.messages});
+        deliverRoomHistory(id);
+        if (returning && !missingPeers.size) { backups.finishGrace(); publish(); }
+        if (meta?.canInherit && roomAccounts.get(id) && !roomAccounts.get(null)) {
+          setTimeout(() => passObserverHost(session,name,code),300);
+        }
         return true;
       },
       onMessage(id, packet) {
@@ -1196,7 +1374,7 @@ async function connectRoom(kind, name, code, signal, {roundLimit, publicRoom, in
           }
           return;
         }
-        if (packet.type === 'chip-wake') { if (packet.handId === session.chipHandId) chipReader?.wake(packet.revision); return; }
+        if (packet.type === 'chip-wake') { if (packet.handId === session.chipHandId) { chipReader?.wake(packet.revision); publicReader?.wake(packet.revision); } return; }
         if (packet.type === 'reserve-departure') {
           const revision = session.revision;
           const accepted = !preparing && session.setGuestDeparture(id, packet.handId, packet.wanted);
@@ -1204,10 +1382,7 @@ async function connectRoom(kind, name, code, signal, {roundLimit, publicRoom, in
           if (session.revision !== revision) publish();
           return;
         }
-        if (packet.type === 'chat-send') {
-          broadcastChat(seat, packet.text, id);
-          return;
-        }
+        if (handleRoomChatPacket(id,packet)) return;
         try {
           if (preparing) throw new Error('배패를 준비하고 있습니다. 잠시 후 다시 시도해 주세요.');
           if (packet.type === 'reservation') {
@@ -1218,6 +1393,7 @@ async function connectRoom(kind, name, code, signal, {roundLimit, publicRoom, in
                 throw new Error('이 계정은 이미 착석했습니다.');
               }
               roomAccounts.set(id, packet.accountId);
+              if (id.length === 64) backups.include(id,packet.accountId);
             }
             applyReservation(session, id, packet.wanted);
           } else if (seat < 0) return;
@@ -1230,6 +1406,7 @@ async function connectRoom(kind, name, code, signal, {roundLimit, publicRoom, in
       },
       onLeave(id) {
         if (!active()) return;
+        backups?.remove(id);
         if (preparing) {
           preparing.departed.add(id);
           preparing.consent.answer(id,false,new Error('참가자 연결이 종료되었습니다. 다시 시작해 주세요.'));
@@ -1246,26 +1423,66 @@ async function connectRoom(kind, name, code, signal, {roundLimit, publicRoom, in
       },
       onError(error) { if (active()) toast(error.message); }
     });
-    if (!active()) { link.close(); return; }
-    if (publicRoom) {
-      let listing;
-      try {
-        listing = await publishPublicRoom({signal, getSummary:() => ({...session.publicSummary(), code:link.code}),
-          onError:error => { if (active()) toast(error.message); }});
-      } catch (error) { link.close(); throw error; }
-      if (!active()) { listing.close(); link.close(); return; }
-      publicListing = listing;
+    store ??= createRoomChatStore(accountClient,link.code,recovery?.roomId,recovery?.credential);
+    if (recovery) {
+      if (!await store.claim(recovery.term)) throw new Error('방장 변경을 기다리고 있습니다.');
+      if (recovery.pendingHand && recovery.pendingHand !== session.chipHandId) {
+        try {
+          const data = await chipRequest({op:'watch',handId:recovery.pendingHand});
+          if (data.handId === recovery.pendingHand && data.game?.seat === -1) committedDeal={...data,publicGame:data.game};
+        } catch (error) {
+          if (error.status !== 404) throw error;
+        }
+        if (committedDeal) session=HostSession.takeOver(recovery.table,recovery.self,committedDeal);
+      }
+    } else if (!reservedPublic) await reserveDirectoryRoom(accountClient,{store,code:link.code,slot:null,hostName:name});
+    await store.open();
+    if (!active()) throw new Error('테이블 연결을 취소했습니다.');
+    } catch (error) {
+      link?.close();
+      if (reservedPublic && store) {
+        try { await store.open(); watchDirectoryRoom(accountClient,{store,getSummary:()=>null}).close(); } catch {}
+      }
+      throw error;
     }
     mode = 'host';
     authority = session;
-    roomAccounts.set(null, accountClient.state.user.id);
-    rememberRoom({roundLimit});
+    transport=link; roomCode=link.code;
+    startHostChat(link.code,store.id,{store});
+    roomAccounts.clear();
+    roomAccounts.set(null, accountClient.state.user?.id ?? null);
+    publicListing = watchDirectoryRoom(accountClient,{store,getSummary:()=>session.publicSummary(),onError:error=>{if(active()) toast(error.message);}});
+    backups = hostBackups(store,{send:link.send,grace:Boolean(recovery),
+      priority:id => (roomAccounts.get(id) ? (session.seatFor(id)>=0 ? 0 : 1) : 2) +
+        (session.isDeparting(id) ? 5 : 0),
+      checkpoint:()=>({table:session.handoffState(),slot,pendingHand:preparing?.committing ? preparing.spec.handId : null,
+        paused:nextRound.state?.status === 'paused'}),onError:error=>{if(active()) toast(error.message);}});
+    if (recovery) {
+      pausedAfterTransfer = recovery.paused ? session.chipHandId : null;
+      missingPeers = new Set(session.connections.keys());
+      if (!missingPeers.size) backups.finishGrace();
+      clearTimeout(restoreTimer);
+      restoreTimer=setTimeout(() => {
+        if (session !== authority) return;
+        for (const id of missingPeers) session.removeGuest(id);
+        missingPeers.clear(); backups.finishGrace(); publish();
+        if (resultKey()) {
+          nextRound.sync(resultKey());
+          if (pausedAfterTransfer === resultKey()) { pausedAfterTransfer=null; nextRound.pause(); }
+        }
+      },20000);
+      if (session !== authority) return;
+      if (session.chipHandId) followInheritedHand(session,session.chipHandId,store);
+      backupTicket=null;
+    } else rememberRoom({roundLimit});
   } else {
-    mode = 'joining';
+    if (!recovery) mode = 'joining';
     link = await joinRoom(code,name,{
-      signal, intent, accountId:accountClient.state.user?.id,
+      signal, intent, accountId:accountClient.state.user?.id, memberKey,returnRoom:recovery?.roomId,
       onMessage(packet) {
         if (!active()) return;
+        if (validBackup(packet) && (!chatRoomId || chatRoomId === packet.roomId) &&
+            (!backupTicket || packet.term >= backupTicket.term)) { backupTicket=packet; return; }
         if (packet?.type === 'cancel-departure' && departureHand === packet.handId && packet.handId === currentHandKey()) {
           if (packet.accepted) {
             clearTimeout(departureTimer);
@@ -1288,8 +1505,7 @@ async function connectRoom(kind, name, code, signal, {roundLimit, publicRoom, in
           if (mode === 'guest') draw();
           return;
         }
-        if (packet?.type === 'chat-message') { chat.receive(packet.message, packet.own === true); return; }
-        if (packet?.type === 'chat-history') { chat.restore(packet.messages); return; }
+        if (roomChat.receive(packet)) { chatRoomId=roomChat.id; return; }
         if (packet?.type === 'chip-offer' && mode === 'guest') {
           approveChipOffer(packet.spec, token);
           return;
@@ -1308,7 +1524,7 @@ async function connectRoom(kind, name, code, signal, {roundLimit, publicRoom, in
           if (departureHand && packet.view?.chipHandId !== departureHand) { chipReader?.wake(); return; }
           snapshot = packet.view;
           snapshot.nextRound = receivedCountdown(snapshot.nextRound, snapshot.chipHandId, packet.sentAt);
-          if (!snapshot.chipHost && intent !== 'watch') {
+          if (!snapshot.chipHost && !snapshot.hostTransfer && intent !== 'watch') {
             stopSession('이 방은 이전 버전입니다. 새 버전의 방에서 칩 대국에 참가해 주세요.');
             return;
           }
@@ -1317,14 +1533,18 @@ async function connectRoom(kind, name, code, signal, {roundLimit, publicRoom, in
           if (mode === 'guest') draw();
         }
       },
-      onClose(reason) {
+      onClose(reason,removed) {
         if (!active()) return;
+        if (!removed && mode === 'guest' && backupTicket) {
+          void recoverRoom(backupTicket,name,code,intent);
+          return;
+        }
         if (mode === 'guest' && snapshot?.chipHandId && snapshot.game && chipReader?.handId === snapshot.chipHandId) {
           // The room channel has closed. The same authenticated reader still owns the live seat.
           mode = 'resume';
           transport = null;
           acceptedOffer = null;
-          chat.reset();
+          resetRoomChat();
           snapshot.nextRound = null;
           snapshot.nextDeal = null;
           if (chipReader.current) snapshot = serverOnlySnapshot(chipReader.current);
@@ -1351,22 +1571,22 @@ async function connectRoom(kind, name, code, signal, {roundLimit, publicRoom, in
   window.scrollTo(0,0);
 }
 
-async function openForm(kind, code = '', publicIntent = null) {
+async function openForm(kind, code = '', publicIntent = null, slot = null) {
   if (kind !== 'profile' && publicIntent !== 'watch' && !await mayPlay()) return;
   const profile = kind === 'profile';
   const joining = kind === 'join';
-  const publicTitles = {play:'공개 테이블 참가', watch:'테이블 관전', reserve:'다음 판 예약'};
-  const title = profile ? '닉네임 변경' : publicTitles[publicIntent] ?? (joining ? '방 참가하기' : '방 만들기');
-  const intro = profile ? '' : '<p>' + (publicIntent ? '테이블 ' + escape(code) +
+  const publicTitles = {play:'테이블 입장', watch:'테이블 관전', reserve:'자리 예약'};
+  const title = profile ? '닉네임 변경' : publicTitles[publicIntent] ?? (joining ? '방 참가하기' : '비공개 방 만들기');
+  const intro = profile ? '' : '<p>' + (publicIntent ? publicTableName(slot) +
     (publicIntent === 'reserve' ? '에서 관전하며 다음 자리를 기다립니다.' : '에 입장할 닉네임을 확인하세요.') :
-    joining ? '친구에게 받은 6자리 방 코드를 입력하세요.' : '게임 중에는 테이블을 운영하는 방장 탭을 열어 두세요.') + '</p>';
+    joining ? '친구에게 받은 6자리 방 코드를 입력하세요.' : '방 코드로 친구를 초대하세요. 비공개 방은 동시에 6개까지 열 수 있습니다.') + '</p>';
   modal(title, intro + '<form id="setup-form"><label class="field">닉네임<input id="name-field" name="nickname" maxlength="16" required autocomplete="nickname"></label>' +
     (publicIntent ? '<input type="hidden" id="code-field">' : joining ? '<label class="field">방 코드<input class="code-field" id="code-field" name="code" maxlength="12" placeholder="6자리 코드" required autocomplete="off" spellcheck="false"></label>' : '') +
-    (kind === 'create' ? visibilityPicker() + seriesPicker(roomPreferences().roundLimit) : '') +
+    (kind === 'create' ? seriesPicker(roomPreferences().roundLimit) : '') +
     '<div class="form-error" role="alert" id="form-error"></div><button class="primary-button form-submit" id="submit-form">' + (profile ? '저장' : title) + '</button></form>');
   $('name-field').value = nickname;
   if (accountClient.state.user) $('name-field').readOnly = true;
-  if (joining) { $('code-field').value = code; (code ? $('name-field') : $('code-field')).focus(); }
+  if (joining || publicIntent) { $('code-field').value = code; (code ? $('name-field') : $('code-field')).focus(); }
   else { $('name-field').focus(); $('name-field').select(); }
   $('setup-form').onsubmit = async event => {
     event.preventDefault();
@@ -1386,7 +1606,7 @@ async function openForm(kind, code = '', publicIntent = null) {
     try {
       const form = event.currentTarget;
       await connectRoom(kind,name,code,controller.signal,{roundLimit:selectedLimit(form),
-        publicRoom:form.elements.visibility?.value === 'public', intent:publicIntent ?? 'play'});
+        publicRoom:Boolean(publicIntent), slot, intent:publicIntent ?? 'play'});
     }
     catch (error) {
       if (controller.signal.aborted) return;
@@ -1405,8 +1625,6 @@ $('create-btn').onclick = () => openForm('create');
 $('join-btn').onclick = () => openForm('join');
 $('practice-btn').onclick = openPracticeSetup;
 accountUI = setupAccountUI(accountClient, {onChange:onAccount});
-const openSupportBoard = setupSupportBoard(accountClient, () => accountUI.open());
-const openCommunityBoard = setupCommunityBoard(accountClient, () => accountUI.open());
 $('profile-btn').onclick = () => accountUI.open();
 $('leave-chip-hand').onclick = () => {
   if (resumeHand && mode === 'lobby') confirmPreviousHandLeave(resumeHand);

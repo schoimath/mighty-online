@@ -16,6 +16,7 @@ const at = 1_800_000_000_000;
 
 function table() {
   let row = null, charges = 0;
+  let operator = {id:host, term:1, credential:'a'.repeat(64), departedSeats:[]};
   let beforeNextSave = null;
   const clone = value => structuredClone(value);
   const grants = new Map();
@@ -33,6 +34,13 @@ function table() {
         return clone(row);
       },
       read:() => clone(row),
+      async control(hand, proof, update) {
+        assert.equal(hand,handId);
+        const authorized = proof.legacy ? proof.id === host && operator.id === host :
+          proof.id === operator.id && proof.credential === operator.credential && proof.term === operator.term;
+        if (!authorized) throw Object.assign(new Error('방장 권한을 확인해 주세요.'), {status:403});
+        return {hand:update ? await db.save(update) : clone(row), departedSeats:[...operator.departedSeats]};
+      },
       async save(update) {
         if (beforeNextSave) {
           const pending = beforeNextSave;
@@ -53,6 +61,7 @@ function table() {
     return operateHand({handId, op, ...fields}, id, db, now);
   }
   return {call, row:() => clone(row), charges:() => charges,
+    controller(next) { operator = next; },
     beforeNextSave(callback) { beforeNextSave = callback; }};
 }
 
@@ -86,6 +95,35 @@ test('verified seats consent to one match specification and receive separate pro
   const retry = await t.call(host,'act',{revision:0,action:{type:'pass'}});
   assert.deepEqual(retry.game.bidHistory,played.game.bidHistory);
   assert.equal(retry.revision,1);
+});
+
+test('successive room hosts keep public projections, immutable wallets and only retire former host seats', async () => {
+  const t = table(), spec = {...game,seats:[host,guest,other,null,null]};
+  for (const player of spec.seats.filter(Boolean)) await t.call(player,'ready',spec);
+  await t.call(host,'start',spec);
+  const successor = {term:2,credential:'b'.repeat(64)};
+  t.controller({...successor,id:guest,departedSeats:[0]});
+  for (const [actor,proof] of [[null,successor],[host,successor],[guest,{...successor,term:1}],[guest,{term:2}],[guest,{...successor,credential:'a'.repeat(64)}]]) {
+    await assert.rejects(t.call(actor,'room-takeover',proof), {status:403});
+  }
+  await assert.rejects(t.call(host,'pace',{pace:'fast'}),{status:403});
+  const result = await t.call(guest,'room-takeover',{...successor,seat:2,departedSeats:[2]});
+  assert.deepEqual(result.bots,[true,false,false,true,true]);
+  assert.deepEqual(result.game,result.publicGame);
+  assert.deepEqual(result.game.hand,[]);
+  assert.equal(result.seat,-1);
+  assert.equal((await t.call(guest,'view')).game.hand.length,10);
+  assert.equal((await t.call(guest,'room-takeover',successor)).revision,result.revision);
+  const observer = {term:3,credential:'c'.repeat(64)};
+  t.controller({...observer,id:null,departedSeats:[0,1]});
+  await assert.rejects(t.call(guest,'room-pace',{...successor,pace:'fast'}), {status:403});
+  assert.deepEqual((await t.call(null,'room-takeover',observer)).bots,[true,true,false,true,true]);
+  const fast = await t.call(null,'room-pace',{...observer,pace:'fast'});
+  assert.equal(fast.pace,'fast');
+  assert.deepEqual(fast.publicGame.hand,[]);
+  assert.deepEqual(t.row().seats,spec.seats);
+  assert.equal((await t.call(other,'view')).game.hand.length,10);
+  assert.equal(t.charges(),0);
 });
 
 test('server plays abandoned hands to completion and only its terminal deltas are settled', async () => {

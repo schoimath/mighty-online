@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="referrer" content="no-referrer">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f7f6f1">
+  <title>게시판 · Mighty Club</title>
+  <link rel="stylesheet" href="./style.css?v=1.1.20261126142516">
+  <link rel="stylesheet" href="./account.css?v=1.1.20261126142516">
+  <script type="importmap">
+    {"imports":{
+      "./account-config.js":"./account-config.js?v=1.1.20261126142516",
+      "./account-client.js":"./account-client.js?v=1.1.20261126142516",
+      "./account-ui.js":"./account-ui.js?v=1.1.20261126142516",
+      "./support-board.js":"./support-board.js?v=1.1.20261126142516",
+      "./community-board.js":"./community-board.js?v=1.1.20261126142516",
+      "./board-ui.js":"./board-ui.js?v=1.1.20261126142516"
+    }}
+  </script>
+  <script type="module" src="./boards.js?v=1.1.20261126142516"></script>
+</head>
+<body class="board-shell">
+  <header class="site-header"><div class="header-inner">
+    <a class="brand" href="./" aria-label="마이티 클럽 로비"><span class="brand-mark" aria-hidden="true">♠</span><span>Mighty Club</span></a>
+    <nav class="main-nav board-nav" aria-label="메뉴">
+      <a href="./">게임 로비</a>
+      <a id="community-open" href="./boards.html?board=community">자유게시판</a>
+      <a id="developer-contact" href="./boards.html?board=support">비공개 문의</a>
+    </nav>
+    <button type="button" class="profile" id="profile-btn" aria-haspopup="dialog"><span id="profile-name">로그인</span><span id="account-chips" class="account-chip" hidden></span></button>
+  </div></header>
+  <main id="board-page" class="page-wrap board-page">
+    <section id="community-board" aria-labelledby="community-title" hidden>
+      <h1 id="community-title">자유게시판</h1>
+      <p class="support-privacy">누구나 글을 읽을 수 있고, 회원은 닉네임으로 글과 댓글을 남길 수 있습니다.</p>
+      <div id="community-body"></div><p class="form-error" role="alert" id="community-error"></p>
+    </section>
+    <section id="support-board" aria-labelledby="support-title" hidden>
+      <h1 id="support-title">비공개 문의</h1>
+      <p class="support-privacy">작성자와 관리자만 문의와 답변을 볼 수 있습니다.</p>
+      <div id="support-body"></div><p class="form-error" role="alert" id="support-error"></p>
+    </section>
+  </main>
+  <dialog class="modal" id="account-dialog" aria-labelledby="account-title"><div class="modal-inner">
+    <button type="button" class="close-icon" id="account-close" aria-label="닫기">×</button>
+    <h2 id="account-title">로그인</h2>
+    <p class="account-notice" id="account-status" role="status" hidden></p>
+    <div id="account-body"></div><p class="form-error" role="alert" id="account-error"></p>
+  </div></dialog>
+</body>
+</html>

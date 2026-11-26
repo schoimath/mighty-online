@@ -18,6 +18,7 @@ function repository(url, publicKey, serviceKey, bearer, send) {
     if (!response.ok) {
       // Only controlled database business exceptions are safe for a browser.
       if (value?.code === 'P0001') throw fail(value.message, 409, value.details || undefined);
+      if (value?.code === '42501') throw fail('방장 권한을 확인해 주세요.', 403);
       throw fail('게임 서버가 정보를 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.', 503);
     }
     return value;
@@ -29,6 +30,9 @@ function repository(url, publicKey, serviceKey, bearer, send) {
     start:(hand, spec, state) => rpc('chips_start_hand',
       {p_hand:hand, p_room:spec.room, p_host:spec.host, p_seats:spec.seats, p_state:state}, true),
     read:hand => rpc('chips_read_hand', {p_hand:hand}, true),
+    control:(hand, proof, row) => rpc('mighty_chip_room_control', {p_hand:hand, p_actor:proof.id,
+      p_term:proof.term, p_credential:proof.credential, p_legacy:proof.legacy,
+      p_revision:row?.revision ?? null, p_state:row?.state ?? null}, true),
     save:row => {
       const round = row.state.round;
       const deltas = round.result ? settlements(round.result, round.bid.suit) : null;
@@ -56,7 +60,8 @@ export function chipHandler({url, publicKey, serviceKey, send = fetch}) {
     try {
       const bearer = request.headers.get('authorization');
       let id = null;
-      if (!['watch','tick'].includes(payload?.op)) {
+      const roomControl = ['room-takeover','room-pace'].includes(payload?.op);
+      if (!['watch','tick'].includes(payload?.op) && (!roomControl || bearer)) {
         if (!bearer || !/^Bearer [^\s]+$/i.test(bearer)) throw fail('로그인이 필요합니다.', 401);
         const result = await send(url + '/auth/v1/user', {headers:{apikey:publicKey, Authorization:bearer}});
         if (!result.ok) throw fail(result.status >= 500 ? '로그인 서버 연결을 확인해 주세요.' : '로그인을 다시 해 주세요.', result.status >= 500 ? 503 : 401);

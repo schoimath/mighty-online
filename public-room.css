@@ -15,10 +15,17 @@
 #public-status:not([hidden]) + #public-list { margin-top: 8px; }
 #public-list { list-style: none; padding: 0; }
 .public-table-row {
-  display: grid; grid-template-columns: minmax(0, 1fr) minmax(110px, .35fr) auto;
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(110px, .35fr) minmax(180px, auto);
   align-items: center; gap: 12px 24px; padding: 16px 19px;
 }
 .public-table-row + .public-table-row { border-top: 1px solid var(--line); }
+.public-table-details { display: flex; align-items: center; gap: 11px; min-width: 0; }
+.public-suit {
+  display: grid; place-items: center; flex: 0 0 36px; height: 42px;
+  border: 1px solid #d1d8ce; border-radius: 6px; background: #f4f6f1; color: #25362d;
+  font: 1.75rem/1 Georgia, serif;
+}
+.public-suit.red { color: #a43842; background: #fff5f1; border-color: #e8d5d1; }
 .public-table-title { display: flex; align-items: baseline; flex-wrap: wrap; gap: 5px 9px; }
 .public-table-title h3 { margin: 0; font-size: 1.04rem; line-height: 1.45; overflow-wrap: anywhere; }
 .public-phase {
@@ -26,12 +33,14 @@
   font-size: .75rem; font-weight: 700; color: #3f634a; background: #eaf1e5;
 }
 .public-phase.is-playing { color: #735321; background: #f8efd9; }
+.public-phase.is-idle { color: #565e55; background: #eeefea; }
 .public-table-meta, .public-counts span { color: var(--muted); font-size: .8rem; line-height: 1.5; }
 .public-table-meta { display: flex; flex-wrap: wrap; gap: 1px 13px; margin-top: 4px; }
 .public-table-meta bdi { font-family: ui-monospace, monospace; }
 .public-counts { display: grid; gap: 3px; font-variant-numeric: tabular-nums; }
 .public-counts strong { font-size: .9rem; }
-.public-row-actions { display: flex; gap: 7px; }
+.public-row-actions { display: flex; justify-content: flex-end; gap: 7px; }
+.public-row-actions:empty, .public-counts:empty { display: none; }
 .public-watch, .public-join {
   border: 1px solid transparent; border-radius: 7px; padding: 8px 12px;
   font: inherit; font-size: .85rem; font-weight: 700; line-height: 1.45; white-space: nowrap;
@@ -39,7 +48,6 @@
 .public-watch { border-color: #c3d0c2; color: var(--green); background: #fffefa; }
 .public-join { border-color: #28543e; background: #28543e; color: #fff; }
 .public-join:hover { background: #193e2b; }
-.public-visibility small { display: block; margin-top: 7px; color: var(--muted); line-height: 1.5; font-size: .8rem; }
 
 .public-audience {
   --audience-ink: #294634; --audience-muted: #536758; --audience-chip: #eef3e9; --audience-line: #d7e0d3;
@@ -71,6 +79,7 @@
 @media (max-width: 650px) {
   .public-tables { margin: 21px 0; }
   .public-table-row { grid-template-columns: minmax(0,1fr) auto; gap: 10px 8px; padding: 13px; }
+  .public-table-details { gap: 8px; }
   .public-counts { justify-items: end; }
   .public-row-actions { grid-column: 1 / -1; }
   .public-row-actions button { flex: 1; }

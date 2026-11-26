@@ -470,14 +470,15 @@ function bidControls(view, ui) {
   const suits = [...new Set(bids.map(b => b.suit))];
   const points = bids.filter(b => b.suit === ui.bidSuit).map(b => [b.points, b.points + "점"]);
   const pass = button("패스", "pass", view.choices.canPass, "secondary");
-  if (!bids.length) return `<h2>패스할 차례예요</h2><p>20점 노기루다가 최고 공약입니다.</p>${pass}`;
+  if (!bids.length) return `<h2>패스할 차례예요</h2><p>20점 노기루다가 최고 공약입니다.</p><div class="g-bid-actions">${pass}</div>`;
   let hint = "손패에서 가장 많은 무늬가 먼저 선택돼요.";
   if (view.bid) {
     hint = ui.bidSuit === "N" && view.bid.suit !== "N"
       ? `노기루다는 현재 공약과 같은 ${escapeHtml(view.bid.points)}점부터 부를 수 있어요.`
       : `${suitInfo[ui.bidSuit][1]}는 ${escapeHtml(points[0][0])}점부터 부를 수 있어요.`;
   }
-  return `<h2>공약을 정하세요</h2><p>${hint}</p>${suitPicker("기루다","bidSuit",suits,ui.bidSuit)}${select("공약 점수", "bidPoints", points, ui.bidPoints)}${button(suitMark(ui.bidSuit) + " " + escapeHtml(ui.bidPoints) + "점 입찰", "bid")}${pass}`;
+  return `<h2>공약을 정하세요</h2><p>${hint}</p>${suitPicker("기루다","bidSuit",suits,ui.bidSuit)}${select("공약 점수", "bidPoints", points, ui.bidPoints)}
+    <div class="g-bid-actions">${button(suitMark(ui.bidSuit) + " " + escapeHtml(ui.bidPoints) + "점 입찰", "bid")}${pass}</div>`;
 }
 function discardControls(view, ui) {
   const contracts = view.choices.contracts || [];
@@ -670,10 +671,13 @@ function resultControls(view, ui) {
   const chipDelta = ui.options.chipDelta;
   const seat = ui.options.settlementSeat ?? view.seat;
   const outcome = handOutcome(result, seat);
-  const currentRules = board?.scoringVersion === TABLE_SCORING_VERSION || ui.options.resumed;
+  const handDeltas = ui.options.handDeltas;
+  const hasServerScores = Array.isArray(handDeltas) && handDeltas.length === 5 && handDeltas.every(Number.isSafeInteger);
+  const currentRules = board?.scoringVersion === TABLE_SCORING_VERSION || ui.options.resumed || hasServerScores;
   let net = chipDelta;
   if (outcome.role && net == null) {
-    if (currentRules) net = settlements(result, view.bid.suit)[seat];
+    if (hasServerScores) net = handDeltas[seat];
+    else if (currentRules) net = settlements(result, view.bid.suit)[seat];
     else if (board) net = board.members.find(m => m.seat === seat)?.lastDelta;
     else net = archivedSettlements(result, view.bid.suit)[seat];
   }
@@ -693,13 +697,24 @@ function resultControls(view, ui) {
   const roleLabel = role ? `<small>내 역할 · ${role}</small>` : "";
   const payout = Number.isSafeInteger(net) ? `<div class="g-result-score g-my-settlement" data-sign="${Math.sign(net)}">
     <span>${chipDelta == null ? "내 정산" : "내 칩 증감"}</span><strong>${signedScore(net)}</strong><span>${chipDelta == null ? "점" : "칩"}</span></div>` : "";
-  const next = ui.options.departing ? '<p role="status">나가기 예약에 따라 잠시 후 로비로 돌아갑니다.</p>' :
-    board?.complete || ui.options.resumed ? "" : scoreTable(board, seat)
-    + nextRoundControls(ui.options)
-    + (ui.options.isHost && ui.options.onReplaySetup ? button(escapeHtml(ui.options.replaySetupLabel), "replay-setup", ui.options.nextRound?.status !== "starting", "secondary") : "");
+  let next = "";
+  if (ui.options.departing) next = '<p role="status">나가기 예약에 따라 잠시 후 로비로 돌아갑니다.</p>';
+  else if (!ui.options.resumed) {
+    if (!board?.complete) next = nextRoundControls(ui.options);
+    if (ui.options.isHost && ui.options.onReplaySetup) {
+      next += button(escapeHtml(ui.options.replaySetupLabel), "replay-setup", ui.options.nextRound?.status !== "starting", board?.complete ? "primary" : "secondary");
+    }
+  }
+  let standings = board;
+  if (!standings) {
+    const deltas = hasServerScores ? handDeltas : (currentRules ? settlements : archivedSettlements)(result,view.bid.suit);
+    standings = {members:deltas.map((lastDelta,seat)=>({seat,name:nameAtSeat(ui,seat),lastDelta}))};
+  }
+  const table = board?.complete ? "" : scoreTable(standings,seat,{roundResult:true,title:"플레이어 성적"});
   return `<div class="g-outcome-heading"${outcome.role ? ` data-won="${outcome.won}"` : ""}><h2>${outcome.title}</h2>${roleLabel}</div>
+    ${next ? `<div class="g-result-actions">${next}</div>` : ""}
     ${payout}<p>공약 ${escapeHtml(result.target)}점 ${result.won ? "달성" : "실패"} · 여당 ${escapeHtml(result.points)}점 · 야당 ${20 - result.points}점</p>
-    ${claimResult}${breakdown}${next}`;
+    ${claimResult}${breakdown}${table}`;
 }
 function previousTrick(view, nameAt) {
   const last = view.lastTrick;
@@ -739,10 +754,8 @@ function mountTable(root) {
     <header class="g-nav"><div class="g-nav-inner">
       <div class="g-brand"><i aria-hidden="true">♠</i><span>Mighty Club</span></div>
       <span class="g-nav-divider"></span><span class="g-nav-phase">게임 테이블</span>
-      <nav class="g-nav-links" aria-label="게임 안내와 게시판">
+      <nav class="g-nav-links" aria-label="게임 안내">
         <button type="button" class="g-btn g-top" data-do="rules" aria-haspopup="dialog" aria-controls="modal">게임 규칙</button>
-        <button type="button" class="g-btn g-top" data-do="community" aria-haspopup="dialog" aria-controls="community-dialog">자유게시판</button>
-        <button type="button" class="g-btn g-top" data-do="support" aria-haspopup="dialog" aria-controls="support-dialog">비공개 문의</button>
       </nav>
       <div class="g-nav-actions"><button type="button" class="g-btn g-top g-sound" data-do="sound" aria-label="효과음">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9h4l5-4v14l-5-4H3z"/><path class="g-sound-on" d="M16 8a6 6 0 0 1 0 8m3-11a10 10 0 0 1 0 14"/><path class="g-sound-off" d="m16 9 5 6m0-6-5 6"/></svg><span>효과음</span>
@@ -829,8 +842,7 @@ function redraw(ui, newDeal = false) {
   }
   const final = root.querySelector(".g-match-final");
   if (finished) {
-    const action = options.isHost && !options.departing && options.onReplaySetup ? button(escapeHtml(options.replaySetupLabel), "replay-setup") : "";
-    const summary = scoreTable(board, options.settlementSeat ?? view.seat, {final:true, title:"최종 순위"}) + action;
+    const summary = scoreTable(board, options.settlementSeat ?? view.seat, {final:true, title:"최종 순위"});
     if (ui.finalHtml !== summary) final.innerHTML = summary;
     ui.finalHtml = summary;
   } else if (!final.hidden) {
@@ -940,8 +952,6 @@ function bind(ui) {
     }
     if (kind === "close-records") return ui.root.querySelector(".g-records-dialog").close();
     if (kind === "rules") return ui.options.onRules?.();
-    if (kind === "community") return ui.options.onCommunity?.();
-    if (kind === "support") return ui.options.onSupport?.();
     if (kind === "leave") return ui.options.onLeave?.();
     if (kind === "replay") return ui.options.onReplay?.();
     if (kind === "toggle-next-round") return ui.options.onToggleNextRound?.();

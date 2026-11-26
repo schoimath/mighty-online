@@ -1,55 +1,64 @@
 const entities = {'&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'};
 const escape = value => String(value).replace(/[&<>"']/g, ch => entities[ch]);
 
-export function visibilityPicker(isPublic = false) {
-  return `<fieldset class="series-picker public-visibility"><legend>공개 범위</legend>
-    <div><label><input type="radio" name="visibility" value="private"${isPublic ? '' : ' checked'}><span>초대 전용</span></label>
-    <label><input type="radio" name="visibility" value="public"${isPublic ? ' checked' : ''}><span>공개 테이블</span></label></div>
-    <small>공개 테이블은 로비에 표시되며 누구나 참가하거나 관전할 수 있습니다.</small></fieldset>`;
+const suits = [
+  {name:'스페이드', mark:'♠'}, {name:'하트', mark:'♥', red:true},
+  {name:'다이아', mark:'♦', red:true}, {name:'클로버', mark:'♣'}
+];
+
+export function publicTableName(slot) {
+  const suit = suits[slot - 1];
+  return suit ? suit.name + ' 테이블' : '공개 테이블';
 }
 
-function roomRow(room) {
-  const {phase, humanCount, roundNumber, roundLimit} = room;
-  const code = escape(room.code), name = escape(room.hostName);
-  const waiting = phase === 'waiting';
-  const state = waiting ? '대기 중' : phase === 'playing' ? '게임 중' : '판 종료';
-  const series = roundLimit ? roundLimit + '판 경기' : '무제한 경기';
-  const progress = !waiting && roundNumber > 0 ? roundNumber + '번째 판 · ' + series : series;
-  const canJoin = waiting && humanCount < 5;
-  const intent = canJoin ? 'play' : 'reserve';
-  const action = canJoin ? '참가하기' : waiting ? '자리 예약' : '다음 판 예약';
+function roomRow(suit, slot, room, loading) {
+  const code = 'PUB00' + slot, name = publicTableName(slot);
+  const phase = room?.phase, empty = phase === 'empty', waiting = phase === 'waiting';
+  const active = ['waiting', 'playing', 'finished'].includes(phase);
+  const state = {empty:'빈 테이블', waiting:'대기 중', playing:'게임 중', finished:'판 종료', settling:'정산 중'}[phase] ||
+    (loading ? '확인 중' : '확인 불가');
+  const stateClass = phase === 'playing' ? 'is-playing' : !active ? 'is-idle' : '';
+  const join = (intent, text) => `<button type="button" class="${intent === 'watch' ? 'public-watch' : 'public-join'}" data-public-code="${code}" data-public-slot="${slot}" data-public-intent="${intent}"${empty ? ' data-public-empty' : ''} aria-label="${name} ${text}">${text}</button>`;
+  let meta = '';
+  let counts = '';
+  let actions = '';
+  if (active) {
+    const series = room.roundLimit ? escape(room.roundLimit) + '판 경기' : '무제한 경기';
+    const progress = !waiting && room.roundNumber > 0 ? escape(room.roundNumber) + '번째 판 · ' + series : series;
+    meta = '<span>방장 ' + escape(room.hostName) + '</span><span>' + progress + '</span>';
+    counts = `<strong>참가 ${escape(room.humanCount)} / 5</strong><span>관전 ${escape(room.spectatorCount)}명${room.reservationCount ? ' · 예약 ' + escape(room.reservationCount) + '명' : ''}</span>`;
+    const canJoin = waiting && room.humanCount < 5;
+    actions = join('watch', '관전하기') + (canJoin ? join('play', '참가하기') : join('reserve', waiting ? '자리 예약' : '다음 판 예약'));
+  } else if (empty) {
+    meta = '<span>첫 참가자가 방장이 됩니다.</span>';
+    counts = '<strong>참가 0 / 5</strong>';
+    actions = join('play', '입장하기');
+  } else if (phase === 'settling') {
+    meta = '<span>이전 판 정산이 끝나면 입장할 수 있습니다.</span>';
+  }
   return `<li class="public-table-row">
-    <div class="public-table-details"><div class="public-table-title"><span class="public-phase${phase === 'playing' ? ' is-playing' : ''}">${state}</span>
-      <h3>${name}님의 테이블</h3></div>
-      <div class="public-table-meta"><span>${escape(progress)}</span><span>방 코드 <bdi>${code}</bdi></span></div>
-    </div>
-    <div class="public-counts"><strong>참가 ${escape(humanCount)} / 5</strong>
-      <span>관전 ${escape(room.spectatorCount)}명${room.reservationCount ? ' · 예약 ' + escape(room.reservationCount) + '명' : ''}</span></div>
-    <div class="public-row-actions">
-      <button type="button" class="public-watch" data-public-code="${code}" data-public-intent="watch" aria-label="${name}님의 테이블 관전하기">관전하기</button>
-      <button type="button" class="public-join" data-public-code="${code}" data-public-intent="${intent}" aria-label="${name}님의 테이블 ${action}">${action}</button>
-    </div></li>`;
+    <div class="public-table-details"><span aria-hidden="true" class="public-suit${suit.red ? ' red' : ''}">${suit.mark}</span>
+      <div><div class="public-table-title"><h3>${name}</h3><span class="public-phase ${stateClass}">${state}</span></div>
+      ${meta ? '<div class="public-table-meta">' + meta + '</div>' : ''}</div></div>
+    <div class="public-counts">${counts}</div><div class="public-row-actions">${actions}</div></li>`;
 }
 
 const listMarkup = new WeakMap();
 
-export function renderPublicTables(rooms, {loading = false, error = '', capacity} = {}) {
+export function renderPublicTables(rooms, {loading = false, error = ''} = {}) {
   const list = document.getElementById('public-list');
   const counter = document.getElementById('public-count');
   const status = document.getElementById('public-status');
   const refresh = document.getElementById('public-refresh');
-  const uncertain = !rooms.length && (loading || error);
-  counter.hidden = Boolean(uncertain);
-  counter.textContent = Number.isInteger(capacity) ? rooms.length + ' / ' + capacity : rooms.length + '개';
-  counter.title = Number.isInteger(capacity) ? '동시에 열 수 있는 공개 테이블 ' + capacity + '개' : '';
-  counter.setAttribute('aria-label', '현재 ' + rooms.length + '개' + (capacity ? ', 최대 ' + capacity + '개' : ''));
+  const slots = new Map(rooms.filter(room => room.code === 'PUB00' + room.slot).map(room => [room.slot, room]));
+  counter.hidden = slots.size !== suits.length;
+  counter.textContent = '사용 중 ' + [...slots.values()].filter(r => r.phase !== 'empty').length + ' / ' + suits.length;
   refresh.disabled = loading;
-  const message = error ? (error.message || String(error)) : rooms.length ? '' :
-    loading ? '공개 테이블을 찾는 중…' : '아직 열린 공개 테이블이 없습니다.';
+  const message = error ? (error.message || String(error)) : loading && !slots.size ? '테이블 상태를 확인하고 있습니다…' : '';
   if (status.textContent !== message) status.textContent = message;
   status.hidden = !message;
-  list.hidden = !rooms.length;
-  const html = rooms.map(roomRow).join('');
+  list.hidden = false;
+  const html = suits.map((suit, i) => roomRow(suit, i + 1, slots.get(i + 1), loading)).join('');
   if (listMarkup.get(list) === html) return;
   const active = list.contains(document.activeElement) ? document.activeElement.dataset : null;
   list.innerHTML = html;

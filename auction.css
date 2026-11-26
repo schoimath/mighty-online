@@ -130,3 +130,10 @@
   .g-bidder b { font-size: .71rem; }
   .g-bidder .g-bid-seat { width: 13px; height: 13px; font-size: .66rem; }
 }
+.g-bid-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; width: min(100%, 16rem); }
+.g-bid-actions .g-btn { min-height: 44px; margin: 0; white-space: nowrap; }
+.g-bid-actions .g-primary:enabled { color: #183b28; background: #bdd9ad; border-color: #d2e6c5; }
+.g-bid-actions .g-primary:enabled:hover { background: #d0e6c4; }
+.g-bid-actions .g-secondary:enabled { color: #472e19; background: #edc28f; border-color: #f3d4af; }
+.g-bid-actions .g-secondary:enabled:hover { background: #f6d3a9; }
+.g-bid-actions .g-btn:disabled { color: #acb7ac; background: #364d40; border-color: #526658; }

@@ -164,8 +164,7 @@ function firstPlayableRevision(row) {
   return change?.revision === row.revision ? change.from : row.revision;
 }
 
-async function changePace(row, id, pace, db, now) {
-  check(row.host === id, '방장만 진행 속도를 변경할 수 있습니다.', 403);
+async function changePace(row, pace, save, now) {
   check(pace === normalizeGameSpeed(pace), '테이블 진행 속도를 확인해 주세요.');
   for (let retry = 0; ; retry++) {
     const state = row.state;
@@ -179,8 +178,37 @@ async function changePace(row, id, pace, db, now) {
     }
     state.pace = pace;
     state.lastPaceChange = {from:firstPlayableRevision(row), revision:row.revision + 1};
-    row = await db.save(row);
+    row = (await save(row)).hand;
   }
+}
+
+async function controlHand(input, id, db, hand, now) {
+  const legacy = input.op === 'pace';
+  if (!legacy) check(typeof input.credential === 'string' && /^[0-9a-f]{64}$/.test(input.credential) &&
+    Number.isSafeInteger(input.term) && input.term>0, '방장 권한을 확인해 주세요.', 403);
+  const proof = {legacy, id, credential:legacy ? null : input.credential, term:legacy ? null : input.term};
+  const save = row => db.control(hand, proof, row);
+  let context = await db.control(hand, proof);
+  check(context?.hand, '해당 판을 찾을 수 없습니다.', 404);
+  if (input.op !== 'room-takeover') {
+    const row = await changePace(context.hand, input.pace, save, now);
+    const receipt = present(row, legacy ? id : null, now);
+    return legacy ? receipt : {...receipt, publicGame:receipt.game};
+  }
+  for (let retry = 0; !context.hand.state.round.result; retry++) {
+    const {hand:row, departedSeats} = context;
+    // The database derives this list from the authorized host changes since
+    // the deal. A client cannot nominate someone else's seat for substitution.
+    const leaving = departedSeats.filter(seat => row.seats[seat] && !row.state.bots[seat]);
+    if (!leaving.length) break;
+    check(retry < 4, '차례가 바뀌었습니다. 다시 시도해 주세요.', 409);
+    const timed = usesTurnClock(row.state);
+    for (const seat of leaving) replaceSeat(row.state, seat);
+    if (leaving.includes(row.state.round.turn) || (timed && !usesTurnClock(row.state))) scheduleTurn(row.state, now);
+    context = await save(row);
+  }
+  const receipt = present(context.hand, null, now);
+  return {...receipt, publicGame:receipt.game};
 }
 
 // All persistence goes through trusted, transactional RPCs. The original
@@ -188,13 +216,15 @@ async function changePace(row, id, pace, db, now) {
 export async function operateHand(input, accountId, db, now = Date.now()) {
   check(input && typeof input === 'object' && !Array.isArray(input), '요청을 확인해 주세요.');
   const {op} = input;
-  check(['ready','start','active','view','act','leave','pace','watch','tick'].includes(op), '지원하지 않는 요청입니다.');
+  const roomControl = op === 'room-takeover' || op === 'room-pace';
+  check(roomControl || ['ready','start','active','view','act','leave','pace','watch','tick'].includes(op), '지원하지 않는 요청입니다.');
   const publicRead = op === 'watch' || op === 'tick';
   const id = accountId?.toLowerCase() ?? null;
-  if (!publicRead) check(uuid(id), '이메일 인증 후 로그인해 주세요.', 401);
+  if (!roomControl && !publicRead) check(uuid(id), '이메일 인증 후 로그인해 주세요.', 401);
   if (op === 'active') return {handId:await db.active()};
   check(uuid(input.handId), '판 번호가 올바르지 않습니다.');
   const hand = input.handId.toLowerCase();
+  if (roomControl || op === 'pace') return controlHand(input, id, db, hand, now);
   if (op === 'ready' || op === 'start') {
     const spec = manifestOf(input);
     const hash = await hashManifest(spec);
@@ -214,7 +244,6 @@ export async function operateHand(input, accountId, db, now = Date.now()) {
   check(row, '해당 판을 찾을 수 없습니다.', 404);
   const seat = id ? row.seats.indexOf(id) : -1;
   if (!publicRead) check(seat >= 0 || row.host === id, '이 판의 참가 계정을 확인해 주세요.', 403);
-  if (op === 'pace') return present(await changePace(row, id, input.pace, db, now), id, now);
   const state = row.state;
   let changed = false;
   if (op === 'leave') {

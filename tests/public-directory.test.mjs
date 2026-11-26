@@ -1,145 +1,101 @@
-import test from 'node:test';
 import assert from 'node:assert/strict';
-import {EventEmitter} from 'node:events';
-import {setImmediate as turn} from 'node:timers/promises';
-import {listPublicRooms, publishPublicRoom, PUBLIC_ROOM_LIMIT} from '../public-directory.js';
+import test from 'node:test';
+import {listPublicRooms,reserveDirectoryRoom,watchDirectoryRoom,PUBLIC_ROOM_LIMIT,PRIVATE_ROOM_LIMIT} from '../public-directory.js';
 
-// PeerServer arbitrates a signaling ID. Absent destinations report errors
-// on the dialing peer, while each established DataConnection is independent.
-function signaling(t) {
-  const peers = new Map(), silent = new Set();
-  class Link extends EventEmitter {
-    send(value) { queueMicrotask(() => this.other.emit('data', structuredClone(value))); }
-    close() {
-      if (this.closed) return;
-      this.closed = true;
-      this.emit('close');
-      this.other?.close();
-    }
-  }
-  class Peer extends EventEmitter {
-    constructor(id) {
-      super();
-      this.id = id;
-      this.links = [];
-      queueMicrotask(() => {
-        if (this.destroyed) return;
-        if (peers.has(id)) {
-          this.emit('error', {type:'unavailable-id'});
-          return;
-        }
-        peers.set(id, this);
-        this.emit('open', id);
-      });
-    }
-    connect(id, {label}) {
-      const link = new Link();
-      this.links.push(link);
-      queueMicrotask(() => {
-        if (this.destroyed || silent.has(id)) return;
-        const target = peers.get(id);
-        if (!target) {
-          this.emit('error', {type:'peer-unavailable', message:'Could not connect to peer ' + id});
-          return;
-        }
-        const incoming = new Link();
-        target.links.push(incoming);
-        incoming.label = label;
-        link.other = incoming;
-        incoming.other = link;
-        target.emit('connection', incoming);
-        incoming.emit('open');
-        link.emit('open');
-      });
-      return link;
-    }
-    destroy() {
-      if (this.destroyed) return;
-      this.destroyed = true;
-      if (peers.get(this.id) === this) peers.delete(this.id);
-      for (const link of this.links) link.close();
-      this.emit('close');
-    }
-  }
-  const prior = globalThis.peerjs;
-  globalThis.peerjs = {Peer};
-  t.after(() => { globalThis.peerjs = prior; });
-  const active = new AbortController();
-  t.after(() => active.abort());
-  const publish = getSummary => publishPublicRoom({getSummary, signal:active.signal});
-  return {peers, silent, publish};
+const client={url:'https://example.invalid',publishableKey:'test-public',state:{user:{id:'member'}},accessToken:async()=>'member-token'};
+const store={id:'archive',credential:'controller',term:1};
+const names=['스페이드 테이블','하트 테이블','다이아 테이블','클로버 테이블'];
+const slots=names.map((name,i)=>({slot:i+1,name,code:'PUB00'+(i+1),phase:'empty'}));
+const summary={phase:'waiting',hostName:'방장',humanCount:2,spectatorCount:0,reservationCount:0,roundNumber:1,roundLimit:10};
+
+function transport(t,handler) {
+  const calls=[];
+  t.mock.method(globalThis,'fetch',async(url,options)=>{
+    if (options.signal.aborted) throw options.signal.reason;
+    const entry={operation:url.split('mighty_directory_').pop(),args:JSON.parse(options.body),headers:options.headers};
+    calls.push(entry);
+    const value=await handler(entry,calls.length);
+    return value instanceof Response ? value : new Response(value==null ? null : JSON.stringify(value));
+  });
+  return calls;
 }
 
-const summary = code => ({
-  code, hostName:'마이티', phase:'waiting', humanCount:1, spectatorCount:0,
-  reservationCount:0, roundNumber:0, roundLimit:10
+test('the public list contains the four permanent tables and does not send account authorization',async t=>{
+  const calls=transport(t,()=>slots);
+  assert.equal(PUBLIC_ROOM_LIMIT,4);
+  assert.equal(PRIVATE_ROOM_LIMIT,6);
+  assert.deepEqual(await listPublicRooms({client}),slots);
+  assert.deepEqual(calls[0],{operation:'list',args:{},headers:{apikey:'test-public','Content-Type':'application/json'}});
+  const cancelled=new AbortController();
+  cancelled.abort();
+  await assert.rejects(listPublicRooms({client,signal:cancelled.signal}),{name:'AbortError'});
+  assert.equal(calls.length,1);
 });
 
-test('concurrent public hosts share eight slots, preserve random room codes and release on close', async t => {
-  const {peers, publish} = signaling(t);
-  assert.deepEqual(await listPublicRooms(), []);
-  const claims = await Promise.allSettled(Array.from({length:PUBLIC_ROOM_LIMIT + 2}, (_, i) =>
-    publish(() => summary('MIGHT' + i))));
-  const accepted = claims.filter(p => p.status === 'fulfilled');
-  assert.equal(accepted.length, PUBLIC_ROOM_LIMIT);
-  assert.equal(peers.size, PUBLIC_ROOM_LIMIT);
-  assert.equal(claims.filter(p => p.status === 'rejected' && p.reason.message.includes('8개')).length, 2);
-  const rows = await listPublicRooms();
-  assert.equal(new Set(rows.map(r => r.code)).size, PUBLIC_ROOM_LIMIT);
-  accepted[0].value.close();
-  await publish(() => summary('ABC234'));
-  assert.ok((await listPublicRooms()).some(r => r.code === 'ABC234'));
+test('an incomplete or malformed directory cannot replace the last valid lobby listing',async t=>{
+  const responses=[slots.slice(0,3),slots.map((r,i)=>i===2 ? {...r,code:'PRIV01'} : r)];
+  transport(t,()=>responses.shift());
+  await assert.rejects(listPublicRooms({client}),/목록/);
+  await assert.rejects(listPublicRooms({client}),/목록/);
 });
 
-test('lookups read live public fields, skip malformed advertisements and release the reader', async t => {
-  const {peers, publish} = signaling(t);
-  const room = {...summary('ABC234'), hand:['JK'], members:['private id']};
-  const lease = await publish(() => room);
-  await publish(() => ({...room, code:['ABC234']}));
-  assert.deepEqual(await listPublicRooms(), [summary('ABC234')]);
-  room.phase = 'playing';
-  room.spectatorCount++;
-  assert.deepEqual(await listPublicRooms(), [{...summary('ABC234'), phase:'playing', spectatorCount:1}]);
-  assert.equal(peers.size, 2);
-  lease.close();
-  assert.deepEqual(await listPublicRooms(), []);
+test('a public reservation loser gets the same code; private creation uses an unnamed slot and the explicit title',async t=>{
+  const responses=[{claimed:false,slot:2,code:'PUB002'},{claimed:true,slot:5,code:'INVITE'},
+    new Response(JSON.stringify({code:'P0001',message:'비공개 방 6개가 모두 열려 있습니다.'}),{status:400})];
+  const calls=transport(t,()=>responses.shift());
+  const join=await reserveDirectoryRoom(client,{store,code:'PUB002',slot:2,hostName:'지현'});
+  assert.deepEqual(join,{claimed:false,slot:2,code:'PUB002'});
+  assert.deepEqual(await reserveDirectoryRoom(client,{store,code:'INVITE',name:'친구들',hostName:'지현'}),
+    {claimed:true,slot:5,code:'INVITE'});
+  assert.deepEqual(calls[1].args,{p_room_id:store.id,p_credential:store.credential,p_code:'INVITE',p_slot:null,p_name:'친구들',p_host:'지현'});
+  assert.equal(calls[1].headers.Authorization,'Bearer member-token');
+  await assert.rejects(reserveDirectoryRoom(client,{store,code:'PRIV07',hostName:'지현'}),/6개/);
 });
 
-test('a stalled probe and absent peers cannot cancel a responding room, and a scan can be aborted', async t => {
-  t.mock.timers.enable({apis:['setTimeout']});
-  const {peers, silent, publish} = signaling(t);
-  await publish(() => summary('ABC234'));
-  const [occupied] = peers.keys();
-  const other = occupied.replace(/\d+$/, n => String((Number(n) + 1) % PUBLIC_ROOM_LIMIT));
-  silent.add(other);
-  const scan = listPublicRooms();
-  await turn();
-  t.mock.timers.tick(8001);
-  assert.deepEqual(await scan, [summary('ABC234')]);
-  const controller = new AbortController();
-  const second = listPublicRooms({signal:controller.signal});
-  await turn();
-  controller.abort();
-  await assert.rejects(second, /취소/);
-  assert.equal(peers.size, 1);
+test('directory refresh sends changed public fields only, heartbeats a quiet room and stops without closing on handoff',async t=>{
+  t.mock.timers.enable({apis:['Date','setInterval'],now:10000});
+  const calls=transport(t,()=>null);
+  let view={...summary,hand:['SA'],chipId:'private',email:'private'};
+  const original=watchDirectoryRoom(client,{store,getSummary:()=>view});
+  t.after(()=>original.stop());
+  await original.refresh();
+  await original.refresh();
+  assert.equal(calls.length,1);
+  assert.deepEqual(calls[0].args,{p_room_id:'archive',p_credential:'controller',p_term:1,p_summary:summary});
+  view={...view,phase:'playing',spectatorCount:1};
+  await original.refresh();
+  assert.equal(calls.length,2);
+  t.mock.timers.tick(20000);
+  await original.refresh();
+  assert.equal(calls.length,3);
+  original.stop();
+  t.mock.timers.tick(60000);
+  await original.refresh();
+  assert.equal(calls.length,3);
+  const next={...store,term:2,credential:'successor'};
+  const successor=watchDirectoryRoom(client,{store:next,getSummary:()=>view});
+  t.after(()=>successor.stop());
+  await successor.refresh();
+  assert.equal(calls.at(-1).args.p_room_id,'archive');
+  assert.equal(calls.at(-1).args.p_term,2);
+  await Promise.all([successor.close(),successor.close()]);
+  assert.deepEqual(calls.at(-1),{operation:'close',headers:{apikey:'test-public','Content-Type':'application/json',Authorization:'Bearer member-token'},
+    args:{p_room_id:'archive',p_credential:'successor',p_term:2}});
+  assert.equal(calls.filter(c=>c.operation==='close').length,1);
 });
 
-test('a disconnected slot is reacquired without displacing its new owner or advertising twice', async t => {
-  t.mock.timers.enable({apis:['setTimeout']});
-  const {peers, publish} = signaling(t);
-  const lease = await publish(() => summary('ABC234'));
-  const [first] = peers.values();
-  first.emit('disconnected');
-  assert.equal(peers.size, 0);
-  const other = new globalThis.peerjs.Peer(first.id);
-  await turn();
-  t.mock.timers.tick(2000);
-  await turn();
-  assert.equal(peers.size, 2);
-  assert.equal(peers.get(first.id), other);
-  other.destroy();
-  assert.deepEqual(await listPublicRooms(), [summary('ABC234')]);
-  lease.close();
-  t.mock.timers.tick(30000);
-  assert.equal(peers.size, 0);
+test('private heartbeat accepts an anonymous elected controller and a retired lease stops retrying',async t=>{
+  t.mock.timers.enable({apis:['Date','setInterval'],now:10000});
+  const errors=[];
+  const calls=transport(t,()=>new Response(JSON.stringify({code:'P0002',message:'이미 닫힌 방입니다.'}),{status:404}));
+  const guestClient={...client,state:{user:null}};
+  const listing=watchDirectoryRoom(guestClient,{store,getSummary:()=>null,onError:error=>errors.push(error.message)});
+  t.after(()=>listing.stop());
+  await listing.refresh();
+  assert.equal(calls[0].args.p_summary,null);
+  assert.equal(calls[0].headers.Authorization,undefined);
+  assert.equal(errors[0],'이미 닫힌 방입니다.');
+  t.mock.timers.tick(60000);
+  await listing.refresh();
+  assert.equal(calls.length,1);
 });

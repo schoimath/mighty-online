@@ -89,15 +89,16 @@ function goodbye(link, reason) {
   setTimeout(() => { if (link.open) link.close(); }, 1500);
 }
 
-export async function hostRoom({onJoin, onMessage, onLeave, onError, signal} = {}) {
+export async function hostRoom({onJoin, onMessage, onLeave, onError, signal, reclaimCode} = {}) {
   let code, peer;
+  if (reclaimCode && !/^[A-Z0-9]{6}$/.test(reclaimCode)) throw new Error('방 코드를 확인해 주세요.');
   for (let attempt = 0; attempt < 4; attempt++) {
-    code = randomCode(6);
+    code = reclaimCode || randomCode(6);
     try {
       peer = await openPeer(CHANNEL + '-' + code, signal);
       break;
     } catch (error) {
-      if (error.type !== 'unavailable-id' || attempt === 3) throw error;
+      if (reclaimCode || error.type !== 'unavailable-id' || attempt === 3) throw error;
     }
   }
   if (signal?.aborted) {
@@ -131,24 +132,35 @@ export async function hostRoom({onJoin, onMessage, onLeave, onError, signal} = {
     peer.destroy();
   }
   peer.on('connection', link => {
-    const id = String(nextId++);
+    let id = String(nextId++);
     const guest = {link, pending: []};
     const timer = setTimeout(() => link.close(), CONNECT_TIMEOUT);
     watchLink(link, () => {
       clearTimeout(timer);
-      if (guests.delete(id) && !guest.pending && !roomClosed) onLeave?.(id);
+      if (guests.get(id) !== guest) return;
+      guests.delete(id);
+      if (!guest.pending && !roomClosed) onLeave?.(id);
     });
-    link.on('open', () => {
+    link.on('open', async () => {
       clearTimeout(timer);
       const name = link.metadata?.name;
       if (roomClosed || link.label !== CHANNEL || typeof name !== 'string' || !name.trim() || name.length > 32) {
         goodbye(link, '입장 정보를 확인하고 다시 시도해 주세요.');
         return;
       }
+      const memberKey = link.metadata?.memberKey;
+      if (typeof memberKey === 'string' && /^[a-f0-9-]{72}$/.test(memberKey)) {
+        // Only the returning browser has the key. Checkpoints contain its digest.
+        const hash = await crypto.subtle.digest('SHA-256',new TextEncoder().encode(memberKey));
+        id = Array.from(new Uint8Array(hash), byte => byte.toString(16).padStart(2,'0')).join('');
+        if (!link.open || roomClosed) return;
+      }
+      if (guests.has(id)) { goodbye(link, '이 연결은 이미 방에 있습니다.'); return; }
       guests.set(id, guest);
       let decision;
       try {
-        decision = onJoin?.(id, name.trim(), link.metadata?.intent, link.metadata?.accountId);
+        decision = onJoin?.(id, name.trim(), link.metadata?.intent, link.metadata?.accountId,
+          {canInherit:id.length === 64, roomId:link.metadata?.returnRoom});
       } catch (error) {
         onError?.(error);
         decision = '방에 입장하지 못했습니다.';
@@ -183,7 +195,7 @@ export async function hostRoom({onJoin, onMessage, onLeave, onError, signal} = {
   return {code, send, drop, close};
 }
 
-export async function joinRoom(rawCode, rawName, {onMessage, onClose, onError, signal, intent = 'play', accountId} = {}) {
+export async function joinRoom(rawCode, rawName, {onMessage, onClose, onError, signal, intent = 'play', accountId, memberKey, returnRoom} = {}) {
   const code = normalizeRoomCode(rawCode);
   if (!/^[A-Z0-9]{6}$/.test(code)) throw new Error('여섯 자리 방 코드를 입력해 주세요.');
   const name = String(rawName ?? '').trim();
@@ -202,13 +214,13 @@ export async function joinRoom(rawCode, rawName, {onMessage, onClose, onError, s
       clearTimeout(timer);
       signal?.removeEventListener('abort', abort);
     }
-    function end(reason, silently = false) {
+    function end(reason, silently = false, removed = false) {
       if (finished) return;
       finished = true;
       cleanup();
       peer.destroy();
       if (!accepted) reject(new Error(reason));
-      else if (!silently) onClose?.(reason);
+      else if (!silently) onClose?.(reason, removed);
     }
     function abort() { end('연결을 취소했습니다.'); }
     function close() { end('방에서 나왔습니다.', true); }
@@ -228,7 +240,7 @@ export async function joinRoom(rawCode, rawName, {onMessage, onClose, onError, s
     peer.on('connection', incoming => incoming.close());
     try {
       link = peer.connect(CHANNEL + '-' + code, {
-        label: CHANNEL, reliable: true, serialization: 'binary', metadata: {name, intent, accountId}
+        label: CHANNEL, reliable: true, serialization: 'binary', metadata: {name, intent, accountId, memberKey, returnRoom}
       });
     } catch {
       end('방장과 연결할 수 없습니다. 다시 시도해 주세요.');
@@ -242,7 +254,7 @@ export async function joinRoom(rawCode, rawName, {onMessage, onClose, onError, s
     link.on('data', packet => {
       if (finished || !packet) return;
       if (packet.kind === 'bye') {
-        end(typeof packet.reason === 'string' ? packet.reason : '방에서 퇴장했습니다.');
+        end(typeof packet.reason === 'string' ? packet.reason : '방에서 퇴장했습니다.', false, true);
       } else if (!accepted && packet.kind === 'welcome') {
         accepted = true;
         cleanup();

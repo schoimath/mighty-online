@@ -22,6 +22,64 @@ export function meta(label, date) {
   return node;
 }
 
+// Keep the editor and its confirmation attached to the item being changed.
+// Removing that item on navigation or logout also invalidates any pending UI response.
+export function authorActions({name, title, body, limit, removal, change, saved}) {
+  const box = element('div',null,'author-actions');
+  const edit = button('수정',editForm), remove = button('삭제',confirmRemoval);
+  edit.setAttribute('aria-label',name+' 수정');
+  remove.setAttribute('aria-label',name+' 삭제');
+  function restore(focus) {
+    box.replaceChildren(edit,remove);
+    focus?.focus();
+  }
+  function submitForm(form, payload, submit) {
+    const status = element('p',null,'form-error');
+    status.setAttribute('role','alert');
+    form.append(status);
+    form.onsubmit = async event => {
+      event.preventDefault();
+      if (!form.isConnected || submit.disabled) return;
+      const data = payload();
+      for (const control of form.elements) control.disabled = true;
+      status.textContent='';
+      try {
+        await change(data);
+        if (form.isConnected) saved(data.p_delete);
+      } catch (error) {
+        if (!form.isConnected) return;
+        status.textContent=boardError(error);
+        for (const control of form.elements) control.disabled = false;
+      }
+    };
+  }
+  function editForm() {
+    const form=element('form'), subject=element('input'), text=element('textarea');
+    if (title !== undefined) {
+      const label=element('label','제목','field');
+      subject.value=title; subject.required=true; subject.maxLength=100; label.append(subject); form.append(label);
+    }
+    const label=element('label',name+' 내용','field');
+    text.value=body; text.rows=4; text.required=true; text.maxLength=limit; label.append(text);
+    const submit=element('button','수정 저장','primary-button');
+    submit.type='submit';
+    form.append(label,submit,button('취소',() => restore(edit)));
+    submitForm(form,() => ({p_delete:false,p_title:subject.value.trim(),p_body:text.value.trim()}),submit);
+    box.replaceChildren(form);
+    (title === undefined ? text : subject).focus();
+  }
+  function confirmRemoval() {
+    const form=element('form'), cancel=button('취소',() => restore(remove)), submit=element('button','삭제하기','plain-button author-delete');
+    submit.type='submit';
+    form.append(element('p',removal),cancel,submit);
+    submitForm(form,() => ({p_delete:true,p_title:null,p_body:null}),submit);
+    box.replaceChildren(form);
+    cancel.focus();
+  }
+  restore();
+  return box;
+}
+
 export function pagination(data, go) {
   const pages = Math.ceil(data.total/data.pageSize);
   const nav = element('div',null,'support-pages');

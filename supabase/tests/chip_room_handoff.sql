@@ -1,0 +1,60 @@
+begin;
+do $test$
+declare a uuid:=gen_random_uuid(); b uuid:=gen_random_uuid(); c uuid:=gen_random_uuid(); rid uuid:=gen_random_uuid();
+  h1 uuid:=gen_random_uuid(); h2 uuid:=gen_random_uuid(); legacy uuid:=gen_random_uuid();
+  first_key text:=repeat('a',64); second_key text:=repeat('b',64); observer_key text:=repeat('c',64);
+  b_digest text:=encode(sha256(convert_to(second_key,'UTF8')),'hex'); observer_digest text:=encode(sha256(convert_to(observer_key,'UTF8')),'hex');
+  code text:=upper(substr(md5(rid::text),1,6)); contents jsonb:=jsonb_build_object('manifest',repeat('a',64),'round',jsonb_build_object('phase','bid')); response jsonb;
+begin
+  insert into auth.users(id,email,email_confirmed_at) select id,id::text||'@example.invalid',now() from unnest(array[a,b,c]) id;
+  insert into mighty_private.hands(id,room,host_id,seats,manifest,state,settled) select deal,code,player,array[a,b,c,null,null],repeat('a',64),contents,deal<>h1
+    from (values(h1,a),(h2,b),(legacy,a)) x(deal,player);
+  perform set_config('request.jwt.claims',jsonb_build_object('sub',a)::text,true);
+  set local role authenticated;
+  perform public.mighty_room_chat_open(rid,code,first_key);
+  perform public.mighty_room_chat_link_hand(rid,first_key,1,h1);
+  perform public.mighty_room_chat_successors(rid,first_key,1,
+    jsonb_build_array(jsonb_build_object('accountId',b,'digest',b_digest),jsonb_build_object('accountId',null,'digest',observer_digest)));
+  reset role;
+  assert not has_function_privilege('authenticated','public.mighty_chip_room_control(uuid,text,bigint,uuid,boolean,integer,jsonb)','execute');
+  assert not has_function_privilege('anon','public.mighty_chip_room_control(uuid,text,bigint,uuid,boolean,integer,jsonb)','execute');
+  set local role service_role;
+  assert public.mighty_chip_room_control(h1,first_key,1,a,false)->'departedSeats'='[]';
+  assert public.mighty_chip_room_control(legacy,null,null,a,true)#>>'{hand,revision}'='0';
+  begin perform public.mighty_chip_room_control(legacy,first_key,1,a,false);
+    raise exception 'unlinked hand accepted'; exception when insufficient_privilege then null; end;
+  reset role;
+  set local role authenticated;
+  perform public.mighty_room_chat_transfer(rid,first_key,1,b_digest);
+  perform set_config('request.jwt.claims',jsonb_build_object('sub',b)::text,true);
+  perform public.mighty_room_chat_link_hand(rid,second_key,2,h2);
+  reset role;
+  set local role service_role;
+  assert public.mighty_chip_room_control(h1,second_key,2,b,false)->'departedSeats'='[0]';
+  begin perform public.mighty_chip_room_control(h1,null,null,a,true,0,contents);
+    raise exception 'legacy owner wrote after promotion'; exception when insufficient_privilege then null; end;
+  begin perform public.mighty_chip_room_control(h1,first_key,1,a,false,0,contents);
+    raise exception 'retired host wrote'; exception when insufficient_privilege then null; end;
+  begin perform public.mighty_chip_room_control(h1,second_key,2,c,false,0,contents);
+    raise exception 'different account wrote'; exception when insufficient_privilege then null; end;
+  response:=public.mighty_chip_room_control(h1,second_key,2,b,false,0,contents||'{"pace":"fast"}');
+  assert response#>>'{hand,revision}'='1' and response#>>'{hand,state,pace}'='fast';
+  reset role;
+  set local role authenticated;
+  perform public.mighty_room_chat_transfer(rid,second_key,2,observer_digest);
+  reset role;
+  set local role service_role;
+  assert public.mighty_chip_room_control(h1,observer_key,3,null,false)->'departedSeats'='[0,1]';
+  assert public.mighty_chip_room_control(h2,observer_key,3,null,false)->'departedSeats'='[1]';
+  begin perform public.mighty_chip_room_control(h1,second_key,2,b,false,1,contents);
+    raise exception 'stale actor wrote after second promotion'; exception when insufficient_privilege then null; end;
+  begin perform public.mighty_chip_room_control(h1,observer_key,3,c,false,1,contents);
+    raise exception 'unbound identity wrote'; exception when insufficient_privilege then null; end;
+  response:=public.mighty_chip_room_control(h1,observer_key,3,null,false,1,contents||'{"pace":"normal"}');
+  assert response#>>'{hand,revision}'='2' and response#>>'{hand,state,pace}'='normal';
+  reset role;
+  assert (select seats=array[a,b,c,null,null] and not settled from mighty_private.hands where id=h1);
+  assert (select count(*)=0 from mighty_private.chip_entries where hand_id=h1);
+end
+$test$;
+rollback;

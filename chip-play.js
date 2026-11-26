@@ -5,11 +5,11 @@ import {normalizeGameSpeed, tableDelay} from './table-timing.js';
 export async function callChipService(client, payload) {
   if (!client.url || !client.publishableKey) throw new Error('게임 계정 서버 연결이 필요합니다.');
   const token = payload.op === 'watch' ? null : await client.accessToken();
-  if (payload.op !== 'watch' && !token) throw new Error('이메일 확인 후 로그인해 주세요.');
+  if (!['watch','room-takeover','room-pace'].includes(payload.op) && !token) throw new Error('이메일 확인 후 로그인해 주세요.');
   const headers = {'Content-Type':'application/json', apikey:client.publishableKey};
   if (token) headers.Authorization = 'Bearer ' + token;
   const res = await fetch(client.url.replace(/\/$/, '') + '/functions/v1/chip-hand', {
-    method:'POST', headers, body:JSON.stringify(payload), cache:'no-store', signal:AbortSignal.timeout(20000)
+    method:'POST', headers, body:JSON.stringify(payload), cache:'no-store', redirect:'error', signal:AbortSignal.timeout(20000)
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok || data.error) {
