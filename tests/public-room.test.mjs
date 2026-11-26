@@ -55,6 +55,50 @@ test('the public table creator and entrants can watch, sit or release a waiting-
   assert.equal(new HostSession('초대 방장',undefined,models,10,{hostSpectator:true}).hostSeat,0);
 });
 
+test('public observers claim the numbered seat they saw without replacing an occupant or entering the queue', () => {
+  const room = new HostSession('방장', undefined, Array(5).fill('heuristic'), 10, {publicRoom:true, hostSpectator:true});
+  room.addGuest('one','하나','watch');
+  room.addGuest('two','둘','watch');
+  assert.equal(room.viewFor('one').supportsOpenSeatChoice, true);
+  const opened = room.revision;
+  assert.equal(room.takeOpenSeat(null, 4, opened), true);
+  assert.equal(room.hostSeat, 4);
+  assert.throws(() => room.takeOpenSeat('one', 4, opened), /선택한 자리/);
+  assert.throws(() => room.takeOpenSeat('one', 3, opened), /다시 선택/);
+  assert.throws(() => room.takeOpenSeat('one', 5, room.revision), /유효하지/);
+  assert.throws(() => room.takeOpenSeat('unknown', 2, room.revision), /관전 중/);
+  const seen = room.revision;
+  room.takeOpenSeat('one',3,seen);
+  assert.throws(() => room.takeOpenSeat('two',3,seen), /선택한 자리/);
+  assert.equal(room.viewFor('two').reservation, null);
+  assert.deepEqual(room.publicSummary().seats, [null,null,null,'하나','방장']);
+  room.start();
+  assert.equal(room.viewFor('one').game.seat, 3);
+  assert.throws(() => room.takeOpenSeat('two', 1, room.revision), /공개 대기실/);
+  assert.equal(room.setReservation('two', true), true);
+  assert.deepEqual(room.viewFor('two').reservation, {position:1,seat:null});
+});
+
+test('a returning spectator keeps their standings when selecting a different seat', () => {
+  const room = table(10);
+  room.addGuest('friend','친구','watch');
+  room.takeOpenSeat('friend',3,room.revision);
+  room.start();
+  openPlay(room,3);
+  finish(room);
+  room.returnToRoom();
+  const previous = room.players[3].memberId;
+  const before = room.viewFor('friend').scoreboard.members.find(member => member.id === previous);
+  room.sitOut('friend');
+  room.takeOpenSeat('friend',1,room.revision);
+  const after = room.viewFor('friend').scoreboard.members.find(member => member.id === previous);
+  assert.equal(room.players[1].memberId, previous);
+  assert.equal(after.rounds, 1);
+  assert.equal(after.total, before.total);
+  assert.equal(room.plannedTable().firstSeat, 1);
+  assert.equal(room.viewFor('friend').scoreboard.members.filter(member => member.name === '친구').length, 1);
+});
+
 test('public lobby seats, full-table FIFO and spectator-only membership', () => {
   const room = table(10);
   assert.deepEqual(room.publicSummary(), {hostName:'방장', phase:'waiting', seats:['방장',null,null,null,null], humanCount:1,

@@ -6,6 +6,13 @@ export function normalizeRoomCode(value) {
   return String(value ?? '').trim().toUpperCase().replace(/[\s-]/g, '');
 }
 
+function roomPeerId(code, route) {
+  const base = CHANNEL + '-' + code;
+  if (route == null) return base;
+  if (typeof route !== 'string' || !/^[a-f0-9]{32}$/i.test(route)) throw new Error('테이블의 연결 주소를 다시 확인해 주세요.');
+  return base + '-' + route.toLowerCase();
+}
+
 function randomCode(length) {
   return Array.from(crypto.getRandomValues(new Uint8Array(length)),
     byte => CODE_ALPHABET[byte % CODE_ALPHABET.length]).join('');
@@ -36,7 +43,7 @@ function connectionError(error) {
   return result;
 }
 
-export async function openPeer(id, signal) {
+export async function openPeer(id, signal, timeout = CONNECT_TIMEOUT) {
   if (signal?.aborted) throw cancelled();
   if (!globalThis.peerjs?.Peer) {
     await import('./vendor/peerjs-1.5.5/peerjs.min.js');
@@ -61,7 +68,7 @@ export async function openPeer(id, signal) {
       cleanup();
       resolve(peer);
     }
-    const timer = setTimeout(() => fail(connectionError()), CONNECT_TIMEOUT);
+    const timer = setTimeout(() => fail(connectionError()), timeout);
     signal?.addEventListener('abort', abort, {once: true});
     peer.on('error', failed);
     peer.on('open', opened);
@@ -87,6 +94,7 @@ function watchLink(link, lost) {
     if (state === 'disconnected') timer = setTimeout(finish, 15000);
     if (state === 'failed' || state === 'closed') finish();
   });
+  return () => { done = true; clearTimeout(timer); };
 }
 
 function goodbye(link, reason) {
@@ -96,17 +104,20 @@ function goodbye(link, reason) {
   }
   link.send({kind: 'bye', reason});
   link.close({flush: true});
-  setTimeout(() => { if (link.open) link.close(); }, 1500);
+  if (link.open) {
+    const timer = setTimeout(() => link.close(), 1500);
+    link.once('close', () => clearTimeout(timer));
+  }
 }
 
-export async function hostRoom({onJoin, onMessage, onLeave, onError, signal, reclaimCode, waitForCode = false} = {}) {
+export async function hostRoom({onJoin, onMessage, onLeave, onError, signal, reclaimCode, signalRoute, waitForCode = false} = {}) {
   let code, peer;
   if (reclaimCode && !/^[A-Z0-9]{6}$/.test(reclaimCode)) throw new Error('방 코드를 확인해 주세요.');
   const attempts = reclaimCode ? (waitForCode ? 3 : 1) : 4;
   for (let attempt = 0; attempt < attempts; attempt++) {
     code = reclaimCode || randomCode(6);
     try {
-      peer = await openPeer(CHANNEL + '-' + code, signal);
+      peer = await openPeer(roomPeerId(code,signalRoute), signal);
       break;
     } catch (error) {
       if (error.type !== 'unavailable-id' || attempt + 1 === attempts) throw error;
@@ -118,8 +129,10 @@ export async function hostRoom({onJoin, onMessage, onLeave, onError, signal, rec
     throw cancelled();
   }
   const guests = new Map();
+  const endpoints = new Map();
+  const links = new Map();
+  const aliasOpening = new AbortController();
   let roomClosed = false;
-  let reconnectTimer;
   let nextId = 1;
 
   function send(id, message) {
@@ -139,20 +152,26 @@ export async function hostRoom({onJoin, onMessage, onLeave, onError, signal, rec
   function close() {
     if (roomClosed) return;
     roomClosed = true;
-    clearTimeout(reconnectTimer);
+    aliasOpening.abort();
     guests.clear();
-    peer.destroy();
+    for (const dispose of links.values()) dispose();
+    links.clear();
+    for (const [endpoint,timer] of endpoints) { clearTimeout(timer); endpoint.destroy(); }
+    endpoints.clear();
   }
-  peer.on('connection', link => {
+  function accept(link) {
+    if (roomClosed) { link.close(); return; }
     let id = String(nextId++);
     const guest = {link, pending: []};
     const timer = setTimeout(() => link.close(), CONNECT_TIMEOUT);
-    watchLink(link, () => {
+    const stopWatch = watchLink(link, () => {
+      links.delete(link);
       clearTimeout(timer);
       if (guests.get(id) !== guest) return;
       guests.delete(id);
       if (!guest.pending && !roomClosed) onLeave?.(id);
     });
+    links.set(link, () => { clearTimeout(timer); stopWatch(); });
     link.on('open', async () => {
       clearTimeout(timer);
       const name = link.metadata?.name;
@@ -192,27 +211,40 @@ export async function hostRoom({onJoin, onMessage, onLeave, onError, signal, rec
         onMessage?.(id, packet.message);
       }
     });
-  });
-  function reconnect() {
-    if (roomClosed || peer.destroyed || !peer.disconnected) return;
-    peer.reconnect();
   }
-  peer.on('disconnected', () => {
-    clearTimeout(reconnectTimer);
-    if (!roomClosed) reconnectTimer = setTimeout(reconnect, 2000);
-  });
-  peer.on('error', error => {
-    if (!roomClosed && error.type !== 'peer-unavailable') onError?.(connectionError(error));
-  });
+  function listen(endpoint) {
+    if (roomClosed) { endpoint.destroy(); return; }
+    endpoints.set(endpoint,null);
+    endpoint.on('connection', accept);
+    endpoint.on('disconnected', () => {
+      if (roomClosed) return;
+      clearTimeout(endpoints.get(endpoint));
+      endpoints.set(endpoint,setTimeout(() => {
+        if (!roomClosed && !endpoint.destroyed && endpoint.disconnected) endpoint.reconnect();
+      },2000));
+    });
+    endpoint.on('error', error => {
+      if (!roomClosed && endpoint === peer && error.type !== 'peer-unavailable') onError?.(connectionError(error));
+    });
+  }
+  listen(peer);
+  if (signalRoute && /^PUB00[1-4]$/.test(code)) {
+    // Older clients still dial the fixed address. Its previous owner may
+    // briefly retain it after this new table has acquired the directory slot.
+    void openPeer(roomPeerId(code),aliasOpening.signal).then(listen, () => {});
+  }
   return {code, send, drop, close};
 }
 
-export async function joinRoom(rawCode, rawName, {onMessage, onClose, onError, signal, intent = 'play', accountId, memberKey, returnRoom} = {}) {
+export async function joinRoom(rawCode, rawName, {onMessage, onClose, onError, onProgress, signal, signalRoute, intent = 'play', accountId, memberKey, returnRoom, timeout = CONNECT_TIMEOUT} = {}) {
   const code = normalizeRoomCode(rawCode);
   if (!/^[A-Z0-9]{6}$/.test(code)) throw new Error('여섯 자리 방 코드를 입력해 주세요.');
+  const address = roomPeerId(code,signalRoute);
   const name = String(rawName ?? '').trim();
   if (!name || name.length > 32) throw new Error('닉네임은 1~32자로 입력해 주세요.');
-  const peer = await openPeer(CHANNEL + '-guest-' + randomCode(16), signal);
+  const started = Date.now();
+  onProgress?.('연결 서버에 접속 중…');
+  const peer = await openPeer(CHANNEL + '-guest-' + randomCode(16), signal, timeout);
   if (signal?.aborted) {
     peer.destroy();
     throw cancelled();
@@ -224,7 +256,7 @@ export async function joinRoom(rawCode, rawName, {onMessage, onClose, onError, s
     let link;
     const initial = [];
     const timer = setTimeout(() => unavailable(welcomed ? '방 정보를 받지 못했습니다. 잠시 후 다시 참가해 주세요.' :
-      '방장과 연결하지 못했습니다. 방 코드와 네트워크를 확인해 주세요.'), CONNECT_TIMEOUT);
+      '방장이 응답하지 않습니다. 테이블을 다시 확인해 주세요.'), Math.max(1, timeout - (Date.now() - started)));
     function cleanup() {
       clearTimeout(timer);
       signal?.removeEventListener('abort', abort);
@@ -255,7 +287,8 @@ export async function joinRoom(rawCode, rawName, {onMessage, onClose, onError, s
     peer.on('close', () => unavailable('방장과의 연결이 종료되었습니다.'));
     peer.on('connection', incoming => incoming.close());
     try {
-      link = peer.connect(CHANNEL + '-' + code, {
+      onProgress?.('방장에게 연결 중…');
+      link = peer.connect(address, {
         label: CHANNEL, reliable: true, serialization: 'binary', metadata: {name, intent, accountId, memberKey, returnRoom}
       });
     } catch {
@@ -273,6 +306,7 @@ export async function joinRoom(rawCode, rawName, {onMessage, onClose, onError, s
         end(typeof packet.reason === 'string' ? packet.reason : '방에서 퇴장했습니다.', false, true);
       } else if (packet.kind === 'welcome') {
         welcomed = true;
+        if (!accepted) onProgress?.('대기실 정보를 받는 중…');
       } else if (welcomed && packet.kind === 'game') {
         const message = packet.message;
         if (accepted) { onMessage?.(message); return; }

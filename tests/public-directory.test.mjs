@@ -48,9 +48,34 @@ test('a public reservation loser gets the same code; private creation uses an un
   assert.deepEqual(join,{claimed:false,slot:2,code:'PUB002'});
   assert.deepEqual(await reserveDirectoryRoom(client,{store,code:'INVITE',name:'친구들',hostName:'지현'}),
     {claimed:true,slot:5,code:'INVITE'});
+  assert.deepEqual(calls.map(c=>c.operation),['open_routed','open']);
   assert.deepEqual(calls[1].args,{p_room_id:store.id,p_credential:store.credential,p_code:'INVITE',p_slot:null,p_name:'친구들',p_host:'지현'});
   assert.equal(calls[1].headers.Authorization,'Bearer member-token');
   await assert.rejects(reserveDirectoryRoom(client,{store,code:'PRIV07',hostName:'지현'}),/6개/);
+});
+
+test('public claim, listing and heartbeat preserve the issued signal route and reject malformed addresses',async t=>{
+  const route='0123456789abcdef'.repeat(2);
+  const slot={...slots[0],phase:'waiting',signalRoute:route};
+  let response={claimed:false,slot:1,code:'PUB001',signalRoute:route};
+  const calls=transport(t,()=>response);
+  const claim=()=>reserveDirectoryRoom(client,{store,slot:1,code:'PUB001',hostName:'새 방장'});
+  assert.equal((await claim()).signalRoute,route);
+  response={...response,signalRoute:'wrong'};
+  await assert.rejects(claim(),/방 정보/);
+  response=[slot,...slots.slice(1)];
+  assert.equal((await listPublicRooms({client}))[0].signalRoute,route);
+  response=[{...slot,signalRoute:[route]},...slots.slice(1)];
+  await assert.rejects(listPublicRooms({client}),/목록/);
+  response=null;
+  let view={...summary,signalRoute:route};
+  const listing=watchDirectoryRoom(client,{store,getSummary:()=>view});
+  t.after(()=>listing.stop());
+  await listing.refresh();
+  assert.deepEqual(calls.at(-1).args.p_summary,view);
+  view={...summary,signalRoute:'bad'};
+  await listing.refresh();
+  assert.deepEqual(calls.at(-1).args.p_summary,summary);
 });
 
 test('directory refresh sends changed public fields only, heartbeats a quiet room and stops without closing on handoff',async t=>{
@@ -120,31 +145,35 @@ test('publishes five ordered nickname slots and omits seat contents from legacy 
   assert.deepEqual(calls.at(-1).args.p_summary,summary);
 });
 
-test('a departing document releases its last-person table once, using its current in-memory grant',async t=>{
-  const events=new EventTarget(), oldWindow=globalThis.window;
-  globalThis.window=events;
-  t.after(()=>{ if (oldWindow===undefined) delete globalThis.window; else globalThis.window=oldWindow; });
+test('a departing host releases a solo table once and a cached page cannot refresh or close a successor',async t=>{
   const calls=transport(t,()=>null);
-  const hide=persisted=>events.dispatchEvent(Object.assign(new Event('pagehide'),{persisted}));
   let peers=0;
   const session={...store}, account={...client,state:{user:{id:'member'}}};
   const start=()=>watchDirectoryRoom(account,{store:session,getSummary:()=>summary,canReleaseOnPageHide:()=>peers===0});
   let watcher=start(); t.after(()=>watcher.stop());
   await watcher.refresh();
-  hide(true);
-  peers=1; hide(false);
-  peers=0; session.term=2; hide(false);
-  session.term=1; account.state.user=null; hide(false);
+  peers=1;
+  await watcher.leavePage();
+  await watcher.refresh();
+  await watcher.close();
+  assert.equal(calls.length,1);
+  peers=0;
+  watcher=start(); await watcher.refresh(); session.term=2; await watcher.leavePage();
+  session.term=1;
+  watcher=start(); await watcher.refresh(); account.state.user=null; await watcher.leavePage();
   assert.equal(calls.filter(c=>c.operation==='close').length,0);
   account.state.user={id:'member'};
-  hide(false);
+  watcher=start(); await watcher.refresh(); await watcher.leavePage();
   assert.deepEqual(calls.at(-1),{operation:'close',args:{p_room_id:'archive',p_term:1,p_credential:'controller'},
     headers:{apikey:'test-public','Content-Type':'application/json',Authorization:'Bearer member-token'},keepalive:true});
-  hide(false);
+  await watcher.leavePage();
   await watcher.close();
   assert.equal(calls.filter(c=>c.operation==='close').length,1);
-  watcher=start();await watcher.refresh();watcher.stop();hide(false);
+  watcher=start();await watcher.refresh();watcher.stop();await watcher.leavePage();
   assert.equal(calls.filter(c=>c.operation==='close').length,1);
-  watcher=start();await watcher.refresh();await watcher.close();hide(false);
+  watcher=start();await watcher.refresh();await watcher.close();await watcher.leavePage();
   assert.equal(calls.filter(c=>c.operation==='close').length,2);
+  watcher=start();await watcher.leavePage();
+  assert.equal(calls.filter(c=>c.operation==='close').length,3);
+  assert.equal(calls.at(-1).keepalive,true);
 });

@@ -10,9 +10,10 @@ function transport(t, failures=[]) {
     constructor(id) {
       super(); this.id=id; peers.push(this);
       const failure=failures.shift();
-      queueMicrotask(()=>failure ? this.emit('error',{type:failure}) : this.emit('open'));
+      if (failure !== 'pending') queueMicrotask(()=>failure ? this.emit('error',{type:failure}) : this.emit('open'));
     }
-    connect() {
+    connect(address) {
+      this.address=address;
       const link=this.link=new EventEmitter();
       link.open=true;
       link.close=()=>{link.open=false;};
@@ -109,6 +110,70 @@ test('a newly reserved public slot briefly retries its exact signaling ID and di
   assert.deepEqual(peers.map(p=>p.id),Array(3).fill('mighty-online-v1-PUB001'));
   room.close();
   assert.ok(peers.every(p=>p.destroyed));
+});
+
+test('a stale fixed public ID cannot block a new table or redirect its scoped invites',async t=>{
+  const peers=transport(t,[null,'unavailable-id']);
+  const signalRoute='abc1'.repeat(8);
+  const errors=[];
+  const host=await hostRoom({reclaimCode:'PUB001',signalRoute,waitForCode:true,onError:e=>errors.push(e)});
+  await turn();
+  const scoped='mighty-online-v1-PUB001-'+signalRoute;
+  assert.deepEqual(peers.map(p=>p.id),[scoped,'mighty-online-v1-PUB001']);
+  assert.equal(host.code,'PUB001');
+  assert.ok(peers[1].destroyed);
+  const joining=joinRoom('PUB001','참가자',{signalRoute:signalRoute.toUpperCase()});
+  await turn();
+  assert.equal(peers[2].address,scoped);
+  peers[2].link.emit('data',welcome); peers[2].link.emit('data',game(state(-1)));
+  const guest=await joining;
+  assert.equal(guest.code,'PUB001');
+  guest.close(); host.close();
+  assert.ok(peers.every(peer=>peer.destroyed));
+  assert.deepEqual(errors,[]);
+});
+
+test('public legacy and scoped addresses deliver the same roster and allocate separate connection IDs',async t=>{
+  const peers=transport(t);
+  const arrivals=[];
+  const host=await hostRoom({reclaimCode:'PUB003',signalRoute:'1'.repeat(32),onJoin(id,name){
+    arrivals.push({id,name});
+    host.send(id,state(-1));
+  }});
+  await turn();
+  const [primary,alias]=peers;
+  for (const [index,peer] of [primary,alias].entries()) {
+    const link=peer.connect();
+    Object.assign(link,{label:'mighty-online-v1',metadata:{name:'참가자'+index}});
+    peer.emit('connection',link); link.emit('open');
+    assert.deepEqual(link.sent,[welcome,game(state(-1))]);
+  }
+  assert.deepEqual(arrivals,[{id:'1',name:'참가자0'},{id:'2',name:'참가자1'}]);
+  assert.equal(host.send('2',{type:'chat'}),true);
+  assert.deepEqual(alias.link.sent.at(-1),game({type:'chat'}));
+  host.close();host.close();
+  assert.ok(peers.every(peer=>peer.destroyed && !peer.link.open));
+});
+
+test('pending legacy aliases are retired on close, invalid routes fail before connecting and private rooms keep their original addresses',async t=>{
+  const peers=transport(t,[null,'pending']);
+  for (const signalRoute of ['',123,'../PUB001','a'.repeat(31)]) {
+    await assert.rejects(hostRoom({reclaimCode:'PUB001',signalRoute}),/연결 주소/);
+    await assert.rejects(joinRoom('PUB001','참가자',{signalRoute}),/연결 주소/);
+  }
+  assert.equal(peers.length,0);
+  const host=await hostRoom({reclaimCode:'PUB002',signalRoute:'b'.repeat(32)});
+  host.close(); await turn();
+  assert.ok(peers.every(peer=>peer.destroyed));
+  const privateRoom=await hostRoom({reclaimCode:'ROOM02'});
+  assert.equal(peers.length,3);assert.equal(peers[2].id,'mighty-online-v1-ROOM02');
+  const joining=joinRoom('ROOM02','초대 손님');
+  await turn();
+  assert.equal(peers[3].address,peers[2].id);
+  peers[3].link.emit('data',welcome); peers[3].link.emit('data',game(state(1)));
+  const invited=await joining;
+  assert.equal(invited.code,'ROOM02');
+  invited.close();privateRoom.close();
 });
 
 test('fixed-code retry is cancelable, bounded, and only used for occupied IDs on an explicitly new public room',async t=>{

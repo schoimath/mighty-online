@@ -1,5 +1,7 @@
 import {accountConfig} from './account-config.js';
 
+const WALLET_TIMEOUT_MS = 8000;
+
 const errorMessages = {
   invalid_credentials:'이메일 또는 비밀번호를 확인해 주세요.',
   email_not_confirmed:'이메일 인증을 마친 뒤 로그인해 주세요.',
@@ -79,7 +81,13 @@ export class AccountClient {
     this.#redirect = location ? new URL('.', location.href).href : undefined;
     this.#state = {configured:Boolean(this.url && this.publishableKey), ready:false,
       user:null, balance:null, recoveryDate:null, recovering:false, authLink:false, linkError:'', error:''};
-    this.ready = this.#init(makeAuth,takeAccountLink(location,history));
+    const link = takeAccountLink(location,history);
+    this.identityReady = this.#restoreIdentity(makeAuth,link);
+    this.ready = this.identityReady.then(async () => {
+      if (this.state.user && !link) await this.refreshWallet();
+      this.#set({ready:true});
+      if (link && this.state.user) void this.refreshWallet();
+    });
   }
 
   get state() { return this.#state; }
@@ -92,7 +100,7 @@ export class AccountClient {
     this.#state = {...this.#state, ...fields};
     for (const callback of this.#listeners) callback(this.state);
   }
-  async #init(makeAuth, link) {
+  async #restoreIdentity(makeAuth, link) {
     try {
       if (link) {
         if (link.type === 'recovery' && !link.error) this.#pendingRecoveryHash = link.hash;
@@ -124,12 +132,8 @@ export class AccountClient {
       } else if (link) {
         throw new Error('메일 링크를 확인할 수 없습니다. 메일을 다시 요청해 주세요.');
       }
-      if (this.state.user && !link) await this.refreshWallet();
     } catch (error) {
       this.#set(link ? {linkError:error.message, recovering:false} : {error:error.message});
-    } finally {
-      this.#set({ready:true});
-      if (link && this.state.user) void this.refreshWallet();
     }
   }
   #session(session) {
@@ -150,12 +154,12 @@ export class AccountClient {
     return changed;
   }
   async #service() {
-    await this.ready;
+    await this.identityReady;
     if (!this.#auth) throw new Error('계정 서버 연결을 준비하고 있습니다. 무료 연습을 이용해 주세요.');
     return this.#auth;
   }
   async accessToken() {
-    await this.ready;
+    await this.identityReady;
     const auth = this.#auth;
     if (!auth) return null;
     const {session} = unwrap(await auth.getSession());
@@ -170,16 +174,26 @@ export class AccountClient {
     try { return await pending; }
     finally { if (this.#pendingWallet === pending) this.#pendingWallet = null; }
   }
+  async #fetchWallet(userId,signal) {
+    const {session} = unwrap(await this.#auth.getSession());
+    if (signal.aborted || session?.user.id !== userId || !session.user.email_confirmed_at) return;
+    const response = await this.#fetch(this.url + '/rest/v1/rpc/chip_wallet', {
+      method:'POST', cache:'no-store', signal, headers:{apikey:this.publishableKey,
+        Authorization:'Bearer ' + session.access_token, 'Content-Type':'application/json'}, body:'{}'
+    });
+    if (!response.ok) throw new Error();
+    return response.json();
+  }
   async #readWallet(userId,identityVersion) {
+    const controller = new AbortController();
+    let timer;
+    const timeout = new Promise((_,reject) => {
+      timer = setTimeout(() => { controller.abort(); reject(controller.signal.reason); },WALLET_TIMEOUT_MS);
+    });
     try {
-      const {session} = unwrap(await this.#auth.getSession());
-      if (session?.user.id !== userId || !session.user.email_confirmed_at) return this.state;
-      const response = await this.#fetch(this.url + '/rest/v1/rpc/chip_wallet', {
-        method:'POST', cache:'no-store', headers:{apikey:this.publishableKey,
-          Authorization:'Bearer ' + session.access_token, 'Content-Type':'application/json'}, body:'{}'
-      });
-      if (!response.ok) throw new Error();
-      const wallet = await response.json();
+      // The same deadline covers the SDK session lock, HTTP headers and body.
+      const wallet = await Promise.race([this.#fetchWallet(userId,controller.signal),timeout]);
+      if (wallet === undefined) return this.state;
       if (!Number.isSafeInteger(wallet.balance)) throw new Error();
       if (this.#identityVersion !== identityVersion) return this.state;
       this.#set({balance:wallet.balance, recoveryDate:wallet.recoveryDate ?? null, error:''});
@@ -192,6 +206,8 @@ export class AccountClient {
       }
     } catch {
       if (this.#identityVersion === identityVersion) this.#set({balance:null, error:'칩 잔액을 확인하지 못했습니다. 잠시 후 다시 조회해 주세요.'});
+    } finally {
+      clearTimeout(timer);
     }
     return this.state;
   }

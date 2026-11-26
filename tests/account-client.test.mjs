@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {AccountClient,takeAccountLink} from '../account-client.js';
+import {reserveDirectoryRoom} from '../public-directory.js';
+import {createRoomChatStore} from '../room-chat-store.js';
 
 const config = {url:'https://mighty.example',publishableKey:'public-key'};
 const person = (id = 'player', confirmed = true) => ({id,email:id+'@example.org',
@@ -56,6 +58,75 @@ function authStub(initialUser,callbackType) {
     async resend(input) { calls.push(['resend',input]); return ok({}); }
   };
 }
+
+test('a restored account can enter a room while its wallet is pending, then retry and recover chips at Korean midnight', async t => {
+  t.mock.timers.enable({apis:['Date','setTimeout'],now:Date.parse('2026-11-26T23:59:30+09:00')});
+  const auth = authStub(person());
+  let firstSignal, releaseWallet, calls = 0;
+  const client = new AccountClient(config,{makeAuth:async () => auth,fetcher:(_url,{signal}) => {
+    calls++;
+    if (calls === 1) {
+      firstSignal = signal;
+      return new Promise(resolve => { releaseWallet=resolve; });
+    }
+    if (calls === 2) return {ok:true,json:async () => ({balance:-2,recoveryDate:'2026-11-27'})};
+    return mockWallet(100);
+  }});
+  await client.identityReady;
+  assert.equal(client.state.user.id,'player');
+  assert.equal(await client.accessToken(),'player-token');
+  assert.equal(client.state.ready,false);
+  assert.equal(calls,1);
+  t.mock.method(globalThis,'fetch',async (url,{headers}) => {
+    assert.equal(headers.Authorization,'Bearer player-token');
+    if (url.endsWith('/mighty_directory_open_routed')) return Response.json({claimed:true,slot:1,code:'PUB001'});
+    assert.ok(url.endsWith('/mighty_room_chat_open'));
+    return Response.json(1);
+  });
+  const store = createRoomChatStore(client,'PUB001');
+  const claim = await reserveDirectoryRoom(client,{store,slot:1,code:'PUB001',hostName:'마이티친구'});
+  assert.equal(claim.claimed,true);
+  assert.equal(await store.open(),1);
+  assert.equal(firstSignal.aborted,false);
+  t.mock.timers.tick(8000);
+  await client.ready;
+  assert.equal(firstSignal.aborted,true);
+  assert.equal(client.state.ready,true);
+  assert.equal(client.state.balance,null);
+  assert.match(client.state.error,/잔액을 확인하지 못했습니다/);
+  await client.refreshWallet();
+  releaseWallet(mockWallet(999));
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(client.state.balance,-2);
+  assert.equal(client.state.recoveryDate,'2026-11-27');
+  t.mock.timers.tick(22250);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(client.state.balance,100);
+  assert.equal(client.state.recoveryDate,null);
+  assert.equal(calls,3);
+});
+
+test('a stalled wallet session lookup expires without sending a late request for the old read', async t => {
+  t.mock.timers.enable({apis:['setTimeout']});
+  const auth = authStub(person());
+  const getSession = auth.getSession;
+  let releaseToken, calls = 0, reads = 0;
+  auth.getSession = () => ++calls === 2 ? new Promise(resolve => { releaseToken=resolve; }) : getSession();
+  const client = new AccountClient(config,{makeAuth:async () => auth,fetcher:async () => {
+    reads++;
+    return mockWallet(90);
+  }});
+  await client.identityReady;
+  assert.equal(calls,2);
+  t.mock.timers.tick(8000);
+  await client.ready;
+  releaseToken(await getSession());
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(reads,0);
+  await client.refreshWallet();
+  assert.equal(client.state.balance,90);
+  assert.equal(reads,1);
+});
 
 test('signup uses the canonical site return URL and never assigns chips to pending email', async () => {
   const auth = authStub();

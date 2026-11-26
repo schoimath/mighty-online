@@ -78,6 +78,7 @@ export function renderPublicAudience(node, snapshot, {onReserve, onCancel} = {})
   node.setAttribute('aria-label', '관전자와 자리 예약');
   const {spectators = [], reservation, spectator} = snapshot;
   const hasVacancy = !snapshot.game && snapshot.players.some(player => !player);
+  const showReservation = spectator && (reservation || !hasVacancy || !snapshot.supportsOpenSeatChoice);
   const prompt = reservation ? reservationLabel(reservation) :
     hasVacancy ? '빈자리에 바로 앉을 수 있습니다.' : '자리가 나면 예약 순서대로 참가합니다.';
   const action = reservation ? '예약 취소' : hasVacancy ? '빈자리 참가' : snapshot.game ? '다음 판 예약' : '자리 예약';
@@ -87,7 +88,7 @@ export function renderPublicAudience(node, snapshot, {onReserve, onCancel} = {})
   }).join('');
   const html = `<div class="audience-heading"><h2>관전자 <span>${spectators.length}명</span></h2></div>
     ${roster ? '<ul class="audience-roster" aria-label="관전자 명단">' + roster + '</ul>' : ''}
-    ${spectator ? `<div class="audience-seat"><p role="status">${escape(prompt)}</p>
+    ${showReservation ? `<div class="audience-seat"><p role="status">${escape(prompt)}</p>
       <button type="button" class="${reservation ? 'public-watch' : 'public-join'}" data-public-seat="${reservation ? 'cancel' : 'reserve'}">${action}</button></div>` : ''}`;
   if (audienceMarkup.get(node) !== html) {
     const focused = node.contains(document.activeElement);

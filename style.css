@@ -81,6 +81,24 @@ svg.icon{width:1.25em;height:1.25em;display:block;fill:none;stroke:currentColor;
 .seat-heading > span, .room-panel .seat-hint { color:var(--muted); font-size:.87rem; }
 .room-panel .seat-hint { margin:6px 0 12px; word-break:keep-all; }
 .seat-list { list-style:none; padding:0; margin:10px 0 18px; }
+.room-start { display: grid; gap: 6px; margin-block: 16px 22px; }
+.room-start p { margin: 0; font-size: .88rem; }
+.room-start:has(button) p { text-align: center; }
+.round-start-button, .g-result-actions .g-btn.g-round-start {
+  display: inline-flex; align-items: center; justify-content: center; gap: 10px;
+  min-height: 56px; padding: 12px 24px; border: 1px solid #986011; border-radius: 10px;
+  background: #ffc55a; color: #312207; box-shadow: 0 2px 0 #956114;
+  font: inherit; font-size: 1.16rem; line-height: 1.35; font-weight: 750;
+}
+.round-start-button::before, .g-result-actions .g-round-start::before {
+  content: ""; width: 0; height: 0; border-block: 6px solid transparent; border-left: 9px solid currentColor;
+}
+.round-start-button:enabled:hover, .g-result-actions .g-round-start:enabled:hover { background: #ffd47a; }
+.round-start-button:enabled:active, .g-result-actions .g-round-start:enabled:active { background: #f4b84c; box-shadow: none; }
+.round-start-button:focus-visible { outline: 3px solid #214e3e; outline-offset: 3px; }
+.round-start-button:disabled {
+  opacity: 1; cursor: not-allowed; color: #625d51; background: #e7e3d7; border-color: #b9b3a3; box-shadow: none;
+}
 .seat-map {
   position:relative; isolation:isolate; display:grid; grid-template-columns:repeat(6,minmax(0,1fr));
   grid-template-areas:". two two three three ." "one one . . four four" ". . zero zero . .";

@@ -19,7 +19,7 @@ export function createRoomChatStore(client, room, id = crypto.randomUUID(), cred
   let writes = Promise.resolve(), roster = Promise.resolve();
 
   async function rpc(operation, args) {
-    await client.ready;
+    await (client.identityReady ?? client.ready);
     const userId = client.state.user?.id;
     const headers = {apikey:client.publishableKey, 'Content-Type':'application/json'};
     if (userId) {

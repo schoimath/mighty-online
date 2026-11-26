@@ -624,14 +624,15 @@ function settingLineMarkup(view) {
 
 function nextRoundControls(options) {
   const {isHost, nextRound} = options;
-  if (!nextRound) return isHost ? button("다시 한 판", "replay") : "<p>방장이 다음 판을 시작할 때까지 기다려 주세요.</p>";
+  const restart = button("다시 시작하기", "replay", true, "round-start");
+  if (!nextRound) return isHost ? restart : "<p>방장이 다음 판을 시작할 때까지 기다려 주세요.</p>";
   if (nextRound.status === "starting") return "<p>다음 판을 준비하고 있습니다.</p>";
   if (nextRound.status === "manual") return isHost
-    ? "<p>다음 판을 자동으로 시작하지 못했습니다.</p>" + button("다음 판 다시 시작", "replay")
+    ? "<p>다음 판을 자동으로 시작하지 못했습니다.</p>" + restart
     : "<p>방장이 다음 판을 다시 시작할 때까지 기다려 주세요.</p>";
   const countdown = '<p class="g-next-round" data-next-countdown role="timer" aria-live="off"></p>';
   if (!isHost) return countdown;
-  return countdown + button("지금 시작", "replay") +
+  return countdown + restart +
     button(nextRound.status === "paused" ? "자동 진행 재개" : "잠시 멈춤", "toggle-next-round", true, "secondary");
 }
 

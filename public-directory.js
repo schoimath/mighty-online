@@ -1,11 +1,12 @@
 export const PUBLIC_ROOM_LIMIT = 4;
 export const PRIVATE_ROOM_LIMIT = 6;
 const HEARTBEAT_MS = 20000;
+const validSignalRoute = value => typeof value === 'string' && /^[a-f0-9]{32}$/.test(value);
 
 async function requestHeaders(client, isPublic) {
   const headers = {apikey:client.publishableKey, 'Content-Type':'application/json'};
   if (!isPublic) {
-    await client.ready;
+    await (client.identityReady ?? client.ready);
     const userId = client.state.user?.id;
     if (userId) {
       const token = await client.accessToken();
@@ -39,16 +40,18 @@ export async function listPublicRooms({signal,client} = {}) {
   const rooms = await rpc(client,'list',{}, {signal,isPublic:true});
   if (!Array.isArray(rooms) || rooms.length !== PUBLIC_ROOM_LIMIT ||
       !rooms.every((room, i) => room.slot === i + 1 && room.code === 'PUB00' + (i + 1) &&
-        ['empty','waiting','playing','finished','settling'].includes(room.phase))) {
+        ['empty','waiting','playing','finished','settling'].includes(room.phase) &&
+        (room.signalRoute == null || validSignalRoute(room.signalRoute)))) {
     throw new Error('공개 테이블 목록을 불러오지 못했습니다. 다시 시도해 주세요.');
   }
   return rooms;
 }
 
 export async function reserveDirectoryRoom(client,{store,code,slot = null,name,hostName}) {
-  const result = await rpc(client,'open',{p_room_id:store.id,p_credential:store.credential,p_code:code,
+  const result = await rpc(client,slot === null ? 'open' : 'open_routed',{p_room_id:store.id,p_credential:store.credential,p_code:code,
     p_slot:slot,p_name:name || '비공개 테이블',p_host:hostName});
   if (result?.code !== code || typeof result.claimed !== 'boolean' ||
+      (result.signalRoute != null && (slot === null || !validSignalRoute(result.signalRoute))) ||
       !Number.isInteger(result.slot) || (slot !== null ? result.slot !== slot :
         (result.slot <= PUBLIC_ROOM_LIMIT || result.slot > PUBLIC_ROOM_LIMIT + PRIVATE_ROOM_LIMIT))) {
     throw new Error('방 정보를 확인하지 못했습니다. 다시 시도해 주세요.');
@@ -60,6 +63,7 @@ function publicSummary(summary) {
   if (!summary?.phase) return null;
   const {hostName,phase,humanCount,spectatorCount,reservationCount,roundNumber,roundLimit} = summary;
   const fields = {hostName,phase,humanCount,spectatorCount,reservationCount,roundNumber,roundLimit};
+  if (validSignalRoute(summary.signalRoute)) fields.signalRoute = summary.signalRoute;
   const seats = summary.seats;
   if (Array.isArray(seats) && seats.length === 5 &&
       seats.every(name => name === null || (typeof name === 'string' && name.trim() && name.length <= 16)) &&
@@ -103,7 +107,6 @@ export function watchDirectoryRoom(client,{store,getSummary,onError,canReleaseOn
     release = null;
     clearInterval(ticker);
     globalThis.document?.removeEventListener('visibilitychange', visible);
-    globalThis.window?.removeEventListener('pagehide', pageHide);
   }
   function close() {
     stop();
@@ -115,16 +118,23 @@ export function watchDirectoryRoom(client,{store,getSummary,onError,canReleaseOn
   function visible() {
     if (globalThis.document?.visibilityState === 'visible') refresh();
   }
-  function pageHide(event) {
-    if (event.persisted || stopped || !release || !canReleaseOnPageHide() ||
-        release.identity.p_term !== store.term || release.userId !== client.state.user?.id) return;
-    const {identity,headers} = release;
+  function leavePage() {
+    if (stopped) return closing;
+    const lastHost = canReleaseOnPageHide?.();
+    const grant = release;
     stop();
-    closing = rpc(client,'close',identity,{headers,keepalive:true}).catch(() => {});
+    if (!lastHost || (grant && (grant.identity.p_term !== store.term || grant.userId !== client.state.user?.id))) {
+      closing = Promise.resolve();
+      return closing;
+    }
+    // Cached and discarded pages both lose their live signaling connection.
+    // Use the prepared grant synchronously before the browser freezes the page.
+    closing = (grant ? rpc(client,'close',grant.identity,{headers:grant.headers,keepalive:true}) :
+      args().then(identity => rpc(client,'close',identity,{keepalive:true}))).catch(() => {});
+    return closing;
   }
   const ticker = setInterval(refresh,HEARTBEAT_MS);
   globalThis.document?.addEventListener('visibilitychange', visible);
-  if (canReleaseOnPageHide) globalThis.window?.addEventListener('pagehide', pageHide);
   refresh();
-  return {refresh,stop,close};
+  return {refresh,stop,close,leavePage};
 }
