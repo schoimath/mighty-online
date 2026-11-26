@@ -4,7 +4,8 @@ import {botObservation, legalPlays, mighty} from '../engine.js';
 import {createGame, applyAction} from '../table-deal.js';
 import {coordinateFriendPlay} from '../table-friend-play.js';
 import {rngFor} from '../lab/game.js';
-import {decideTableTurn, memoryForReplacement, MODEL_CATALOG} from '../lab/table-agents.js';
+import {decideTableTurn, memoryForReplacement} from '../lab/table-agents.js';
+import {clubPolicies} from './table-policy-models.mjs';
 
 // Replay the public decisions from two real deals, retaining each seat's
 // own pre-play history for the recurrent model.
@@ -34,7 +35,7 @@ test('all three live friends take the opening invitation and return a low trump'
     const {view, history} = position;
     const original = structuredClone(view);
     assert.equal(view.selfRole, 'friend');
-    for (const {id} of MODEL_CATALOG) {
+    for (const id of clubPolicies) {
       const memory = memoryForReplacement(id, history);
       assert.equal(decideTableTurn({modelId:id, view, memory, seed:22}).action.card, card, id);
     }

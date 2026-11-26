@@ -1,7 +1,7 @@
 import {commonModelChoice, MODEL_CATALOG} from './lab/table-agents.js';
 
 const modelsById = new Map(MODEL_CATALOG.map(model => [model.id, model]));
-const choices = [{id:'random', label:'랜덤', description:'자리마다 세 모델 중 하나를 무작위로 배정합니다.'}, ...MODEL_CATALOG];
+const choices = [{id:'random', label:'랜덤', description:'자리마다 등록된 모델 중 하나를 무작위로 배정합니다.'}, ...MODEL_CATALOG];
 const escape = value => String(value ?? '').replace(/[&<>"']/g,
   char => ({'&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'}[char]));
 

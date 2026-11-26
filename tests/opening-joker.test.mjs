@@ -6,7 +6,8 @@ import {conserveOpeningJoker} from '../table-tactics.js';
 import {rngFor} from '../lab/game.js';
 import {protectPartner} from '../lab/partnership-policy.js';
 import {balancedTurn, replayBalancedMemory} from '../lab/table-memory.js';
-import {decideTableTurn, MODEL_CATALOG} from '../lab/table-agents.js';
+import {decideTableTurn} from '../lab/table-agents.js';
+import {clubPolicies} from './table-policy-models.mjs';
 
 // Replay two deals from full games in which the cooperative policy opened or
 // followed with the powerless Joker despite holding legal ordinary cards.
@@ -34,7 +35,7 @@ for (const [role, seed, firstSeat, suit, cards, lead] of [
     assert.equal(view.selfRole, role);
     assert.equal(botDecision(protectPartner(view), policyPlay).card, 'JK');
     const before = structuredClone(view);
-    for (const {id:modelId} of MODEL_CATALOG) {
+    for (const modelId of clubPolicies) {
       const choice = decideTableTurn({modelId, view, memory, seed});
       assert.notEqual(choice.action.card, 'JK');
       assert.doesNotThrow(() => applyAction(structuredClone(game), 3, choice.action));

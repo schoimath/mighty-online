@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {botDecision, botObservation, DECK, policyPlay} from '../engine.js';
 import {rngFor} from '../lab/game.js';
-import {decideTableTurn, MODEL_CATALOG} from '../lab/table-agents.js';
+import {decideTableTurn} from '../lab/table-agents.js';
+import {clubPolicies} from './table-policy-models.mjs';
 import {applyAction, createGame} from '../table-deal.js';
 import {preferSideAcePlan} from '../table-side-ace.js';
 
@@ -21,13 +22,13 @@ test('each table model calls a reachable side ace and leads its ordinary three',
   assert.equal(botDecision(callView, policyPlay).card, 'DA');
   assert.ok(callView.hand.every(card => card[0] !== 'D'));
   const call = {type:'friend', kind:'card', card:'CA'};
-  for (const {id} of MODEL_CATALOG) {
+  for (const id of clubPolicies) {
     assert.deepEqual(decideTableTurn({modelId:id, view:callView, seed:97}).action, call, id);
   }
   step(call);
   const view = botObservation(state, 0), original = structuredClone(view);
   assert.ok(view.choices.plays.some(move => move.card === 'C3' && move.jokerCall));
-  for (const {id} of MODEL_CATALOG) {
+  for (const id of clubPolicies) {
     assert.deepEqual(decideTableTurn({modelId:id, view, seed:97}).action, {type:'play',card:'C3'}, id);
   }
   assert.deepEqual(view, original);

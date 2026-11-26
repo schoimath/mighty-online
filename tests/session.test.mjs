@@ -131,14 +131,15 @@ test('a replacement finishes for the original member, then keeps a separate scor
   assert.equal(board().members.reduce((sum,m) => sum + m.total,0),0);
 });
 
-test('each seat independently draws from just the three playable models when creating a room', t => {
+test('each seat independently draws from the installed table models when creating a room', t => {
   const draws = [0, .34, .99, .8, .45];
+  const ids = MODEL_CATALOG.map(m => m.id);
+  for (const model of ['contract_search','recurrent_balanced','heuristic']) assert.ok(ids.includes(model));
+  const expected = draws.map(fraction => ids[Math.floor(fraction * ids.length)]);
   const random = t.mock.method(Math, 'random', () => draws.shift());
   const room = new HostSession('방장');
   random.mock.restore();
   assert.deepEqual(draws, []);
-  assert.deepEqual(MODEL_CATALOG.map(m => m.id), ['contract_search','recurrent_balanced','heuristic']);
-  const expected = ['contract_search','recurrent_balanced','heuristic','heuristic','recurrent_balanced'];
   assert.equal(room.view(0).modelChoice, 'random');
   assert.deepEqual(room.view(0).botModels, expected);
   assert.deepEqual(room.view(3).botModels, expected);

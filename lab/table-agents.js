@@ -1,11 +1,7 @@
-import {botDecision, policyPlay} from '../engine.js';
-import {withJokerStatus} from '../table-joker.js';
-import {conserveMightyOnTrumpAce, conserveOpeningJoker, protectCalledJoker} from '../table-tactics.js?v=1.1.20261127031810';
-import {preferTrumpLead} from '../table-trump-lead.js';
-import {preferSideAcePlan} from '../table-side-ace.js?v=1.1.20261127031810';
-import {coordinateFriendPlay} from '../table-friend-play.js?v=1.1.20261127031810';
+import agents from '../agent-kit/registry.js?v=1.1.20261127032816';
+import {checkAgent, runAgent} from '../agent-kit/protocol.js?v=1.1.20261127032816';
+import {withTableStrategy} from './table-strategy.js?v=1.1.20261127032816';
 import {rngFor} from './game.js';
-import {protectPartner} from './partnership-policy.js';
 import {contractSearchAction} from './contract-search.js';
 import {replayBalancedMemory, balancedTurn} from './table-memory.js';
 
@@ -13,8 +9,14 @@ export const DEFAULT_MODEL = 'contract_search';
 export const MODEL_CATALOG = [
   {id:DEFAULT_MODEL, label:'공약 탐색형', description:'주공이 바닥 세 장을 본 뒤 가능한 공약의 개인 정산을 모의 대국으로 비교합니다.'},
   {id:'recurrent_balanced', label:'기억형 · 균형', description:'앞선 수를 기억하고, 탐색이 도움이 된다고 학습한 차례에는 여러 카드를 냈을 때의 결과를 비교합니다.'},
-  {id:'heuristic', label:'협력형', description:'팀원이 이길 때 점수를 보태고 위험한 점수 카드를 관리합니다.'}
 ];
+const registered = new Map();
+for (const agent of agents) {
+  const {id, label, description} = checkAgent(agent);
+  if (MODEL_CATALOG.some(model => model.id === id)) throw new Error('중복된 AI 모델 ID: ' + id);
+  registered.set(id, agent);
+  MODEL_CATALOG.push({id, label, description});
+}
 export const isModelId = id => MODEL_CATALOG.some(model => model.id === id);
 export const hasSeatMemory = id => id === 'recurrent_balanced';
 
@@ -42,21 +44,22 @@ function chooseModelTurn(modelId, view, rng, memory, recurrentTurn) {
   switch (modelId) {
     case 'contract_search': return {action:contractSearchAction(view, rng)};
     case 'recurrent_balanced': return recurrentTurn(view, rng, memory);
-    case 'heuristic': return {action:botDecision(protectPartner(view), policyPlay)};
     default: throw new Error('지원하지 않는 AI 모델입니다.');
   }
 }
 
 // The host commits a worker's proposed memory only after accepting the move.
 export function decideTableTurn({modelId = DEFAULT_MODEL, view, seed, memory}, recurrentTurn = balancedTurn) {
-  const rng = rngFor(seed ?? crypto.getRandomValues(new Uint32Array(1))[0]);
-  const openingView = conserveOpeningJoker(withJokerStatus(view));
-  const tableView = protectCalledJoker(conserveMightyOnTrumpAce(openingView));
-  const decision = chooseModelTurn(modelId, tableView, rng, memory, recurrentTurn);
-  if (tableView.selfRole === 'declarer') {
-    decision.action = preferSideAcePlan(tableView, preferTrumpLead(tableView, decision.action));
-  } else if (tableView.selfRole === 'friend') {
-    decision.action = coordinateFriendPlay(tableView, decision.action);
+  const turnSeed = seed ?? crypto.getRandomValues(new Uint32Array(1))[0];
+  const agent = registered.get(modelId);
+  if (agent) {
+    try {
+      return {action:runAgent(agent, view, turnSeed)};
+    } catch (error) {
+      if (modelId === 'heuristic') throw error;
+      console.warn('AI 선택 실패, 협력형이 이번 수를 대신합니다.', modelId);
+      return {action:runAgent(registered.get('heuristic'), view, turnSeed)};
+    }
   }
-  return decision;
+  return withTableStrategy(view, table => chooseModelTurn(modelId, table, rngFor(turnSeed), memory, recurrentTurn));
 }

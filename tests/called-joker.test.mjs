@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {baselinePlay, botObservation} from '../engine.js';
 import {rngFor} from '../lab/game.js';
-import {decideTableTurn, MODEL_CATALOG} from '../lab/table-agents.js';
+import {decideTableTurn} from '../lab/table-agents.js';
+import {clubPolicies} from './table-policy-models.mjs';
 import {applyAction, createGame} from '../table-deal.js';
 import {protectCalledJoker} from '../table-tactics.js';
 
@@ -33,7 +34,7 @@ test('all table policies keep a Joker friend active and retain the plain caller 
     const guarded = protectCalledJoker(view);
     assert.deepEqual(guarded.choices.plays, view.choices.plays.filter(move => !move.jokerCall));
     assert.ok(guarded.choices.plays.some(move => move.card === caller));
-    for (const {id:modelId} of MODEL_CATALOG) {
+    for (const modelId of clubPolicies) {
       const {action} = decideTableTurn({modelId, view, seed});
       assert.ok(!action.jokerCall, `${modelId}: ${trump} on trick ${trick}`);
       applyAction(structuredClone(round), round.turn, action);
