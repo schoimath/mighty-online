@@ -114,7 +114,8 @@ export function setupSupportBoard(client, openAccount) {
     };
   }
 
-  document.getElementById('developer-contact').onclick = () => { page=1; dialog.showModal(); refresh(); };
+  function open() { page=1; dialog.showModal(); refresh(); }
+  document.getElementById('developer-contact').onclick = open;
   document.getElementById('support-close').onclick = () => dialog.close();
   dialog.addEventListener('close',clear);
   dialog.addEventListener('click',event => { if (event.target === dialog) dialog.close(); });
@@ -123,4 +124,5 @@ export function setupSupportBoard(client, openAccount) {
     user = state.user?.id; page = 1;
     if (dialog.open) refresh();
   });
+  return open;
 }

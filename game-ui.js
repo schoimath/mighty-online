@@ -656,7 +656,8 @@ function resultControls(view, ui) {
   }
   const role = view.seat === result.declarer ? (result.friend == null ? "주공 ×4" : "주공 ×2")
     : view.seat === result.friend ? "프렌드" : "야당";
-  const next = board?.complete || ui.options.resumed ? "" : scoreTable(board, view.seat)
+  const next = ui.options.departing ? '<p role="status">나가기 예약에 따라 잠시 후 로비로 돌아갑니다.</p>' :
+    board?.complete || ui.options.resumed ? "" : scoreTable(board, view.seat)
     + nextRoundControls(ui.options)
     + (ui.options.isHost && ui.options.onReplaySetup ? button(escapeHtml(ui.options.replaySetupLabel), "replay-setup", ui.options.nextRound?.status !== "starting", "secondary") : "");
   return `<h2>주공 팀 ${result.won ? "승리" : "패배"}</h2>
@@ -723,9 +724,14 @@ function mountTable(root) {
     <header class="g-nav"><div class="g-nav-inner">
       <div class="g-brand"><i aria-hidden="true">♠</i><span>Mighty Club</span></div>
       <span class="g-nav-divider"></span><span class="g-nav-phase">게임 테이블</span>
+      <nav class="g-nav-links" aria-label="게임 안내와 게시판">
+        <button type="button" class="g-btn g-top" data-do="rules" aria-haspopup="dialog" aria-controls="modal">게임 규칙</button>
+        <button type="button" class="g-btn g-top" data-do="community" aria-haspopup="dialog" aria-controls="community-dialog">자유게시판</button>
+        <button type="button" class="g-btn g-top" data-do="support" aria-haspopup="dialog" aria-controls="support-dialog">비공개 문의</button>
+      </nav>
       <div class="g-nav-actions"><button type="button" class="g-btn g-top g-sound" data-do="sound" aria-label="효과음">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9h4l5-4v14l-5-4H3z"/><path class="g-sound-on" d="M16 8a6 6 0 0 1 0 8m3-11a10 10 0 0 1 0 14"/><path class="g-sound-off" d="m16 9 5 6m0-6-5 6"/></svg><span>효과음</span>
-      </button>${button("게임 규칙", "rules", true, "top")}${button("나가기", "leave", true, "top")}</div>
+      </button>${button("나가기", "leave", true, "top")}</div>
     </div></header>
     <div class="g-main">
       <div class="g-heading"><div class="g-eyebrow"><i aria-hidden="true">♠</i> 마이티 · 5인전
@@ -782,6 +788,8 @@ function redraw(ui, newDeal = false) {
   const { view, options, root } = ui;
   updateTurnCountdown(ui);
   root.querySelector(".g-nav-phase").textContent = view.seat < 0 ? "테이블 관전" : "게임 테이블";
+  const leaveButton = root.querySelector('[data-do="leave"]');
+  leaveButton.textContent = options.departing ? "나가기 예약 중" : "나가기";
   const nameAt = seat => nameAtSeat(ui, seat);
   const focused = root.contains(document.activeElement) ? document.activeElement : null;
   const oldFocus = focused && ["card", "field", "do"].map(attr => [attr, focused.dataset[attr]]).find(([, value]) => value != null);
@@ -803,7 +811,7 @@ function redraw(ui, newDeal = false) {
   }
   const final = root.querySelector(".g-match-final");
   if (finished) {
-    const action = options.isHost && options.onReplaySetup ? button(escapeHtml(options.replaySetupLabel), "replay-setup") : "";
+    const action = options.isHost && !options.departing && options.onReplaySetup ? button(escapeHtml(options.replaySetupLabel), "replay-setup") : "";
     const summary = scoreTable(board, view.seat, {final:true, title:"최종 순위"}) + action;
     if (ui.finalHtml !== summary) final.innerHTML = summary;
     ui.finalHtml = summary;
@@ -842,7 +850,7 @@ function redraw(ui, newDeal = false) {
     root.querySelector(`[data-${attr}="${value}"]${radio}`)?.focus({ preventScroll: true });
   }
   if (view.phase !== "result") ui.resultWasShown = false;
-  else if (!ui.resultWasShown && !finished && !options.resumed && options.onResultShown) {
+  else if (!ui.resultWasShown && options.onResultShown) {
     ui.resultWasShown = true;
     options.onResultShown();
   }
@@ -893,6 +901,8 @@ function bind(ui) {
     if (kind === "confirm-play") return playCard(ui, ui.pendingCard, true);
     if (kind === "sound") return toggleSound(el);
     if (kind === "rules") return ui.options.onRules?.();
+    if (kind === "community") return ui.options.onCommunity?.();
+    if (kind === "support") return ui.options.onSupport?.();
     if (kind === "leave") return ui.options.onLeave?.();
     if (kind === "replay") return ui.options.onReplay?.();
     if (kind === "toggle-next-round") return ui.options.onToggleNextRound?.();

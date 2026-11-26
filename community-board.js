@@ -89,9 +89,10 @@ export function setupCommunityBoard(client, openAccount) {
       }
     };
   }
-  document.getElementById('community-open').onclick = () => {
+  function open() {
     currentPost=null; page=1; dialog.showModal(); refresh();
-  };
+  }
+  document.getElementById('community-open').onclick = open;
   document.getElementById('community-close').onclick = () => dialog.close();
   dialog.addEventListener('click',event => { if (event.target === dialog) dialog.close(); });
   dialog.addEventListener('close',clear);
@@ -100,4 +101,5 @@ export function setupCommunityBoard(client, openAccount) {
     user=state.user?.id;
     if (dialog.open) refresh();
   });
+  return open;
 }

@@ -66,6 +66,7 @@ const chipRequest = payload => callChipService(accountClient, payload);
 let chipReader = null, preparing = null, acceptedOffer = null, resumeHand = null;
 let activeRead = null, activeTimer, settlingHand = null;
 let leavingGeneration = null;
+let departureHand = null, departureTimer;
 let pendingPace = null;
 let lastAccount = null, settledChipHand = null;
 let accountUI;
@@ -85,7 +86,7 @@ const nextRound = createNextRoundTimer({
 });
 
 function resultKey() {
-  if (!authority || snapshot?.game?.phase !== 'result' || snapshot.scoreboard?.complete) return null;
+  if (departureHand || !authority || snapshot?.game?.phase !== 'result' || snapshot.scoreboard?.complete) return null;
   return snapshot.chipHandId || `practice-${generation}-${snapshot.scoreboard.rounds}`;
 }
 
@@ -455,6 +456,8 @@ $('nav-rules').onclick = showRules;
 
 function stopSession(message) {
   generation++;
+  clearTimeout(departureTimer);
+  departureHand = null;
   nextRound.sync(null);
   preparing?.consent.close();
   preparing = acceptedOffer = null;
@@ -556,11 +559,24 @@ function handleChipError(error) {
   }).catch(error => { if (token === generation) toast(error.message); });
 }
 
+function currentHandKey() {
+  return snapshot?.chipHandId ?? (mode === 'practice' && snapshot?.game ? 'practice' : null);
+}
+
+function finishReservedDeparture() {
+  const message = mode === 'practice' ? '이번 연습 판을 마치고 로비로 돌아왔습니다.' :
+    mode === 'host' ? '이번 판의 칩 정산이 끝나 방을 닫았습니다.' : '이번 판의 칩 정산을 마치고 방에서 나왔습니다.';
+  stopSession(message);
+}
+
 function requestLeave() {
   if (mode === 'lobby' || preparing || leavingGeneration === generation) return;
   const canWatch = mode === 'host' && snapshot.publicRoom && !snapshot.spectator &&
     snapshot.game && snapshot.game.phase !== 'result';
   const handId = snapshot?.chipHandId, token = generation;
+  const handKey = currentHandKey();
+  const canReserve = handKey && !snapshot.spectator && snapshot.game?.phase !== 'result' &&
+    !chipReader?.current?.game.result;
   const playing = handId && snapshot.game?.phase !== 'result';
   const leavingOwnHand = playing && (!snapshot.spectator || resumeHand === snapshot.chipHandId);
   let reason = '이 방에서 나갑니다.';
@@ -570,12 +586,39 @@ function requestLeave() {
   else if (snapshot?.spectator) reason = '관전을 끝냅니다. 신청한 자리 예약도 취소됩니다.';
   if (playing && !snapshot.spectator) reason += ' AI가 내 패를 마저 치고, 이 판의 칩은 내 계정에 정산됩니다.';
   const stepAside = canWatch ? '<button class="primary-button" id="host-watch">AI에게 맡기고 관전</button>' : '';
+  const schedule = canReserve ? '<button class="plain-button" id="reserve-departure">' +
+    (departureHand ? '나가기 예약 취소' : '나가기 예약') + '</button>' : '';
+  const scheduleHint = !canReserve ? '' : departureHand ? '<p>이번 판이 끝나면 자동으로 나가도록 예약했습니다.</p>' :
+    '<p>나가기 예약을 선택하면 이번 판을 직접 마치고 ' +
+    (mode === 'host' ? '칩 정산 후 방을 닫습니다.' : mode === 'practice' ? '로비로 돌아갑니다.' : '칩 정산 후 방에서 나갑니다.') + '</p>';
   modal('로비로 나갈까요?', '<p>' + reason + (canWatch ? ' 방을 유지하려면 AI에게 자리를 맡기고 이 탭에서 관전하세요.' : '') +
-    '</p><p class="form-error" role="alert" id="quit-error"></p><div class="room-actions"><button class="plain-button" id="stay">계속하기</button>' + stepAside +
+    '</p>' + scheduleHint + '<p class="form-error" role="alert" id="quit-error"></p><div class="room-actions"><button class="plain-button" id="stay">계속하기</button>' + schedule + stepAside +
     '<button class="' + (canWatch ? 'plain-button' : 'primary-button') + '" id="quit">' + (mode === 'host' ? '방 닫기' : '나가기') + '</button></div>');
   $('stay').onclick = closeModal;
   const buttons = $('quit').parentElement.querySelectorAll('button');
   const errorLine = $('quit-error');
+  if (canReserve) $('reserve-departure').onclick = () => {
+    if (generation !== token || currentHandKey() !== handKey || !errorLine.isConnected) return;
+    const wanted = !departureHand;
+    if (snapshot.game?.result || chipReader?.current?.game.result) {
+      if (wanted) finishReservedDeparture();
+      else { closeModal(); toast('이미 이번 판의 정산이 끝났습니다.'); }
+      return;
+    }
+    if (mode === 'guest' && snapshot.supportsReservedExit &&
+        !transport?.send({type:'reserve-departure',handId,wanted})) {
+      errorLine.textContent = '방장과의 연결을 확인해 주세요.';
+      return;
+    }
+    // A cancellation racing with settlement is only valid if the host still
+    // had the seat. Older hosts rely on this guest declining the next offer.
+    const waitForCancel = !wanted && mode === 'guest' && snapshot.supportsReservedExit;
+    if (!waitForCancel) departureHand = wanted ? handKey : null;
+    closeModal();
+    draw();
+    toast(wanted ? '나가기를 예약했습니다. 이번 판은 계속 플레이하세요.' :
+      waitForCancel ? '나가기 예약 취소를 요청했습니다.' : '나가기 예약을 취소했습니다.');
+  };
   async function leave(watch) {
     if (generation !== token || leavingGeneration === token || !$('modal').open || !errorLine.isConnected) return;
     leavingGeneration = token;
@@ -590,7 +633,7 @@ function requestLeave() {
         if (!watch) rememberDeparture(data, finishIfAlone);
       }
       if (watch) {
-        authority.leaveHostSeat(); closeModal(); clearGame($('game')); publish();
+        authority.leaveHostSeat(); departureHand = null; closeModal(); clearGame($('game')); publish();
       } else stopSession();
     } catch (error) {
       if (generation !== token) return;
@@ -695,7 +738,13 @@ function drawRoom() {
       : '<button type="button" class="plain-button" id="swap-cancel">요청 취소</button>';
     swapPanel = '<div id="seat-swap"><p role="status">' + message + '</p><div class="swap-actions">' + actions + '</div></div>';
   }
-  $('room').innerHTML = '<section class="room-panel"><h1>' + (snapshot.publicRoom ? '공개 게임 대기실' : '게임 대기실') + '</h1><p>' +
+  let roomPanel = room.querySelector('.room-panel');
+  if (!roomPanel) {
+    roomPanel = document.createElement('section');
+    roomPanel.className = 'room-panel';
+    room.append(roomPanel);
+  }
+  roomPanel.innerHTML = '<h1>' + (snapshot.publicRoom ? '공개 게임 대기실' : '게임 대기실') + '</h1><p>' +
     (snapshot.publicRoom ? '로비의 공개 테이블 목록에서 참가하거나 관전할 수 있습니다.' : '친구에게 방 코드나 초대 링크를 보내 주세요.') + '</p>' +
     '<div class="room-code-section"><span>방 코드</span><strong class="room-code">' + escape(roomCode) + '</strong><button id="copy-invite" class="plain-button">초대 링크 복사</button></div>' +
     '<div class="seat-heading"><h2>' + (canChoose ? '자리 선택' : '참가자') + '</h2><span>참가 ' + occupied + ' / 5</span></div>' +
@@ -707,7 +756,7 @@ function drawRoom() {
     '<section class="public-audience" hidden></section><p>' + (host ? (occupied < 5 ? '지금 시작하면 빈자리 ' + (5-occupied) + '곳은 AI가 맡습니다.' : '다섯 명이 모였습니다. 게임을 시작하세요.') : snapshot.spectator ? '방장이 게임을 시작하면 보드에서 관전할 수 있습니다.' : '방장이 게임을 시작하면 카드를 받습니다.') +
     '</p><div class="room-actions">' + (host ? '<button class="primary-button" id="start-round">게임 시작</button>' : '') +
     '<button class="plain-button" id="room-leave">나가기</button></div>' +
-    scoreTable(snapshot.scoreboard, snapshot.seat, {collapsed:!snapshot.scoreboard?.rounds}) + '</section>';
+    scoreTable(snapshot.scoreboard, snapshot.seat, {collapsed:!snapshot.scoreboard?.rounds});
   if (standingsOpen && room.querySelector('details.match-standings')) room.querySelector('details.match-standings').open = true;
   $('copy-invite').onclick = copyInvite;
   $('room-leave').onclick = requestLeave;
@@ -758,7 +807,7 @@ function drawRoom() {
     };
     if (focus?.name) settings.elements.namedItem(focus.name)?.focus({preventScroll:true});
   }
-  chat.attach($('room').querySelector('.room-actions'));
+  chat.attach(roomPanel.querySelector('.room-actions'), roomPanel);
   drawAudience();
   const oldControl = focus?.id ? $(focus.id) : null;
   if (focusSeat != null || focus?.id.startsWith('swap-')) {
@@ -811,8 +860,16 @@ function draw() {
     modelLabels:remote ? remote.models.map((id,i) => remote.bots[i] ? modelLabel(id) : '') :
       snapshot.players.map(p => p?.bot && p.modelId ? modelLabel(p.modelId) : ''),
     replaySetupLabel: mode === 'practice' ? (snapshot.scoreboard?.complete ? '새 연습 경기 설정' : '규칙·AI 바꿔서 시작') : '대기실로 돌아가기',
-    nextRound:authority ? nextRound.state : snapshot.nextRound,
+    nextRound:authority ? nextRound.state : snapshot.nextRound, departing:Boolean(departureHand),
     onResultShown() {
+      if (departureHand && departureHand === currentHandKey()) {
+        const hand = departureHand, token = generation;
+        clearTimeout(departureTimer);
+        departureTimer = setTimeout(() => {
+          if (token === generation && hand === departureHand) finishReservedDeparture();
+        }, 4000);
+        return;
+      }
       const key = resultKey();
       if (key) {
         nextRound.sync(key);
@@ -824,6 +881,7 @@ function draw() {
       if (nextRound.state?.status === 'paused') nextRound.resume();
       else nextRound.pause();
     },
+    onCommunity:openCommunityBoard, onSupport:openSupportBoard,
     onRules:showRules, onLeave:requestLeave, onReplay() {
       const key = resultKey();
       if (!key) return;
@@ -831,7 +889,7 @@ function draw() {
       nextRound.startNow();
     },
     onReplaySetup() {
-      if (authority?.round?.phase !== 'result') return;
+      if (departureHand || authority?.round?.phase !== 'result') return;
       if (mode === 'practice') openPracticeSetup();
       else if (mode === 'host') { authority.returnToRoom(); publish(); }
       window.scrollTo(0,0);
@@ -862,7 +920,10 @@ function draw() {
       return false;
     }
   });
-  if (mode === 'host' || mode === 'guest') chat.attach($('game').querySelector('.g-nav-actions'));
+  if (mode === 'host' || mode === 'guest') {
+    const game = $('game');
+    chat.attach(game.querySelector('.g-nav-actions'), game.querySelector('.g-match-final'));
+  }
   accountUI.attach($('game').querySelector('.g-nav-actions'));
   drawAudience();
 }
@@ -1009,6 +1070,7 @@ function takeBotTurn() {
   }
 }
 async function startRound() {
+  if (departureHand) return false;
   if (mode === 'practice') {
     authority.start();
     publish();
@@ -1135,6 +1197,13 @@ async function connectRoom(kind, name, code, signal, {roundLimit, publicRoom, in
           return;
         }
         if (packet.type === 'chip-wake') { if (packet.handId === session.chipHandId) chipReader?.wake(packet.revision); return; }
+        if (packet.type === 'reserve-departure') {
+          const revision = session.revision;
+          const accepted = !preparing && session.setGuestDeparture(id, packet.handId, packet.wanted);
+          if (packet.wanted === false) transport?.send(id,{type:'cancel-departure',handId:packet.handId,accepted});
+          if (session.revision !== revision) publish();
+          return;
+        }
         if (packet.type === 'chat-send') {
           broadcastChat(seat, packet.text, id);
           return;
@@ -1197,6 +1266,15 @@ async function connectRoom(kind, name, code, signal, {roundLimit, publicRoom, in
       signal, intent, accountId:accountClient.state.user?.id,
       onMessage(packet) {
         if (!active()) return;
+        if (packet?.type === 'cancel-departure' && departureHand === packet.handId && packet.handId === currentHandKey()) {
+          if (packet.accepted) {
+            clearTimeout(departureTimer);
+            departureHand = null;
+            draw();
+            toast('나가기 예약을 취소했습니다.');
+          } else toast('이미 이번 판의 정산이 끝났습니다.');
+          return;
+        }
         if (packet?.type === 'table-pace' && snapshot?.chipHandId === packet.handId &&
             normalizeGameSpeed(packet.pace) === packet.pace) {
           snapshot.pace = packet.pace;
@@ -1225,6 +1303,9 @@ async function connectRoom(kind, name, code, signal, {roundLimit, publicRoom, in
         }
         if (packet?.type === 'error') { toast(packet.message); if (mode === 'guest') draw(); return; }
         if (packet?.type === 'state') {
+          // A host can already be in the waiting room or the next hand while
+          // this tab wakes up. Finish showing the reserved hand's own receipt.
+          if (departureHand && packet.view?.chipHandId !== departureHand) { chipReader?.wake(); return; }
           snapshot = packet.view;
           snapshot.nextRound = receivedCountdown(snapshot.nextRound, snapshot.chipHandId, packet.sentAt);
           if (!snapshot.chipHost && intent !== 'watch') {
@@ -1249,7 +1330,8 @@ async function connectRoom(kind, name, code, signal, {roundLimit, publicRoom, in
           if (chipReader.current) snapshot = serverOnlySnapshot(chipReader.current);
           chipReader.wake();
           draw();
-          toast('방장과의 연결이 종료되었습니다. 현재 판은 게임 서버에서 계속 진행됩니다.');
+          toast(chipReader.current?.game.result || snapshot.game?.result ? '방이 닫혔습니다. 이번 판의 정산 결과를 확인할 수 있습니다.' :
+            '방장과의 연결이 종료되었습니다. 현재 판은 게임 서버에서 계속 진행됩니다.');
           return;
         }
         stopSession(reason);
@@ -1323,8 +1405,8 @@ $('create-btn').onclick = () => openForm('create');
 $('join-btn').onclick = () => openForm('join');
 $('practice-btn').onclick = openPracticeSetup;
 accountUI = setupAccountUI(accountClient, {onChange:onAccount});
-setupSupportBoard(accountClient, () => accountUI.open());
-setupCommunityBoard(accountClient, () => accountUI.open());
+const openSupportBoard = setupSupportBoard(accountClient, () => accountUI.open());
+const openCommunityBoard = setupCommunityBoard(accountClient, () => accountUI.open());
 $('profile-btn').onclick = () => accountUI.open();
 $('leave-chip-hand').onclick = () => {
   if (resumeHand && mode === 'lobby') confirmPreviousHandLeave(resumeHand);
@@ -1349,6 +1431,10 @@ $('resume-chip-hand').onclick = async () => {
 
 async function approveChipOffer(spec, token) {
   if (!spec || offeredSeat(snapshot, spec, roomCode, accountClient.state.user?.id) < 0) return;
+  if (departureHand) {
+    transport?.send({type:'chip-answer',handId:spec.handId,accepted:false});
+    return;
+  }
   if (acceptedOffer) return;
   acceptedOffer = spec.handId;
   let accepted = false, reason;

@@ -30,6 +30,7 @@ export class HostSession {
   #nextBot = 1;
   #observers = new Map();
   #queue = [];
+  #departingGuests = new Set();
   #dealtPlayers = null;
   #members = new Map();
   #roundMembers = null;
@@ -144,6 +145,7 @@ export class HostSession {
 
   removeGuest(id) {
     if (id == null) return;
+    this.#departingGuests.delete(id);
     if (this.#observers.delete(id)) {
       this.connections.delete(id);
       this.#queue = this.#queue.filter(entry => entry.id !== id);
@@ -154,6 +156,17 @@ export class HostSession {
     if (seat < 0) return;
     this.connections.delete(id);
     this.#releaseSeat(seat);
+  }
+
+  setGuestDeparture(id, handId, wanted) {
+    if (!handId || handId !== this.chipHandId || !this.round ||
+        this.seatFor(id) < 0 || typeof wanted !== 'boolean') return false;
+    // A guest can still be playing the last trick on screen after the host has
+    // received its receipt. Honor the request before building the next table.
+    if (this.round.result) return wanted && this.sitOut(id);
+    if (wanted) this.#departingGuests.add(id);
+    else this.#departingGuests.delete(id);
+    return true;
   }
 
   leaveHostSeat() {
@@ -497,6 +510,10 @@ export class HostSession {
       const opener = this.round.result.friend ?? this.round.result.declarer;
       this.#nextBidder = {seat: opener, memberId: this.#roundMembers[opener]};
       this.#roundMembers = null;
+      // The outgoing guest owns the hand just settled. Release the seat before
+      // a spectator is assigned or the host can offer another chip hand.
+      for (const id of this.#departingGuests) this.sitOut(id);
+      this.#departingGuests.clear();
       this.#updateReservations();
     }
   }
@@ -556,7 +573,7 @@ export class HostSession {
     const spectators = Array.from(this.#observers, ([id, name]) => ({name, position:null, seat:null, ...positions.get(id)}));
     const roster = game?.result && this.#dealtPlayers ? this.#dealtPlayers : this.players;
     return {revision: this.revision, chipHandId:this.chipHandId, chipRevision:this.#chipRevision, seat, hostSeat: this.hostSeat, swap: swap ? {...swap} : null,
-      publicRoom:this.publicRoom, spectator, spectators, reservation:positions.get(id) ?? null,
+      publicRoom:this.publicRoom, spectator, spectators, reservation:positions.get(id) ?? null, supportsReservedExit:true,
       rules: {...this.rules}, pace:this.pace, botModels: [...this.botModels], players: roster.map(p => p && {...p}),
       scoreboard: this.#scoreboard(), game};
   }

@@ -140,6 +140,59 @@ test('a repeated or unexpected consent response does not acknowledge another pla
   await assert.rejects(check.ready,/참가 취소/);
 });
 
+test('a reserved exit keeps the dealt seat through settlement and opens it for the next reservation', () => {
+  const {table,accounts} = signedRoom();
+  const spec = chipManifest(table.plannedTable(),code,owner,accounts);
+  const raw = createGame();
+  const bots = [false,false,true,true,true];
+  table.startChipHand(packet(raw,spec.handId,0,bots));
+  table.addGuest('next','새 참가자','reserve');
+  assert.equal(table.setGuestDeparture('next',spec.handId,true),false);
+  assert.equal(table.setGuestDeparture('connection',crypto.randomUUID(),true),false);
+  assert.ok(table.setGuestDeparture('connection',spec.handId,true));
+  assert.ok(table.setGuestDeparture('connection',spec.handId,true));
+  assert.equal(table.seatFor('connection'),1);
+  assert.equal(table.players[1].bot,false);
+  assert.equal(table.viewFor('next').reservation.seat,null);
+
+  const changes = finish(raw);
+  const result = packet(raw,spec.handId,1,bots);
+  table.syncChipHand(result);
+  table.syncChipHand({...result,revision:2});
+  assert.equal(table.seatFor('connection'),-1);
+  const row = table.hostView().scoreboard.members.find(m => m.name === '참가자');
+  assert.deepEqual([row.rounds,row.lastSeat,row.lastDelta,row.total],[1,1,changes[1],changes[1]]);
+  assert.equal(table.hostView().players[1].name,'참가자');
+  assert.equal(table.viewFor('next').reservation.seat,1);
+  table.removeGuest('connection');
+  const next = chipManifest(table.plannedTable(),code,owner,accounts);
+  assert.deepEqual(next.seats,[owner,newcomer,null,null,null]);
+});
+
+test('cancelling a reserved exit retains the seat and a previous hand cannot reserve the next exit', () => {
+  const table = new HostSession('방장',undefined,models);
+  table.addGuest('connection','방원');
+  const bots = [false,false,true,true,true], handId = crypto.randomUUID(), raw = createGame();
+  table.startChipHand(packet(raw,handId,0,bots));
+  assert.ok(table.setGuestDeparture('connection',handId,true));
+  assert.ok(table.setGuestDeparture('connection',handId,false));
+  finish(raw);
+  table.syncChipHand(packet(raw,handId,1,bots));
+  assert.equal(table.seatFor('connection'),1);
+  assert.equal(table.plannedTable().seats[1].id,'connection');
+  assert.equal(table.setGuestDeparture('connection',handId,false),false);
+  const second = crypto.randomUUID();
+  const secondRaw = createGame();
+  table.startChipHand(packet(secondRaw,second,0,bots));
+  assert.equal(table.setGuestDeparture('connection',handId,true),false);
+  finish(secondRaw);
+  table.syncChipHand(packet(secondRaw,second,1,bots));
+  assert.ok(table.setGuestDeparture('connection',second,true));
+  assert.equal(table.seatFor('connection'),-1);
+  table.removeGuest('connection');
+  assert.equal(table.players[1].bot,true);
+});
+
 test('spectator polling cannot submit a move and ignores a response after closing', async () => {
   const handId = crypto.randomUUID(), seen = [], calls = [];
   let release, started;
