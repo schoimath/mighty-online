@@ -13,6 +13,15 @@ function randomCode(length) {
 
 const cancelled = () => new Error('연결을 취소했습니다.');
 
+function waitForCodeRelease(delay,signal) {
+  return new Promise((resolve,reject) => {
+    if (signal?.aborted) { reject(cancelled()); return; }
+    function abort() { clearTimeout(timer); reject(cancelled()); }
+    const timer = setTimeout(() => { signal?.removeEventListener('abort',abort); resolve(); },delay);
+    signal?.addEventListener('abort',abort,{once:true});
+  });
+}
+
 function connectionError(error) {
   const messages = {
     'peer-unavailable': '방을 찾을 수 없습니다. 방 코드와 방장의 접속 상태를 확인해 주세요.',
@@ -23,6 +32,7 @@ function connectionError(error) {
   const message = messages[error?.type] ?? '연결 서버에 접속할 수 없습니다. 네트워크를 확인하고 다시 시도해 주세요.';
   const result = new Error(message, {cause: error});
   result.type = error?.type;
+  result.retryable = !error || ['peer-unavailable','webrtc','network','disconnected','socket-error','socket-closed','server-error'].includes(error.type);
   return result;
 }
 
@@ -89,16 +99,18 @@ function goodbye(link, reason) {
   setTimeout(() => { if (link.open) link.close(); }, 1500);
 }
 
-export async function hostRoom({onJoin, onMessage, onLeave, onError, signal, reclaimCode} = {}) {
+export async function hostRoom({onJoin, onMessage, onLeave, onError, signal, reclaimCode, waitForCode = false} = {}) {
   let code, peer;
   if (reclaimCode && !/^[A-Z0-9]{6}$/.test(reclaimCode)) throw new Error('방 코드를 확인해 주세요.');
-  for (let attempt = 0; attempt < 4; attempt++) {
+  const attempts = reclaimCode ? (waitForCode ? 3 : 1) : 4;
+  for (let attempt = 0; attempt < attempts; attempt++) {
     code = reclaimCode || randomCode(6);
     try {
       peer = await openPeer(CHANNEL + '-' + code, signal);
       break;
     } catch (error) {
-      if (reclaimCode || error.type !== 'unavailable-id' || attempt === 3) throw error;
+      if (error.type !== 'unavailable-id' || attempt + 1 === attempts) throw error;
+      if (reclaimCode) await waitForCodeRelease(350 * (attempt+1),signal);
     }
   }
   if (signal?.aborted) {
@@ -206,10 +218,13 @@ export async function joinRoom(rawCode, rawName, {onMessage, onClose, onError, s
     throw cancelled();
   }
   return new Promise((resolve, reject) => {
+    let welcomed = false;
     let accepted = false;
     let finished = false;
     let link;
-    const timer = setTimeout(() => end('방장과 연결하지 못했습니다. 방 코드와 네트워크를 확인해 주세요.'), CONNECT_TIMEOUT);
+    const initial = [];
+    const timer = setTimeout(() => unavailable(welcomed ? '방 정보를 받지 못했습니다. 잠시 후 다시 참가해 주세요.' :
+      '방장과 연결하지 못했습니다. 방 코드와 네트워크를 확인해 주세요.'), CONNECT_TIMEOUT);
     function cleanup() {
       clearTimeout(timer);
       signal?.removeEventListener('abort', abort);
@@ -219,9 +234,10 @@ export async function joinRoom(rawCode, rawName, {onMessage, onClose, onError, s
       finished = true;
       cleanup();
       peer.destroy();
-      if (!accepted) reject(new Error(reason));
-      else if (!silently) onClose?.(reason, removed);
+      if (!accepted) reject(reason instanceof Error ? reason : new Error(reason));
+      else if (!silently) onClose?.(reason instanceof Error ? reason.message : reason, removed);
     }
+    function unavailable(message) { end(Object.assign(new Error(message),{retryable:true})); }
     function abort() { end('연결을 취소했습니다.'); }
     function close() { end('방에서 나왔습니다.', true); }
     function send(message) {
@@ -233,34 +249,54 @@ export async function joinRoom(rawCode, rawName, {onMessage, onClose, onError, s
     peer.on('error', error => {
       if (finished) return;
       const detail = connectionError(error);
-      if (!accepted || peer.destroyed) end(detail.message);
+      if (!accepted || peer.destroyed) end(detail);
       else if (error.type !== 'network' && error.type !== 'disconnected') onError?.(detail);
     });
-    peer.on('close', () => end('방장과의 연결이 종료되었습니다.'));
+    peer.on('close', () => unavailable('방장과의 연결이 종료되었습니다.'));
     peer.on('connection', incoming => incoming.close());
     try {
       link = peer.connect(CHANNEL + '-' + code, {
         label: CHANNEL, reliable: true, serialization: 'binary', metadata: {name, intent, accountId, memberKey, returnRoom}
       });
     } catch {
-      end('방장과 연결할 수 없습니다. 다시 시도해 주세요.');
+      unavailable('방장과 연결할 수 없습니다. 다시 시도해 주세요.');
       return;
     }
     if (!link) {
-      end('방장과 연결할 수 없습니다. 다시 시도해 주세요.');
+      unavailable('방장과 연결할 수 없습니다. 다시 시도해 주세요.');
       return;
     }
-    watchLink(link, () => end('방장과의 연결이 종료되었습니다.'));
+    watchLink(link, () => unavailable('방장과의 연결이 종료되었습니다.'));
     link.on('data', packet => {
       if (finished || !packet) return;
       if (packet.kind === 'bye') {
         end(typeof packet.reason === 'string' ? packet.reason : '방에서 퇴장했습니다.', false, true);
-      } else if (!accepted && packet.kind === 'welcome') {
-        accepted = true;
-        cleanup();
-        resolve({code, send, close});
-      } else if (accepted && packet.kind === 'game') {
-        onMessage?.(packet.message);
+      } else if (packet.kind === 'welcome') {
+        welcomed = true;
+      } else if (welcomed && packet.kind === 'game') {
+        const message = packet.message;
+        if (accepted) { onMessage?.(message); return; }
+        // Welcome confirms the peer link. Only the first roster lets the
+        // application enter a usable room. Keep the join cancelable until then.
+        if (message?.type === 'state') {
+          if (!Array.isArray(message.view?.players) || message.view.players.length !== 5 ||
+              !Number.isInteger(message.view.seat) || message.view.seat < -1 || message.view.seat > 4) {
+            end('방의 참가자 정보를 읽지 못했습니다. 다시 참가해 주세요.');
+            return;
+          }
+          try {
+            for (const saved of initial) onMessage?.(saved);
+            initial.length = 0;
+            onMessage?.(message);
+          } catch {
+            end('방의 참가자 정보를 읽지 못했습니다. 다시 참가해 주세요.');
+            return;
+          }
+          if (finished) return;
+          accepted = true;
+          cleanup();
+          resolve({code, send, close});
+        } else initial.push(message);
       }
     });
   });

@@ -2,7 +2,7 @@ export const PUBLIC_ROOM_LIMIT = 4;
 export const PRIVATE_ROOM_LIMIT = 6;
 const HEARTBEAT_MS = 20000;
 
-async function rpc(client, operation, args, {signal, isPublic = false} = {}) {
+async function requestHeaders(client, isPublic) {
   const headers = {apikey:client.publishableKey, 'Content-Type':'application/json'};
   if (!isPublic) {
     await client.ready;
@@ -13,9 +13,14 @@ async function rpc(client, operation, args, {signal, isPublic = false} = {}) {
       headers.Authorization = 'Bearer ' + token;
     }
   }
+  return headers;
+}
+
+async function rpc(client, operation, args, {signal, isPublic = false, headers, keepalive = false} = {}) {
+  headers ??= await requestHeaders(client,isPublic);
   const timeout = AbortSignal.timeout(8000);
   const response = await fetch(client.url + '/rest/v1/rpc/mighty_directory_' + operation, {
-    method:'POST', headers, body:JSON.stringify(args), cache:'no-store', redirect:'error',
+    method:'POST', headers, body:JSON.stringify(args), cache:'no-store', redirect:'error', keepalive,
     signal:signal ? AbortSignal.any([timeout,signal]) : timeout
   });
   if (!response.ok) {
@@ -57,9 +62,9 @@ function publicSummary(summary) {
   return {hostName,phase,humanCount,spectatorCount,reservationCount,roundNumber,roundLimit};
 }
 
-export function watchDirectoryRoom(client,{store,getSummary,onError}) {
+export function watchDirectoryRoom(client,{store,getSummary,onError,canReleaseOnPageHide}) {
   let stopped = false, warned = false, lastSummary, lastSent = 0;
-  let queued = Promise.resolve(), closing;
+  let queued = Promise.resolve(), closing, release;
   async function args() {
     const term = store.term || await store.open();
     return {p_room_id:store.id,p_credential:store.credential,p_term:term};
@@ -71,8 +76,13 @@ export function watchDirectoryRoom(client,{store,getSummary,onError}) {
       const fingerprint = JSON.stringify(summary);
       if (lastSummary === fingerprint && Date.now() - lastSent < HEARTBEAT_MS) return;
       const identity = await args();
-      if (stopped) return;
-      await rpc(client,'refresh',{...identity,p_summary:summary});
+      const userId = client.state.user?.id;
+      const headers = await requestHeaders(client,false);
+      if (stopped || client.state.user?.id !== userId) return;
+      // Prepare the last host's small close request while the page is active.
+      // Waiting for an auth refresh inside pagehide can outlive the document.
+      if (canReleaseOnPageHide) release = {identity, headers, userId};
+      await rpc(client,'refresh',{...identity,p_summary:summary},{headers});
       lastSummary = fingerprint;
       lastSent = Date.now();
       warned = false;
@@ -85,8 +95,10 @@ export function watchDirectoryRoom(client,{store,getSummary,onError}) {
   }
   function stop() {
     stopped = true;
+    release = null;
     clearInterval(ticker);
     globalThis.document?.removeEventListener('visibilitychange', visible);
+    globalThis.window?.removeEventListener('pagehide', pageHide);
   }
   function close() {
     stop();
@@ -98,8 +110,16 @@ export function watchDirectoryRoom(client,{store,getSummary,onError}) {
   function visible() {
     if (globalThis.document?.visibilityState === 'visible') refresh();
   }
+  function pageHide(event) {
+    if (event.persisted || stopped || !release || !canReleaseOnPageHide() ||
+        release.identity.p_term !== store.term || release.userId !== client.state.user?.id) return;
+    const {identity,headers} = release;
+    stop();
+    closing = rpc(client,'close',identity,{headers,keepalive:true}).catch(() => {});
+  }
   const ticker = setInterval(refresh,HEARTBEAT_MS);
   globalThis.document?.addEventListener('visibilitychange', visible);
+  if (canReleaseOnPageHide) globalThis.window?.addEventListener('pagehide', pageHide);
   refresh();
   return {refresh,stop,close};
 }

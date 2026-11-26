@@ -13,6 +13,7 @@ function transport(t,handler) {
   t.mock.method(globalThis,'fetch',async(url,options)=>{
     if (options.signal.aborted) throw options.signal.reason;
     const entry={operation:url.split('mighty_directory_').pop(),args:JSON.parse(options.body),headers:options.headers};
+    if (options.keepalive) entry.keepalive = true;
     calls.push(entry);
     const value=await handler(entry,calls.length);
     return value instanceof Response ? value : new Response(value==null ? null : JSON.stringify(value));
@@ -98,4 +99,33 @@ test('private heartbeat accepts an anonymous elected controller and a retired le
   t.mock.timers.tick(60000);
   await listing.refresh();
   assert.equal(calls.length,1);
+});
+
+test('a departing document releases its last-person table once, using its current in-memory grant',async t=>{
+  const events=new EventTarget(), oldWindow=globalThis.window;
+  globalThis.window=events;
+  t.after(()=>{ if (oldWindow===undefined) delete globalThis.window; else globalThis.window=oldWindow; });
+  const calls=transport(t,()=>null);
+  const hide=persisted=>events.dispatchEvent(Object.assign(new Event('pagehide'),{persisted}));
+  let peers=0;
+  const session={...store}, account={...client,state:{user:{id:'member'}}};
+  const start=()=>watchDirectoryRoom(account,{store:session,getSummary:()=>summary,canReleaseOnPageHide:()=>peers===0});
+  let watcher=start(); t.after(()=>watcher.stop());
+  await watcher.refresh();
+  hide(true);
+  peers=1; hide(false);
+  peers=0; session.term=2; hide(false);
+  session.term=1; account.state.user=null; hide(false);
+  assert.equal(calls.filter(c=>c.operation==='close').length,0);
+  account.state.user={id:'member'};
+  hide(false);
+  assert.deepEqual(calls.at(-1),{operation:'close',args:{p_room_id:'archive',p_term:1,p_credential:'controller'},
+    headers:{apikey:'test-public','Content-Type':'application/json',Authorization:'Bearer member-token'},keepalive:true});
+  hide(false);
+  await watcher.close();
+  assert.equal(calls.filter(c=>c.operation==='close').length,1);
+  watcher=start();await watcher.refresh();watcher.stop();hide(false);
+  assert.equal(calls.filter(c=>c.operation==='close').length,1);
+  watcher=start();await watcher.refresh();await watcher.close();hide(false);
+  assert.equal(calls.filter(c=>c.operation==='close').length,2);
 });

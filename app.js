@@ -56,8 +56,10 @@ let botWorker = null;
 let claimWorker = null;
 let workerUnavailable = false;
 let pendingConnect = null;
+let dialogRevision = 0;
 let roomCode = '';
 let publicListing = null;
+let directoryRelease = Promise.resolve();
 let backups, backupTicket, reconnecting, restoreTimer, memberKey;
 let missingPeers = new Set();
 let publicReader = null, inheritedHand = null;
@@ -365,6 +367,14 @@ function pauseDirectory() {
   directoryScan = null;
 }
 
+function releaseUnusedRoom(store) {
+  // The user may have cancelled while the server was still granting the slot.
+  // Refresh any lobby that was shown before that late grant was released.
+  const closing = watchDirectoryRoom(accountClient,{store,getSummary:()=>null}).close();
+  directoryRelease = Promise.all([directoryRelease,closing]).then(() => {});
+  if (mode === 'lobby' && !pendingConnect) { pauseDirectory(); refreshDirectory(); }
+}
+
 async function refreshDirectory() {
   if (mode !== 'lobby' || pendingConnect || document.hidden || directoryScan) return;
   clearTimeout(directoryTimer);
@@ -373,6 +383,8 @@ async function refreshDirectory() {
   let nextScan = 45000;
   renderPublicTables(listedRooms, {loading:true});
   try {
+    await directoryRelease;
+    if (controller.signal.aborted) return;
     const rooms = await listPublicRooms({signal:controller.signal});
     if (controller.signal.aborted) return;
     listedRooms = rooms;
@@ -414,19 +426,36 @@ function pauseCountdownForDialog() {
 }
 
 function modal(title, content) {
+  dialogRevision++;
   $('modal-content').innerHTML = '<h2 id="modal-title">' + escape(title) + '</h2>' + content;
   if (!$('modal').open) $('modal').showModal();
   pauseCountdownForDialog();
 }
 
-function closeModal() {
-  pendingConnect?.abort();
+function cancelRoomConnection() {
+  const controller = pendingConnect;
   pendingConnect = null;
+  controller?.abort();
+}
+function closeModal() {
+  dialogRevision++;
+  const connecting = pendingConnect && $('modal').open && $('setup-form');
+  if (connecting) cancelRoomConnection();
   $('modal').close();
+  if (connecting && !transport) {
+    if (mode === 'joining') mode = 'lobby';
+    if (mode === 'lobby') refreshDirectory();
+  }
 }
 $('close-modal').onclick = closeModal;
 $('modal').addEventListener('cancel', event => { event.preventDefault(); closeModal(); });
 $('modal').addEventListener('click', event => { if (event.target === $('modal')) closeModal(); });
+window.addEventListener('pagehide', () => {
+  dialogRevision++;
+  if (!pendingConnect || transport) return;
+  if ($('modal').open && $('setup-form')) closeModal();
+  else if (mode === 'joining') stopSession();
+});
 function activeRules() {
   if (!snapshot) return DEFAULT_RULES;
   // Rooms hosted by the earlier version always start the auction at 13.
@@ -501,8 +530,10 @@ function showRules() {
 }
 $('nav-rules').onclick = showRules;
 
-function stopSession(message) {
+function stopSession(message, {returnToObserver = false} = {}) {
   generation++;
+  dialogRevision++;
+  cancelRoomConnection();
   reconnecting?.abort(); reconnecting = null;
   clearTimeout(restoreTimer);
   missingPeers.clear();
@@ -520,7 +551,7 @@ function stopSession(message) {
   chipReader = null;
   pendingPace = null;
   roomAccounts.clear();
-  publicListing?.close();
+  if (publicListing) directoryRelease = publicListing.close();
   publicListing = null;
   clearTimeout(botTimer);
   botDueAt = null;
@@ -534,7 +565,7 @@ function stopSession(message) {
   oldTransport?.close();
   authority = snapshot = null;
   roomCode = '';
-  mode = 'lobby';
+  mode = returnToObserver ? 'joining' : 'lobby';
   resetRoomChat();
   if ($('modal').open) closeModal();
   $('room').replaceChildren();
@@ -543,6 +574,13 @@ function stopSession(message) {
   if (url.searchParams.has('room')) {
     url.searchParams.delete('room');
     history.replaceState(null,'',url);
+  }
+  if (returnToObserver) {
+    showScreen('room');
+    $('room').innerHTML = '<section class="room-panel"><h2>관전석에 다시 연결 중</h2><p role="status">새 방장이 테이블을 여는 중입니다.</p><button id="cancel-observer-return" class="plain-button" type="button">연결 취소하고 로비로</button></section>';
+    $('cancel-observer-return').onclick = () => stopSession();
+    $('cancel-observer-return').focus();
+    return;
   }
   showScreen('lobby');
   // The last scan predates the entire visit. In particular our former host
@@ -635,6 +673,7 @@ function finishReservedDeparture() {
 }
 
 function requestLeave() {
+  if (mode === 'joining' && pendingConnect && !transport) { stopSession(); return; }
   if (mode === 'lobby' || preparing || leavingGeneration === generation) return;
   const canWatch = mode === 'host' && snapshot.publicRoom && !snapshot.spectator &&
     snapshot.game && snapshot.game.phase !== 'result';
@@ -1269,17 +1308,20 @@ async function passObserverHost(session,name,code) {
   try {
     if (!await backups.giveToNext() || generation !== token) return;
     publicListing?.stop(); publicListing = null;
-    stopSession();
+    stopSession(null, {returnToObserver:true});
     const controller = new AbortController();
     pendingConnect=controller;
-    const deadline=Date.now()+60000;
+    const deadline=setTimeout(() => {
+      if (pendingConnect === controller) stopSession('관전석에 연결하지 못했습니다. 로비에서 다시 관전할 수 있습니다.');
+    },60000);
     try {
-      while (!controller.signal.aborted && pendingConnect===controller && Date.now()<deadline) {
+      while (!controller.signal.aborted && pendingConnect===controller) {
         try { await connectRoom('join',name,code,controller.signal,{publicRoom:true,intent:'watch'}); return; }
         catch { await sleep(1400); }
       }
     } finally {
-      if (pendingConnect===controller) { pendingConnect=null; mode='lobby'; refreshDirectory(); }
+      clearTimeout(deadline);
+      if (pendingConnect===controller) stopSession('관전석에 연결하지 못했습니다. 로비에서 다시 관전할 수 있습니다.');
     }
   } finally { if (leavingGeneration === token) leavingGeneration=null; }
 }
@@ -1315,29 +1357,27 @@ async function connectRoom(kind, name, code, signal, {roundLimit, publicRoom, in
     let session, committedDeal;
     const createSession = () => new HostSession(name, preferences.rules, roomModels(preferences.models), roundLimit, {publicRoom, pace:preferences.pace});
     let store;
-    let reservedPublic = false;
+    let reservedPublic = false, reservedPrivate = false;
     if (!recovery && slot) {
       store = createRoomChatStore(accountClient,code);
       const claim = await reserveDirectoryRoom(accountClient,{store,code,slot,name,hostName:name});
       if (!active()) {
-        if (claim.claimed) { await store.open(); watchDirectoryRoom(accountClient,{store,getSummary:()=>null}).close(); }
+        if (claim.claimed) releaseUnusedRoom(store);
         return;
       }
       if (!claim.claimed) {
-        // Both players may have clicked the empty table before its host opened the channel.
-        let failure;
-        for (let attempt=0; attempt<10 && !signal.aborted; attempt++) {
-          try { return await connectRoom('join',name,code,signal,{roundLimit,publicRoom,intent,slot}); }
-          catch (error) { failure=error; await sleep(650); }
-        }
-        throw failure || new Error('테이블 연결을 취소했습니다.');
+        return connectRoom('join',name,code,signal,{roundLimit,publicRoom,intent,slot});
       }
       reservedPublic = true;
     }
     session = recovery ? HostSession.takeOver(recovery.table,recovery.self) : createSession();
     try {
+    // Finish opening a newly claimed public room before its signaling ID can
+    // accept another browser. A concurrent entrant can retry a missing host.
+    if (reservedPublic) await store.open();
+    if (!active()) throw new Error('테이블 연결을 취소했습니다.');
     link = await hostRoom({
-      signal, reclaimCode:recovery || slot ? code : null,
+      signal, reclaimCode:recovery || slot ? code : null, waitForCode:reservedPublic,
       onJoin(id, guestName, guestIntent, accountId, meta) {
         if (!active() || authority !== session) return '테이블을 준비하고 있습니다. 잠시 후 다시 시도해 주세요.';
         if (preparing) return '새 판의 배패를 준비하고 있습니다. 잠시 후 입장해 주세요.';
@@ -1435,14 +1475,15 @@ async function connectRoom(kind, name, code, signal, {roundLimit, publicRoom, in
         }
         if (committedDeal) session=HostSession.takeOver(recovery.table,recovery.self,committedDeal);
       }
-    } else if (!reservedPublic) await reserveDirectoryRoom(accountClient,{store,code:link.code,slot:null,hostName:name});
+    } else if (!reservedPublic) {
+      await reserveDirectoryRoom(accountClient,{store,code:link.code,slot:null,hostName:name});
+      reservedPrivate = true;
+    }
     await store.open();
     if (!active()) throw new Error('테이블 연결을 취소했습니다.');
     } catch (error) {
       link?.close();
-      if (reservedPublic && store) {
-        try { await store.open(); watchDirectoryRoom(accountClient,{store,getSummary:()=>null}).close(); } catch {}
-      }
+      if ((reservedPublic || reservedPrivate) && store) releaseUnusedRoom(store);
       throw error;
     }
     mode = 'host';
@@ -1451,7 +1492,9 @@ async function connectRoom(kind, name, code, signal, {roundLimit, publicRoom, in
     startHostChat(link.code,store.id,{store});
     roomAccounts.clear();
     roomAccounts.set(null, accountClient.state.user?.id ?? null);
-    publicListing = watchDirectoryRoom(accountClient,{store,getSummary:()=>session.publicSummary(),onError:error=>{if(active()) toast(error.message);}});
+    publicListing = watchDirectoryRoom(accountClient,{store,getSummary:()=>session.publicSummary(),
+      canReleaseOnPageHide:()=>authority === session && session.connections.size === 0,
+      onError:error=>{if(active()) toast(error.message);}});
     backups = hostBackups(store,{send:link.send,grace:Boolean(recovery),
       priority:id => (roomAccounts.get(id) ? (session.seatFor(id)>=0 ? 0 : 1) : 2) +
         (session.isDeparting(id) ? 5 : 0),
@@ -1563,16 +1606,50 @@ async function connectRoom(kind, name, code, signal, {roundLimit, publicRoom, in
   }
   roomCode = link.code;
   transport = link;
-  pendingConnect = null;
-  $('modal').close();
+  if (pendingConnect?.signal === signal) pendingConnect = null;
+  if ($('modal').open) $('modal').close();
   if (authority) publish();
   else if (snapshot) draw();
   else { showScreen('room'); $('room').textContent = '참가자 정보를 받고 있습니다…'; }
   window.scrollTo(0,0);
 }
 
+async function enterPublicTable(name, code, signal, options, showStatus) {
+  // Resolve the permanent slot at submit time. An earlier listing may describe
+  // a room that closed while the nickname form was open.
+  pauseDirectory();
+  await directoryRelease;
+  const started = Date.now();
+  let failure;
+  for (let attempt = 0; attempt < 4; attempt++) {
+    signal.throwIfAborted();
+    const rooms = await listPublicRooms({signal});
+    signal.throwIfAborted();
+    listedRooms = rooms;
+    renderPublicTables(rooms);
+    const room = rooms.find(entry => entry.slot === options.slot && entry.code === code);
+    if (!room) throw new Error('공개 테이블 목록을 다시 확인해 주세요.');
+    if (room.phase === 'settling') throw new Error('이 테이블은 이전 판을 정산 중입니다. 다른 테이블을 선택할 수 있습니다.');
+    const empty = room.phase === 'empty';
+    if (empty && options.intent !== 'play') throw new Error('이 테이블의 대국이 끝났습니다. 목록에서 빈 테이블에 입장할 수 있습니다.');
+    if (failure && !empty && (attempt === 3 || Date.now()-started >= 8000)) break;
+    showStatus(empty ? '빈 테이블을 여는 중…' : failure ? '방장 연결을 다시 확인하는 중…' : '방장에게 연결 중…');
+    try {
+      return await connectRoom(empty ? 'create' : 'join', name, code, signal, options);
+    } catch (error) {
+      if (!error.retryable || signal.aborted) throw error;
+      failure = error;
+      if (attempt < 3) await sleep(500 * (attempt+1));
+    }
+  }
+  throw new Error('아직 방장에게 연결되지 않습니다. 다시 시도하거나 다른 테이블을 선택해 주세요.');
+}
+
 async function openForm(kind, code = '', publicIntent = null, slot = null) {
+  if (mode !== 'lobby' || pendingConnect) return;
+  const opening = ++dialogRevision;
   if (kind !== 'profile' && publicIntent !== 'watch' && !await mayPlay()) return;
+  if (dialogRevision !== opening || mode !== 'lobby') return;
   const profile = kind === 'profile';
   const joining = kind === 'join';
   const publicTitles = {play:'테이블 입장', watch:'테이블 관전', reserve:'자리 예약'};
@@ -1582,8 +1659,10 @@ async function openForm(kind, code = '', publicIntent = null, slot = null) {
     joining ? '친구에게 받은 6자리 방 코드를 입력하세요.' : '방 코드로 친구를 초대하세요. 비공개 방은 동시에 6개까지 열 수 있습니다.') + '</p>';
   modal(title, intro + '<form id="setup-form"><label class="field">닉네임<input id="name-field" name="nickname" maxlength="16" required autocomplete="nickname"></label>' +
     (publicIntent ? '<input type="hidden" id="code-field">' : joining ? '<label class="field">방 코드<input class="code-field" id="code-field" name="code" maxlength="12" placeholder="6자리 코드" required autocomplete="off" spellcheck="false"></label>' : '') +
-    (kind === 'create' ? seriesPicker(roomPreferences().roundLimit) : '') +
-    '<div class="form-error" role="alert" id="form-error"></div><button class="primary-button form-submit" id="submit-form">' + (profile ? '저장' : title) + '</button></form>');
+    (kind === 'create' && !publicIntent ? seriesPicker(roomPreferences().roundLimit) : '') +
+    '<div class="form-error" role="alert" id="form-error"></div><button class="primary-button form-submit" id="submit-form">' + (profile ? '저장' : title) + '</button>' +
+    (publicIntent ? '<button type="button" class="plain-button form-submit" id="other-tables">다른 테이블 보기</button>' : '') + '</form>');
+  if (publicIntent) $('other-tables').onclick = closeModal;
   $('name-field').value = nickname;
   if (accountClient.state.user) $('name-field').readOnly = true;
   if (joining || publicIntent) { $('code-field').value = code; (code ? $('name-field') : $('code-field')).focus(); }
@@ -1599,24 +1678,28 @@ async function openForm(kind, code = '', publicIntent = null, slot = null) {
     if (profile) { closeModal(); return; }
     const controller = new AbortController();
     pendingConnect = controller;
-    const submit = $('submit-form');
+    const submit = $('submit-form'), errorLine = $('form-error');
     submit.disabled = true;
     submit.textContent = '연결 중…';
     $('form-error').textContent = '';
     try {
       const form = event.currentTarget;
-      await connectRoom(kind,name,code,controller.signal,{roundLimit:selectedLimit(form),
-        publicRoom:Boolean(publicIntent), slot, intent:publicIntent ?? 'play'});
+      const options = {roundLimit:publicIntent ? roomPreferences().roundLimit : selectedLimit(form),
+        publicRoom:Boolean(publicIntent), slot, intent:publicIntent ?? 'play'};
+      if (publicIntent) {
+        await enterPublicTable(name,code,controller.signal,options,message => { submit.textContent=message; });
+      } else await connectRoom(kind,name,code,controller.signal,options);
     }
     catch (error) {
-      if (controller.signal.aborted) return;
-      $('form-error').textContent = error.message;
+      if (pendingConnect === controller && errorLine.isConnected) errorLine.textContent = error.message;
     } finally {
-      if (pendingConnect === controller) pendingConnect = null;
-      if (mode === 'joining' && !transport) mode = 'lobby';
-      if (mode === 'lobby') refreshDirectory();
-      submit.disabled = false;
-      submit.textContent = title;
+      if (pendingConnect === controller) {
+        pendingConnect = null;
+        if (mode === 'joining' && !transport) mode = 'lobby';
+        if (mode === 'lobby') refreshDirectory();
+        submit.disabled = false;
+        submit.textContent = title;
+      }
     }
   };
 }
