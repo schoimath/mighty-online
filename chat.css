@@ -13,7 +13,6 @@
   background: #234231;
   font-size: .875rem;
 }
-.room-actions .chat-toggle { padding: 10px 16px; }
 #chat-unread {
   position: absolute;
   right: -5px;

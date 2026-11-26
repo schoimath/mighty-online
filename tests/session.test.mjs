@@ -139,8 +139,28 @@ test('each seat independently draws from just the three playable models when cre
   assert.deepEqual(draws, []);
   assert.deepEqual(MODEL_CATALOG.map(m => m.id), ['contract_search','recurrent_balanced','heuristic']);
   const expected = ['contract_search','recurrent_balanced','heuristic','heuristic','recurrent_balanced'];
+  assert.equal(room.view(0).modelChoice, 'random');
   assert.deepEqual(room.view(0).botModels, expected);
   assert.deepEqual(room.view(3).botModels, expected);
+});
+
+test('a random model choice survives matching draws, room updates and host handoff', t => {
+  const room = new HostSession('방장', undefined, undefined, 10, {modelChoice:'heuristic', publicRoom:true});
+  room.addGuest('guest', '친구', 'play');
+  assert.equal(room.viewFor('guest').modelChoice, 'heuristic');
+  assert.deepEqual(room.plannedTable().models, Array(5).fill('heuristic'));
+  const random = t.mock.method(Math, 'random', () => 0);
+  room.setModelChoice('random');
+  room.setModelChoice('random');
+  const next = HostSession.takeOver(room.handoffState(), 'guest');
+  assert.equal(random.mock.callCount(), 5);
+  random.mock.restore();
+  assert.equal(next.hostView().modelChoice, 'random');
+  assert.deepEqual(next.plannedTable().models, Array(5).fill('contract_search'));
+  next.setModelChoice('recurrent_balanced');
+  assert.deepEqual(next.plannedTable().models, Array(5).fill('recurrent_balanced'));
+  next.start();
+  assert.ok(next.players.filter(player => player.bot).every(player => player.modelId === 'recurrent_balanced'));
 });
 
 test('AI models follow their configured seats through replacements and rematches', () => {

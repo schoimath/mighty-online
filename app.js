@@ -10,10 +10,9 @@ import {chatText, setupChat} from './chat.js';
 import {createRoomChatStore} from './room-chat-store.js';
 import {createRoomChatRelay} from './room-chat-relay.js';
 import {DEFAULT_RULES} from './engine.js';
-import {scoreTable, seatStanding} from './score-ui.js';
-import {bindModelSettings, modelLabel, modelSettings, modelSummary, readModelSettings} from './model-picker.js';
+import {modelLabel, modelSettings, modelSummary} from './model-picker.js';
 import {VERSION} from './release.js';
-import {rememberRoom, roomModels, roomPreferences} from './room-preferences.js';
+import {rememberRoom, roomPreferences} from './room-preferences.js';
 import {accountClient} from './account-client.js';
 import {setupAccountUI} from './account-ui.js';
 import {accountIdValid, callChipService, chipManifest, consentWindow, followChipHand, offeredSeat} from './chip-play.js';
@@ -490,20 +489,58 @@ function rulesSummary(rules) {
   </dl>`;
 }
 
-function ruleEditor(rules) {
-  const options = Array.from({length:8}, (_, i) => i + 13).map(points =>
-    `<option value="${points}"${points === rules.minBid ? ' selected' : ''}>${points}점</option>`).join('');
-  const toggle = (key, title, detail) => `<label class="rule-row">
-    <span><strong>${title}</strong><small>${detail}</small></span>
-    <input type="checkbox" role="switch" name="${key}" aria-label="${title}"${rules[key] ? ' checked' : ''}>
-  </label>`;
-  return `<fieldset class="rule-settings"><legend>테이블 규칙</legend>
-    <label class="rule-row"><span><strong>최저 공약</strong><small>경매에서 처음 부를 수 있는 점수</small></span>
-      <select name="minBid" aria-label="최저 공약">${options}</select></label>
-    ${toggle('allowFirstFriend','초구 프렌드 가능','첫 트릭의 승자를 프렌드로 지정')}
-    ${toggle('allowFirstJokerCall','초구 조커콜 효력','첫 트릭부터 조커콜 선언')}
-    ${toggle('allowLastJoker','막구 조커 효력','마지막 트릭 조커가 기루다를 이김')}
-  </fieldset>`;
+const tableRules = [
+  ['minBid', '최저 공약', '경매에서 처음 부를 수 있는 점수'],
+  ['allowFirstFriend', '초구 프렌드 가능', '첫 트릭의 승자를 프렌드로 지정'],
+  ['allowFirstJokerCall', '초구 조커콜 효력', '첫 트릭부터 조커콜 선언'],
+  ['allowLastJoker', '막구 조커 효력', '마지막 트릭 조커가 기루다를 이김']
+];
+
+function ruleEditor(rules, {room = false, editable = true} = {}) {
+  const fields = tableRules.map(([key, title, detail]) => {
+    const noteId = 'room-note-' + key;
+    const attributes = `name="${key}" aria-label="${title}"${room ? ' aria-describedby="' + noteId + '"' : ''}`;
+    let control;
+    if (!editable) {
+      const [off, on] = key === 'allowFirstFriend' ? ['미허용','허용'] : ['효력 없음','효력 있음'];
+      const value = key === 'minBid' ? escape(rules[key]) + '점' : (rules[key] ? on : off);
+      control = `<span class="room-rule-value" data-rule-value="${key}">${value}</span>`;
+    } else if (key === 'minBid') {
+      const options = Array.from({length:8}, (_, i) => i + 13).map(points =>
+        `<option value="${points}"${points === rules[key] ? ' selected' : ''}>${points}점</option>`).join('');
+      control = `<select ${attributes}>${options}</select>`;
+    } else {
+      control = `<input type="checkbox" role="switch" ${attributes}${rules[key] ? ' checked' : ''}>`;
+    }
+    if (!room) return `<label class="rule-row"><span><strong>${title}</strong><small>${detail}</small></span>${control}</label>`;
+    return `<div class="room-rule-cell">
+      <button type="button" class="room-rule-label" id="room-help-${key}" aria-describedby="${noteId}" aria-expanded="false">${title}</button>
+      <small role="tooltip" class="room-rule-tip" id="${noteId}">${detail}</small>
+      <div class="rule-row">${control}</div></div>`;
+  }).join('');
+  return `<fieldset class="rule-settings${room ? ' room-rule-settings' : ''}"><legend>테이블 규칙</legend>
+    ${room ? '<div class="room-rule-grid">' + fields + '</div>' : fields}</fieldset>`;
+}
+
+function bindRoomRuleHints(settings) {
+  const close = () => settings.querySelector('[aria-expanded="true"]')?.setAttribute('aria-expanded', 'false');
+  settings.onclick = event => {
+    const label = event.target.closest('.room-rule-label');
+    const open = label?.getAttribute('aria-expanded') === 'false';
+    close();
+    if (open) {
+      label.focus({preventScroll:true});
+      label.setAttribute('aria-expanded', 'true');
+    }
+  };
+  settings.onfocusout = close;
+  settings.onkeydown = event => {
+    if (event.key === 'Escape') {
+      close();
+      event.target.closest('.room-rule-cell')?.classList.add('hint-dismissed');
+    }
+  };
+  settings.onfocusin = settings.onpointerover = event => event.target.closest('.room-rule-cell')?.classList.remove('hint-dismissed');
 }
 
 function readRules(container) {
@@ -525,13 +562,27 @@ function selectedLimit(container) {
   return Number(container.querySelector('[name="roundLimit"]:checked')?.value) || null;
 }
 
-function paceSetting(pace, editable = true) {
+const paceLabels = {slow:'느리게', normal:'보통', fast:'빠르게'};
+
+function paceSetting(pace) {
   const selected = normalizeGameSpeed(pace);
-  const labels = {slow:'느리게', normal:'보통', fast:'빠르게'};
-  if (!editable) return '<p class="series-summary"><strong>진행 속도</strong> ' + labels[selected] + '</p>';
-  const choices = Object.entries(labels).map(([value, label]) =>
+  const choices = Object.entries(paceLabels).map(([value, label]) =>
     `<label><input type="radio" name="pace" value="${value}"${value === selected ? ' checked' : ''}><span>${label}</span></label>`);
   return '<fieldset class="series-picker pace-picker"><legend>진행 속도</legend><div>' + choices.join('') + '</div></fieldset>';
+}
+
+function roomGameOptions(board, pace, host, canSetLimit) {
+  const limit = board?.roundLimit ?? 0;
+  const selectedPace = normalizeGameSpeed(pace);
+  const picker = (name, title, values, selected) => {
+    const options = values.map(([value, label]) =>
+      `<option value="${value}"${value === selected ? ' selected' : ''}>${label}</option>`).join('');
+    return `<label class="room-game-option"><strong>${title}</strong><select name="${name}">${options}</select></label>`;
+  };
+  const series = canSetLimit ? picker('roundLimit', '경기 판수', [[10,'10판'],[20,'20판'],[0,'무제한']], limit) : seriesSummary(board);
+  const speed = host ? picker('pace', '진행 속도', Object.entries(paceLabels), selectedPace)
+    : `<p class="series-summary"><strong>진행 속도</strong> ${paceLabels[selectedPace]}</p>`;
+  return '<div class="room-game-options">' + series + speed + '</div>';
 }
 
 function seriesSummary(board) {
@@ -834,8 +885,6 @@ function drawRoom() {
   const board = snapshot.scoreboard;
   const canSetLimit = host && !board?.rounds;
   const focus = room.contains(document.activeElement) ? document.activeElement : null;
-  const modelDetailsOpen = room.querySelector('.model-details')?.open;
-  const standingsOpen = room.querySelector('details.match-standings')?.open;
   const focusSeat = focus?.closest('[data-room-seat]')?.dataset.roomSeat;
   const canChoose = Number.isInteger(snapshot.hostSeat) && (!snapshot.spectator || snapshot.supportsOpenSeatChoice);
   const hostSeat = snapshot.hostSeat ?? 0;
@@ -846,14 +895,13 @@ function drawRoom() {
     const roles = [isHostSeat && '방장', mine && '나'].filter(Boolean).join(' · ');
     const number = (index + 1) + '번 자리';
     const canMove = canChoose && !mine && (!player || (!snapshot.spectator && !swap));
-    const standing = player ? seatStanding(snapshot.scoreboard, index) : '';
     const contents = `<span class="seat-caption"><span class="seat-number">${number}</span>
       ${roles ? '<span class="seat-tag">' + roles + '</span>' : ''}</span>
-      <span class="seat-identity"><strong class="seat-name"${player ? ' title="' + escape(player.name) + '"' : ''}>${player ? escape(player.name) : '빈자리'}</strong>${standing ? '<span id="room-total-' + index + '">' + standing + '</span>' : ''}</span>
+      <span class="seat-identity"><strong class="seat-name"${player ? ' title="' + escape(player.name) + '"' : ''}>${player ? escape(player.name) : '빈자리'}</strong></span>
       ${canMove ? '<span class="seat-action">' + (player ? '교환 요청' : '여기 앉기') + '</span>' : ''}`;
     const description = player ? number + ' ' + player.name + (isHostSeat ? ' 방장' : '') + '에게 자리 교환 요청' : number + '에 앉기';
     return `<li data-room-seat="${index}" class="${mine ? 'seat-mine' : player ? 'seat-occupied' : 'seat-open'}"${mine ? ' aria-current="true" tabindex="-1"' : ''}>
-      ${canMove ? '<button type="button" class="seat-place" data-choose-seat="' + index + '" aria-label="' + escape(description) + '"' + (standing ? ' aria-describedby="room-total-' + index + '"' : '') + '>' + contents + '</button>'
+      ${canMove ? '<button type="button" class="seat-place" data-choose-seat="' + index + '" aria-label="' + escape(description) + '">' + contents + '</button>'
         : '<div class="seat-place">' + contents + '</div>'}</li>`;
   }).join('');
   let swapPanel = '';
@@ -876,9 +924,10 @@ function drawRoom() {
   const startHint = host
     ? (!occupied ? '한 명 이상 자리에 앉으면 게임을 시작할 수 있습니다.' : occupied < 5 ? '빈자리 ' + (5 - occupied) + '곳은 AI가 맡습니다.' : '다섯 자리가 모두 찼습니다.')
     : snapshot.spectator ? '방장이 게임을 시작하면 보드에서 관전할 수 있습니다.' : '방장이 게임을 시작하면 카드를 받습니다.';
-  const startSection = '<div class="room-start">' + (host
+  const startSection = '<div class="room-start"><div class="room-start-actions">' + (host
     ? '<button type="button" id="start-round" class="round-start-button" aria-describedby="room-start-hint"' + (!occupied ? ' disabled' : '') + '>게임 시작</button>'
-    : '') + '<p id="room-start-hint">' + startHint + '</p></div>';
+    : '') + (canWatch ? '<button type="button" class="plain-button" id="lobby-watch">관전석으로</button>' : '') +
+    '<button type="button" class="plain-button" id="room-leave">나가기</button></div><p id="room-start-hint">' + startHint + '</p></div>';
   roomPanel.innerHTML = '<h1>' + (snapshot.publicRoom ? '공개 게임 대기실' : '게임 대기실') + '</h1><p>' +
     (snapshot.publicRoom ? '관전 중에도 빈자리에 앉을 수 있습니다.' : '친구에게 방 코드나 초대 링크를 보내 주세요.') + '</p>' +
     '<div class="room-code-section"><span>방 코드</span><strong class="room-code">' + escape(roomCode) + '</strong><button id="copy-invite" class="plain-button">초대 링크 복사</button></div>' +
@@ -887,14 +936,10 @@ function drawRoom() {
       ? (occupied < 5 ? '참가하려면 원하는 빈자리를 누르세요.' : '다섯 자리가 모두 찼습니다. 아래에서 다음 자리를 예약할 수 있습니다.')
       : '자리 번호 순으로 진행합니다. 빈자리에 앉거나 다른 참가자에게 교환을 요청하세요.') + '</p>' : '') +
     '<ol class="seat-list ' + (canChoose ? 'seat-map' : 'seat-readonly') + '" aria-label="자리 번호 순서">' + seats + '</ol>' + swapPanel +
-    startSection + (canSetLimit ? seriesPicker(board?.roundLimit) : seriesSummary(board)) + paceSetting(snapshot.pace, host) +
-    (host ? modelSettings(snapshot.botModels, hostSeat, snapshot.players) : modelSummary(snapshot)) +
-    (host ? ruleEditor(activeRules()) : '<h2 class="room-heading">테이블 규칙</h2>' + rulesSummary(activeRules())) +
-    '<section class="public-audience" hidden></section><div class="room-actions">' +
-    (canWatch ? '<button class="plain-button" id="lobby-watch">관전석으로</button>' : '') +
-    '<button class="plain-button" id="room-leave">나가기</button></div>' +
-    scoreTable(snapshot.scoreboard, snapshot.seat, {collapsed:!snapshot.scoreboard?.rounds});
-  if (standingsOpen && room.querySelector('details.match-standings')) room.querySelector('details.match-standings').open = true;
+    startSection + roomGameOptions(board, snapshot.pace, host, canSetLimit) +
+    (host ? modelSettings(snapshot.modelChoice) : modelSummary(snapshot)) +
+    ruleEditor(activeRules(), {room:true, editable:host}) +
+    '<section class="public-audience" hidden></section>';
   $('copy-invite').onclick = copyInvite;
   $('room-leave').onclick = requestLeave;
   if (canWatch) $('lobby-watch').onclick = () => {
@@ -910,37 +955,32 @@ function drawRoom() {
     $('swap-decline').onclick = () => answerSwap(false);
   }
   if ($('swap-cancel')) $('swap-cancel').onclick = cancelSwap;
+  bindRoomRuleHints(room.querySelector('.room-rule-settings'));
   if (host) {
     $('start-round').onclick = startRound;
-    const series = room.querySelector('[name="roundLimit"]')?.closest('fieldset');
+    const series = room.querySelector('select[name="roundLimit"]');
     if (series) {
       series.onchange = () => {
-        const roundLimit = selectedLimit(series);
+        const roundLimit = Number(series.value) || null;
         authority.setRoundLimit(roundLimit);
         rememberRoom({roundLimit});
         publish();
       };
-      if (focus?.name === 'roundLimit') series.querySelector('input:checked')?.focus({preventScroll:true});
+      if (focus?.name === 'roundLimit') series.focus({preventScroll:true});
     }
-    const pacePicker = room.querySelector('.pace-picker');
+    const pacePicker = room.querySelector('select[name="pace"]');
     pacePicker.onchange = event => {
       authority.setPace(event.target.value);
       rememberRoom({pace:authority.pace});
       publish();
     };
-    if (focus?.name === 'pace') pacePicker.querySelector('input:checked')?.focus({preventScroll:true});
-    room.querySelector('.model-details').open = Boolean(modelDetailsOpen);
-    bindModelSettings(room, hostSeat, (models, changedSeat) => {
-      authority.setBotModels(models);
-      if (changedSeat === null) {
-        rememberRoom({models});
-      } else {
-        const overrides = roomPreferences().models;
-        overrides[changedSeat] = models[changedSeat];
-        rememberRoom({models:overrides});
-      }
+    if (focus?.name === 'pace') pacePicker.focus({preventScroll:true});
+    room.querySelector('[name="modelChoice"]').onchange = event => {
+      const modelChoice = event.target.value;
+      authority.setModelChoice(modelChoice);
+      rememberRoom({modelChoice});
       publish();
-    });
+    };
     const settings = $('room').querySelector('.rule-settings');
     settings.onchange = () => {
       authority.setRules(readRules(settings));
@@ -949,7 +989,7 @@ function drawRoom() {
     };
     if (focus?.name) settings.elements.namedItem(focus.name)?.focus({preventScroll:true});
   }
-  chat.attach(roomPanel.querySelector('.room-actions'), roomPanel);
+  chat.attach(null, roomPanel);
   drawAudience();
   const oldControl = focus?.id ? $(focus.id) : null;
   if (focusSeat != null || focus?.id.startsWith('swap-')) {
@@ -1304,14 +1344,13 @@ function openPracticeSetup() {
   const canSetLimit = !replay || board.complete;
   modal('연습 게임 설정', '<form id="practice-setup">' +
     (canSetLimit ? seriesPicker(board?.roundLimit) : seriesSummary(board)) +
-    paceSetting(replay ? authority.pace : roomPreferences().pace) + modelSettings(replay ? authority.botModels : undefined) +
+    paceSetting(replay ? authority.pace : roomPreferences().pace) + modelSettings(replay ? authority.modelChoice : undefined) +
     ruleEditor(replay ? activeRules() : DEFAULT_RULES) +
     '<button type="submit" class="primary-button form-submit" id="start-practice">연습 시작</button></form>');
-  bindModelSettings($('practice-setup'));
   $('practice-setup').onsubmit = event => {
     event.preventDefault();
     const rules = readRules(event.currentTarget);
-    const models = readModelSettings(event.currentTarget);
+    const modelChoice = event.currentTarget.elements.modelChoice.value;
     const pace = normalizeGameSpeed(event.currentTarget.elements.pace.value);
     rememberRoom({pace});
     if (replay) {
@@ -1319,11 +1358,11 @@ function openPracticeSetup() {
       authority.setPace(pace);
       if (canSetLimit) authority.setRoundLimit(selectedLimit(event.currentTarget));
       authority.setRules(rules);
-      authority.setBotModels(models);
+      authority.setModelChoice(modelChoice);
     } else {
       pauseDirectory();
       mode = 'practice';
-      authority = new HostSession(nickname, rules, models, selectedLimit(event.currentTarget), {pace});
+      authority = new HostSession(nickname, rules, undefined, selectedLimit(event.currentTarget), {pace, modelChoice});
     }
     closeModal();
     startRound();
@@ -1420,8 +1459,8 @@ async function connectRoom(kind, name, code, signal, {roundLimit, publicRoom, in
   if (kind === 'create') {
     const preferences = roomPreferences();
     let session, committedDeal;
-    const createSession = () => new HostSession(name, preferences.rules, roomModels(preferences.models), roundLimit,
-      {publicRoom, hostSpectator:intent === 'watch', pace:preferences.pace});
+    const createSession = () => new HostSession(name, preferences.rules, undefined, roundLimit,
+      {publicRoom, hostSpectator:intent === 'watch', pace:preferences.pace, modelChoice:preferences.modelChoice});
     let store;
     let reservedPublic = false, reservedPrivate = false;
     if (!recovery && slot) {

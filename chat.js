@@ -178,6 +178,7 @@ export function setupChat(send) {
   reopen.textContent='방 채팅 열기';
   reopen.hidden=true;
   dock.append(reopen);
+  let attached = false;
   let unread = 0;
 
   function showCount(count) {
@@ -358,15 +359,19 @@ export function setupChat(send) {
       void loadPage();
     },
     attach(actions, dockAfter) {
-      if (toggle.parentNode !== actions) actions.prepend(toggle);
+      if (actions) {
+        if (toggle.parentNode !== actions) actions.prepend(toggle);
+      } else if (toggle.parentNode) toggle.remove();
+      toggle.hidden = !actions;
       if (dockAfter.nextElementSibling !== dock) dockAfter.after(dock);
       if (panel.parentNode !== dock) dock.prepend(panel);
-      if (toggle.hidden) {
-        toggle.hidden = false;
+      if (!attached) {
+        attached = true;
         showLayout(layout);
       }
     },
     reset() {
+      attached = false;
       toggle.remove();
       toggle.hidden = true;
       toggle.setAttribute('aria-expanded','false');

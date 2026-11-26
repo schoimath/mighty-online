@@ -1,9 +1,9 @@
 import {botDecision, policyPlay} from '../engine.js';
 import {withJokerStatus} from '../table-joker.js';
-import {conserveMightyOnTrumpAce, conserveOpeningJoker, protectCalledJoker} from '../table-tactics.js?v=1.1.20261126151522';
+import {conserveMightyOnTrumpAce, conserveOpeningJoker, protectCalledJoker} from '../table-tactics.js?v=1.1.20261126153954';
 import {preferTrumpLead} from '../table-trump-lead.js';
-import {preferSideAcePlan} from '../table-side-ace.js?v=1.1.20261126151522';
-import {coordinateFriendPlay} from '../table-friend-play.js?v=1.1.20261126151522';
+import {preferSideAcePlan} from '../table-side-ace.js?v=1.1.20261126153954';
+import {coordinateFriendPlay} from '../table-friend-play.js?v=1.1.20261126153954';
 import {rngFor} from './game.js';
 import {protectPartner} from './partnership-policy.js';
 import {contractSearchAction} from './contract-search.js';
@@ -20,6 +20,18 @@ export const hasSeatMemory = id => id === 'recurrent_balanced';
 
 export function randomSeatModels(random = Math.random) {
   return Array.from({length:5}, () => MODEL_CATALOG[Math.floor(random() * MODEL_CATALOG.length)].id);
+}
+
+export function commonModelChoice(models) {
+  const first = models?.[0];
+  return Array.isArray(models) && models.length === 5 && isModelId(first) &&
+    Array.from(models).every(id => id === first) ? first : 'random';
+}
+
+export function modelsForChoice(choice) {
+  if (choice === 'random') return randomSeatModels();
+  if (!isModelId(choice)) throw new Error('전체 AI 모델을 확인해 주세요.');
+  return Array(5).fill(choice);
 }
 
 export function memoryForReplacement(id, seatHistory) {

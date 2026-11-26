@@ -4,7 +4,7 @@ import {jokerWasPlayed, withJokerStatus} from './table-joker.js';
 import {shouldDeclareSetting} from './bot-setting.js';
 import {settlements, TABLE_SCORING_VERSION} from './table-scoring.js';
 import {normalizeGameSpeed} from './table-timing.js';
-import {decideTableTurn, hasSeatMemory, isModelId, memoryForReplacement, randomSeatModels} from './lab/table-agents.js';
+import {commonModelChoice, decideTableTurn, hasSeatMemory, isModelId, memoryForReplacement, modelsForChoice} from './lab/table-agents.js';
 
 const BOT_NAMES = ['솔', '달', '별', '구름', '바다'];
 const validSeat = seat => Number.isInteger(seat) && seat >= 0 && seat < BOT_NAMES.length;
@@ -46,7 +46,7 @@ export class HostSession {
   chipHandId = null;
   #chipRevision = -1;
 
-  constructor(hostName, rules = DEFAULT_RULES, botModels = randomSeatModels(), roundLimit = null, {publicRoom = false, hostSpectator = false, pace} = {}) {
+  constructor(hostName, rules = DEFAULT_RULES, botModels, roundLimit = null, {publicRoom = false, hostSpectator = false, pace, modelChoice = commonModelChoice(botModels)} = {}) {
     this.publicRoom = publicRoom === true;
     this.pace = normalizeGameSpeed(pace);
     this.#hostName = hostName;
@@ -55,7 +55,8 @@ export class HostSession {
     if (this.hostSeat < 0) this.#observers.set(null,hostName);
     else this.players[this.hostSeat] = this.#player('host', hostName, false);
     this.rules = validateRules(rules);
-    this.botModels = validateBotModels(botModels);
+    this.botModels = validateBotModels(botModels === undefined ? modelsForChoice(modelChoice) : botModels);
+    this.modelChoice = modelChoice;
     this.#roundLimit = validateRoundLimit(roundLimit);
     this.connections = new Map();
     this.revision = 0;
@@ -91,7 +92,7 @@ export class HostSession {
       for (const key of fields) if (Object.hasOwn(game,key)) round[key] = game[key];
     }
     return structuredClone({version:1, publicRoom:this.publicRoom, rules:this.rules, pace:this.pace,
-      models:this.botModels, roundLimit:this.#roundLimit, revision:this.revision, hostSeat:this.hostSeat,
+      models:this.botModels, modelChoice:this.modelChoice, roundLimit:this.#roundLimit, revision:this.revision, hostSeat:this.hostSeat,
       hostMemberId:this.#hostMemberId,
       players:this.players, connections:[...this.connections], observers:[...this.#observers],
       observerMembers:[...this.#observerMembers], queue:this.#queue, departing:[...this.#departingGuests],
@@ -112,7 +113,7 @@ export class HostSession {
     }
     const peers = new Map(state.connections), observers = new Map(state.observers);
     const name = state.players[state.hostSeat]?.name ?? observers.get(null);
-    const session = new HostSession(name,state.rules,state.models,state.roundLimit,{publicRoom:state.publicRoom,pace:state.pace});
+    const session = new HostSession(name,state.rules,state.models,state.roundLimit,{publicRoom:state.publicRoom,pace:state.pace,modelChoice:state.modelChoice});
     session.hostSeat = state.hostSeat;
     session.players = state.players;
     session.connections = peers;
@@ -402,7 +403,14 @@ export class HostSession {
   setBotModels(models) {
     if (this.round) throw new Error('AI 모델은 대기실에서 변경할 수 있습니다.');
     this.botModels = validateBotModels(models);
+    this.modelChoice = commonModelChoice(models);
     this.revision++;
+  }
+
+  setModelChoice(choice) {
+    if (choice === this.modelChoice) return;
+    this.setBotModels(modelsForChoice(choice));
+    this.modelChoice = choice;
   }
 
   setRules(rules) {
@@ -690,7 +698,7 @@ export class HostSession {
     return {revision: this.revision, chipHandId:this.chipHandId, chipRevision:this.#chipRevision, seat, hostSeat: this.hostSeat, swap: swap ? {...swap} : null,
       publicRoom:this.publicRoom, spectator, spectators, reservation:positions.get(id) ?? null, supportsReservedExit:true,
       supportsOpenSeatChoice:this.publicRoom,
-      rules: {...this.rules}, pace:this.pace, botModels: [...this.botModels], players: roster.map(p => p && {...p}),
+      rules: {...this.rules}, pace:this.pace, botModels: [...this.botModels], modelChoice:this.modelChoice, players: roster.map(p => p && {...p}),
       scoreboard: this.#scoreboard(), game};
   }
 }
