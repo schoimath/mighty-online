@@ -1,4 +1,5 @@
 .g-screen {
+  --table-pace: 1;
   --g-cream: #f8f5e9;
   --g-soft: #a7c1b3;
   --g-night: #122c24;
@@ -311,6 +312,7 @@ html:has(.g-screen) { scrollbar-gutter: stable; }
 .g-panel-caption .g-wait-dot { background: #91af99; }
 .g-action h2 { margin: 0; color: var(--g-cream); font-size: 1.32rem; line-height: 1.3; letter-spacing: -.04em; overflow-wrap: anywhere; }
 .g-action p { margin: 8px 0 15px; color: #c4d5c5; font-size: .92rem; line-height: 1.65; word-break: keep-all; overflow-wrap: break-word; }
+.g-action .g-next-round { color: #f3dfaa; font-weight: 650; font-variant-numeric: tabular-nums; }
 .g-action .g-claim-outcome {
   margin: 10px 0; padding: 8px 12px; border-inline-start: 3px solid #91c9a0;
   background: #143126; color: #e1ecdc; word-break: keep-all;
@@ -449,9 +451,9 @@ html:has(.g-screen) { scrollbar-gutter: stable; }
   .g-trick-result { top: 21%; padding: 2px 7px; font-size: .75rem; }
 }
 @media (prefers-reduced-motion: no-preference) {
-  .g-flight-back { animation: g-send-card-back 420ms cubic-bezier(.2,.67,.4,1) var(--deal-delay) both; }
+  .g-flight-back { animation: g-send-card-back calc(420ms * var(--table-pace)) cubic-bezier(.2,.67,.4,1) calc(var(--deal-delay) * var(--table-pace)) both; }
   .g-hand-card.g-deal .g-card-face {
-    animation: g-deal-card 320ms cubic-bezier(.17, .65, .23, 1) var(--deal-delay, 0ms) backwards;
+    animation: g-deal-card calc(320ms * var(--table-pace)) cubic-bezier(.17, .65, .23, 1) calc(var(--deal-delay, 0ms) * var(--table-pace)) backwards;
   }
   .g-hand-card.g-deal .g-card-face::after {
     content: ""; position: absolute; inset: 0; border: 3px solid #eee8cc; border-radius: inherit;
@@ -459,12 +461,12 @@ html:has(.g-screen) { scrollbar-gutter: stable; }
     background-image: repeating-linear-gradient(45deg, transparent 0 4px, #c3b48488 4px 5px),
                       repeating-linear-gradient(-45deg, transparent 0 4px, #c3b48488 4px 5px);
     opacity: 0; pointer-events: none;
-    animation: g-reveal-face 320ms ease-out var(--deal-delay, 0ms) backwards;
+    animation: g-reveal-face calc(320ms * var(--table-pace)) ease-out calc(var(--deal-delay, 0ms) * var(--table-pace)) backwards;
   }
   .g-hand-card.g-sending { transform: translateY(-7px); transition: transform 100ms ease-out; }
   .g-board:has(.g-play-enter) { z-index: 1; }
   .g-trick:has(.g-play-enter) { z-index: 3; pointer-events: none; }
-  .g-on-table.g-play-enter { animation: g-play-card var(--play-time) cubic-bezier(.22,.45,.38,1) backwards; }
+  .g-on-table.g-play-enter { animation: g-play-card calc(var(--play-time) * var(--table-pace)) cubic-bezier(.22,.45,.38,1) backwards; }
   .g-mighty-play::before, .g-joker-call-play::before {
     content: ""; position: absolute; inset: -3px; border: 2px solid #fbe09a; border-radius: 7px;
     pointer-events: none; animation: g-mighty-ring 680ms 90ms ease-out both;
@@ -478,7 +480,7 @@ html:has(.g-screen) { scrollbar-gutter: stable; }
   .g-joker-call-play .g-card-face::after { background: linear-gradient(110deg, transparent 38%, #fbf4ffed 50%, transparent 62%); }
   .g-mighty-play .g-mighty-tag, .g-joker-call-play .g-joker-call-tag { animation: g-mighty-title 360ms 110ms ease-out backwards; }
   .g-trick.g-collecting .g-played {
-    animation: g-gather-cards 390ms cubic-bezier(.52, .03, .8, .55) forwards;
+    animation: g-gather-cards calc(390ms * var(--table-pace)) cubic-bezier(.52, .03, .8, .55) forwards;
   }
   .g-trick.g-collecting .g-played > span { opacity: 0; transition: opacity 80ms linear; }
   .g-result-arrive { animation: g-show-result 260ms ease-out backwards; }

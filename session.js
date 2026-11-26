@@ -3,6 +3,7 @@ import {applyAction, canDeclareSetting, createGame, getView, getSpectatorView, r
 import {jokerWasPlayed, withJokerStatus} from './table-joker.js';
 import {shouldDeclareSetting} from './bot-setting.js';
 import {settlements, TABLE_SCORING_VERSION} from './table-scoring.js';
+import {normalizeGameSpeed} from './table-timing.js';
 import {decideTableTurn, hasSeatMemory, isModelId, memoryForReplacement, randomSeatModels} from './lab/table-agents.js';
 
 const BOT_NAMES = ['솔', '달', '별', '구름', '바다'];
@@ -42,8 +43,9 @@ export class HostSession {
   chipHandId = null;
   #chipRevision = -1;
 
-  constructor(hostName, rules = DEFAULT_RULES, botModels = randomSeatModels(), roundLimit = null, {publicRoom = false} = {}) {
+  constructor(hostName, rules = DEFAULT_RULES, botModels = randomSeatModels(), roundLimit = null, {publicRoom = false, pace} = {}) {
     this.publicRoom = publicRoom === true;
+    this.pace = normalizeGameSpeed(pace);
     this.#hostName = hostName;
     this.players = [this.#player('host', hostName, false), null, null, null, null];
     this.hostSeat = 0;
@@ -290,6 +292,14 @@ export class HostSession {
     this.revision++;
   }
 
+  setPace(pace) {
+    if (this.round) throw new Error('진행 속도는 대기실에서 변경할 수 있습니다.');
+    const next = normalizeGameSpeed(pace);
+    if (this.pace === next) return;
+    this.pace = next;
+    this.revision++;
+  }
+
   get #complete() {
     return this.#roundLimit !== null && this.#completedRounds >= this.#roundLimit;
   }
@@ -307,7 +317,7 @@ export class HostSession {
       const id = seat === this.hostSeat ? null : Array.from(this.connections).find(([, n]) => n === seat)?.[0];
       return {id, name:player.name};
     });
-    return {seats, firstSeat, models:[...this.botModels], rules:{...this.rules}};
+    return {seats, firstSeat, models:[...this.botModels], rules:{...this.rules}, pace:this.pace};
   }
 
   start() {
@@ -546,7 +556,7 @@ export class HostSession {
     const roster = game?.result && this.#dealtPlayers ? this.#dealtPlayers : this.players;
     return {revision: this.revision, chipHandId:this.chipHandId, chipRevision:this.#chipRevision, seat, hostSeat: this.hostSeat, swap: swap ? {...swap} : null,
       publicRoom:this.publicRoom, spectator, spectators, reservation:positions.get(id) ?? null,
-      rules: {...this.rules}, botModels: [...this.botModels], players: roster.map(p => p && {...p}),
+      rules: {...this.rules}, pace:this.pace, botModels: [...this.botModels], players: roster.map(p => p && {...p}),
       scoreboard: this.#scoreboard(), game};
   }
 }

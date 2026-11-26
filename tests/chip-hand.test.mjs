@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import {operateHand} from '../supabase/functions/chip-hand/hand.js';
 import {chipHandler} from '../supabase/functions/chip-hand/handler.js';
 import {settlements} from '../table-scoring.js';
+import {validateRules} from '../engine.js';
+import {botTurnDelay, tableDelay} from '../table-timing.js';
 
 const host = 'b11255ac-bd23-4fd4-af36-aaaaaaaaaaaa';
 const guest = 'b11255ac-bd23-4fd4-af36-bbbbbbbbbbbb';
@@ -124,6 +126,56 @@ test('a spectating host starts only with separate host and actual player consent
   assert.equal(result.seat,-1);
   assert.deepEqual(result.game,result.publicGame);
   await assert.rejects(t.call(host,'ready',{...spec,seats:Array(5).fill(null)}));
+});
+
+test('table pace binds non-default consent and schedules AI turns, keeping the normal legacy manifest', async () => {
+  const spec = {...game, firstSeat:2};
+  const oldSpec = {host,room:spec.room,seats:spec.seats,names:spec.names,models:spec.models,
+    rules:validateRules(spec.rules),firstSeat:spec.firstSeat};
+  const oldDigest = Buffer.from(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(oldSpec)))).toString('hex');
+  for (const [pace,openingMs] of [['slow',2610],['normal',1800],['fast',1170]]) {
+    const t = table();
+    await t.call(host,'ready',{...spec,pace});
+    await t.call(guest,'ready',pace === 'normal' ? spec : {...spec,pace});
+    if (pace !== 'normal') await assert.rejects(t.call(host,'start',spec));
+    const opening = await t.call(host,'start',{...spec,pace});
+    assert.equal(opening.pace,pace);
+    assert.equal(opening.dueAt,at+openingMs);
+    assert.equal(t.row().state.manifest === oldDigest,pace === 'normal');
+    assert.equal((await t.call(guest,'view')).pace,pace);
+    assert.equal((await t.call(null,'watch',{},at+openingMs-1)).revision,0);
+    assert.equal((await t.call(null,'watch',{},at+openingMs)).revision,1);
+  }
+  for (const pace of [null,1,'very-fast','constructor']) {
+    await assert.rejects(table().call(host,'ready',{...spec,pace}), /진행 속도/);
+  }
+});
+
+test('human timeouts are independent of pace and old saved games still have normal timing', async () => {
+  for (const pace of ['fast','slow']) {
+    const t = table(), spec = {...game,pace};
+    for (const id of [host,guest]) await t.call(id,'ready',spec);
+    const opening = await t.call(host,'start',spec);
+    assert.equal(opening.dueAt,at+120_000);
+    const legacy = t.row();
+    delete legacy.state.pace;
+    const view = await operateHand({op:'watch',handId},null,{read:()=>legacy},at);
+    assert.equal(view.pace,'normal');
+  }
+  const phases = [
+    [{phase:'bid',bidHistory:[],dealNo:2},3150],
+    [{phase:'bid',bidHistory:[{}]},1350],
+    [{phase:'discard'},1910],
+    [{phase:'play',trick:[],trickNo:1},2200],
+    [{phase:'play',trick:[],trickNo:2},1050],
+    [{phase:'play',trick:[{}],trickNo:2},560]
+  ];
+  for (const [state,base] of phases) {
+    assert.equal(botTurnDelay(state),base);
+    assert.equal(botTurnDelay(state,'slow'),Math.round(base*1.45));
+    assert.equal(botTurnDelay(state,'fast'),Math.round(base*0.65));
+  }
+  assert.equal(botTurnDelay(phases[0][0],'fast',{showRedeal:false}),tableDelay(1800,'fast'));
 });
 
 test('HTTP handler authenticates against Auth and keeps its privileged credential out of user requests',async () => {

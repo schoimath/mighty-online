@@ -59,6 +59,31 @@ test('chip seats bind a verified account, its room, seat, host and table setting
   assert.notEqual(chipManifest(plan,code,owner,accounts).handId,spec.handId);
 });
 
+test('chip hand consent binds the advertised pace and supports legacy normal-speed rooms', () => {
+  const {table,accounts} = signedRoom();
+  const plan = table.plannedTable();
+  const snapshot = guestSnapshot(table,'connection');
+  const legacy = {...snapshot};
+  delete legacy.pace;
+  const normal = chipManifest({...plan,pace:'normal'},code,owner,accounts);
+  assert.equal(Object.hasOwn(normal,'pace'),false);
+  assert.equal(offeredSeat(legacy,normal,code,guest),1);
+  assert.equal(offeredSeat({...snapshot,pace:'normal'},normal,code,guest),1);
+  assert.equal(offeredSeat(legacy,{...normal,pace:'normal'},code,guest),1);
+  for (const pace of ['slow','fast']) {
+    const spec = chipManifest({...plan,pace},code,owner,accounts);
+    const view = {...snapshot,pace};
+    assert.equal(spec.pace,pace);
+    assert.equal(offeredSeat(view,spec,code,guest),1);
+    assert.equal(offeredSeat(view,normal,code,guest),-1);
+    assert.equal(offeredSeat(legacy,spec,code,guest),-1);
+  }
+  for (const pace of [null,'unknown',0]) {
+    assert.throws(() => chipManifest({...plan,pace},code,owner,accounts), /속도/);
+    assert.equal(offeredSeat({...snapshot,pace},{...normal,pace},code,guest),-1);
+  }
+});
+
 test('host relays public hands only, settles the dealt-in player once, then seats the reservation', () => {
   const {table,accounts} = signedRoom();
   const spec = chipManifest(table.plannedTable(),code,owner,accounts);
@@ -136,6 +161,26 @@ test('spectator polling cannot submit a move and ignores a response after closin
     assert.deepEqual(calls,[{op:'watch',handId}]);
     assert.deepEqual(seen,[initial]);
   } finally {follow.close();}
+});
+
+test('a fast table can read the next AI card before the normal polling interval', async t => {
+  t.mock.timers.enable({apis:['Date','setTimeout'],now:1000});
+  for (const [pace,ms] of [['normal',450],['fast',293]]) {
+    const handId = crypto.randomUUID(), seen = [];
+    const initial = {handId,pace,dueAt:Date.now(),revision:1,seat:-1,game:{phase:'play'}};
+    const follow = followChipHand(async () => { seen.push(Date.now()); return initial; },
+      handId,'watch',() => {},assert.fail,initial);
+    try {
+      follow.start();
+      t.mock.timers.tick(0);
+      await Promise.resolve();
+      t.mock.timers.tick(ms - 1);
+      assert.equal(seen.length,1);
+      t.mock.timers.tick(1);
+      assert.equal(seen.length,2);
+      assert.equal(seen[1] - seen[0],ms);
+    } finally { follow.close(); }
+  }
 });
 
 test('a spectator receives wallet changes between turns without replacing the game frame', {timeout:3000}, async () => {

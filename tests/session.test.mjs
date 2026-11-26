@@ -20,6 +20,19 @@ function fullRoom() {
   return session;
 }
 
+test('the selected pace follows the host, seated guests and spectators into the hand', () => {
+  const room = new HostSession('방장', undefined, undefined, 10, {publicRoom:true});
+  assert.equal(room.pace, 'normal');
+  room.addGuest('guest', '친구', 'play');
+  room.addGuest('observer', '관전자', 'watch');
+  room.setPace('fast');
+  assert.equal(room.plannedTable().pace, 'fast');
+  room.start();
+  for (const view of [room.hostView(), room.viewFor('guest'), room.viewFor('observer')]) {
+    assert.equal(view.pace, 'fast');
+  }
+});
+
 function finishWithFriend(session, friendSeat) {
   const submit = action => session.botTurn ? session.runBot(action) : session.act(session.round.turn, session.revision, action);
   submit({type: 'bid', points: session.rules.minBid, suit: 'H'});

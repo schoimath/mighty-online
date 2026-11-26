@@ -1,3 +1,5 @@
+import {normalizeGameSpeed, tableDelay} from './table-timing.js';
+
 // A bearer token goes directly to the configured game service. Peers exchange
 // hand IDs and one-hand consent notices, never tokens or personal projections.
 export async function callChipService(client, payload) {
@@ -21,7 +23,13 @@ export async function callChipService(client, payload) {
 
 export const accountIdValid = id => typeof id === 'string' && /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(id);
 
+function dealPace(value = 'normal') {
+  return normalizeGameSpeed(value) === value ? value : null;
+}
+
 export function chipManifest(plan, room, host, accounts) {
+  const pace = dealPace(plan.pace);
+  if (!pace) throw new Error('대국 속도를 확인해 주세요.');
   const seats = plan.seats.map(p => p.bot ? null : accounts.get(p.id));
   if (!accountIdValid(host) || seats.some(id => id !== null && !accountIdValid(id))) {
     throw new Error('모든 참가자가 계정에 로그인한 뒤 다시 입장해 주세요.');
@@ -30,13 +38,15 @@ export function chipManifest(plan, room, host, accounts) {
   if (!humans.length) throw new Error('칩 대국에는 칩을 보유한 참가자가 한 명 이상 필요합니다.');
   if (new Set(humans).size !== humans.length) throw new Error('한 계정은 한 자리에서만 참가할 수 있습니다.');
   return {handId:crypto.randomUUID(), room, host, seats, names:plan.seats.map(p => p.name),
-    models:plan.models, rules:plan.rules, firstSeat:plan.firstSeat};
+    models:plan.models, rules:plan.rules, firstSeat:plan.firstSeat, ...(pace === 'normal' ? {} : {pace})};
 }
 
 export function offeredSeat(snapshot, spec, room, userId) {
   if (!snapshot || !spec || (snapshot.game && snapshot.game.phase !== 'result') || spec.room !== room ||
       !accountIdValid(spec.handId) || !accountIdValid(userId) || spec.host !== snapshot.chipHost ||
       !Array.isArray(spec.seats) || spec.seats.length !== 5) return -1;
+  const pace = dealPace(spec.pace);
+  if (!pace || pace !== dealPace(snapshot.pace)) return -1;
   const seat = snapshot.spectator ? snapshot.reservation?.seat : snapshot.seat;
   if (!Number.isInteger(seat) || seat < 0 || seat > 4 || spec.seats[seat] !== userId) return -1;
   const next = snapshot.nextDeal;
@@ -101,7 +111,8 @@ export function followChipHand(request, handId, op, onState, onError, initial) {
     } finally {
       busy = false;
       const due = current?.dueAt;
-      const delay = Number.isFinite(due) ? Math.min(3200, Math.max(450, due - Date.now() + 50)) : 2600;
+      const minimumWait = tableDelay(450, current?.pace);
+      const delay = Number.isFinite(due) ? Math.min(3200, Math.max(minimumWait, due - Date.now() + 50)) : 2600;
       schedule(failures ? Math.min(12000, 2000 * failures) : delay);
     }
   }

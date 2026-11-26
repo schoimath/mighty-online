@@ -5,7 +5,7 @@ import {shouldDeclareSetting} from '../../../bot-setting.js';
 import {settlements} from '../../../table-scoring.js';
 import {jokerWasPlayed, withJokerStatus} from '../../../table-joker.js';
 import {decideTableTurn, hasSeatMemory, isModelId, memoryForReplacement} from '../../../lab/table-agents.js';
-import {AUCTION_BEAT_MS, FRIEND_ANNOUNCEMENT_MS} from '../../../table-timing.js';
+import {botTurnDelay, normalizeGameSpeed} from '../../../table-timing.js';
 
 const RECONNECT_MS = 120_000;
 const SUBSTITUTE_NAMES = ['AI 솔', 'AI 달', 'AI 별', 'AI 구름', 'AI 바다'];
@@ -26,8 +26,12 @@ function manifestOf(request) {
   check(five(names) && names.every(n => typeof n === 'string' && n.trim() && n.length <= 16), '자리별 닉네임을 확인해 주세요.');
   check(five(models) && models.every(isModelId), '자리별 AI 모델을 확인해 주세요.');
   check(Number.isInteger(firstSeat) && firstSeat >= 0 && firstSeat < 5, '첫 공약 자리를 확인해 주세요.');
+  const pace = normalizeGameSpeed(request.pace);
+  check(request.pace === undefined || pace === request.pace, '테이블 진행 속도를 확인해 주세요.');
+  // Old clients consented to the manifest without a pace field. Preserve its
+  // exact serialized shape for normal tables, and bind any other pace to consent.
   return {host:host.toLowerCase(), room, seats:normalized, names:names.map(n => n.trim()),
-    models, rules:validateRules(request.rules), firstSeat};
+    models, rules:validateRules(request.rules), firstSeat, ...(pace === 'normal' ? {} : {pace})};
 }
 
 async function hashManifest(spec) {
@@ -40,14 +44,11 @@ function nextDue(state, now) {
   const g = state.round;
   if (g.result) return null;
   if (!state.bots[g.turn]) return now + RECONNECT_MS;
-  if (g.phase === 'bid') return now + (g.bidHistory.length ? AUCTION_BEAT_MS : 1800);
-  if (g.phase === 'discard') return now + AUCTION_BEAT_MS + 560;
-  if (g.phase === 'play' && !g.trick.length) return now + (g.trickNo === 1 ? FRIEND_ANNOUNCEMENT_MS : 1050);
-  return now + 560;
+  return now + botTurnDelay(g, state.pace, {showRedeal:false});
 }
 
 function createState(spec, manifest, now) {
-  const state = {manifest, names:spec.names, models:spec.models, firstSeat:spec.firstSeat,
+  const state = {manifest, names:spec.names, models:spec.models, firstSeat:spec.firstSeat, pace:normalizeGameSpeed(spec.pace),
     round:createGame({firstSeat:spec.firstSeat, rules:spec.rules}), bots:spec.seats.map(id => id === null),
     history:Array.from({length:5}, () => []), memory:Array(5).fill(null), dueAt:null};
   state.dueAt = nextDue(state, now);
@@ -71,7 +72,7 @@ function present(row, id) {
   const seatBalances = row.seats.map((account, i) =>
     account && (!state.bots[i] || row.settled) && Number.isSafeInteger(row.seatBalances?.[i]) ? row.seatBalances[i] : null);
   return {handId:row.hand, room:row.room, revision:row.revision, seat, game, bots:state.bots,
-    names:state.names.map((_, i) => nameAt(row, i)), seatBalances, models:state.models, firstSeat:state.firstSeat,
+    names:state.names.map((_, i) => nameAt(row, i)), seatBalances, models:state.models, firstSeat:state.firstSeat, pace:normalizeGameSpeed(state.pace),
     dueAt:state.dueAt, deltas, ...(owner >= 0 && deltas ? {myDelta:deltas[owner]} : {}),
     ...(id === row.host ? {publicGame} : {})};
 }

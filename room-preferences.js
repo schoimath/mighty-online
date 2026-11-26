@@ -1,5 +1,6 @@
 import {DEFAULT_RULES, validateRules} from './engine.js';
 import {isModelId, randomSeatModels} from './lab/table-agents.js';
+import {normalizeGameSpeed} from './table-timing.js';
 
 const storageKey = 'mighty-room-preferences';
 
@@ -13,7 +14,7 @@ export function roomPreferences() {
     const id = saved?.models?.[seat];
     return isModelId(id) ? id : null;
   });
-  return {roundLimit:roundLimit === null || roundLimit === 20 ? roundLimit : 10, rules, models};
+  return {roundLimit:roundLimit === null || roundLimit === 20 ? roundLimit : 10, pace:normalizeGameSpeed(saved?.pace), rules, models};
 }
 
 export function rememberRoom(change) {

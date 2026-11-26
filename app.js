@@ -1,5 +1,6 @@
 import {clearGame, renderGame, rulesContent, updateSeatBalances} from './game-ui.js';
-import {AUCTION_BEAT_MS, FRIEND_ANNOUNCEMENT_MS} from './table-timing.js';
+import {botTurnDelay, normalizeGameSpeed} from './table-timing.js';
+import {createNextRoundTimer} from './next-round.js';
 import {hostRoom, joinRoom, normalizeRoomCode} from './network.js';
 import {listPublicRooms, publishPublicRoom, PUBLIC_ROOM_LIMIT} from './public-directory.js';
 import {renderPublicTables, renderPublicAudience, visibilityPicker} from './public-room-ui.js';
@@ -63,6 +64,33 @@ const chipRequest = payload => callChipService(accountClient, payload);
 let chipReader = null, preparing = null, acceptedOffer = null, resumeHand = null;
 let lastAccount = null, settledChipHand = null;
 let accountUI;
+const nextRound = createNextRoundTimer({
+  onStart:key => key === resultKey() ? startRound() : false,
+  onError:error => toast(error.message),
+  onChange:state => {
+    if (!state || state.key !== resultKey()) return;
+    if (mode === 'host') {
+      for (const id of authority.connections.keys()) {
+        transport.send(id, {type:'next-round', nextRound:state, sentAt:Date.now()});
+      }
+    }
+    // Result rendering can start this clock. Finish that render before updating its controls.
+    queueMicrotask(() => { if (state.key === resultKey()) draw(); });
+  }
+});
+
+function resultKey() {
+  if (!authority || snapshot?.game?.phase !== 'result' || snapshot.scoreboard?.complete) return null;
+  return snapshot.chipHandId || `practice-${generation}-${snapshot.scoreboard.rounds}`;
+}
+
+function receivedCountdown(state, handId, sentAt) {
+  if (!state || state.key !== handId) return null;
+  if (state.status !== 'running') return state;
+  if (!Number.isFinite(state.deadline) || !Number.isFinite(sentAt)) return null;
+  // A guest's device may use a different clock from the host.
+  return {...state, deadline:Date.now() + Math.max(0, state.deadline - sentAt)};
+}
 
 async function lookupActiveHand() {
   const user = accountClient.state.user;
@@ -202,9 +230,19 @@ $('public-tables').addEventListener('click', event => {
   if (button) openForm('join', button.dataset.publicCode, button.dataset.publicIntent);
 });
 
+function pauseCountdownForDialog() {
+  if (!authority || nextRound.state?.status !== 'running') return;
+  nextRound.pause();
+  const paused = nextRound.state;
+  $('modal').addEventListener('close', () => {
+    if (nextRound.state === paused && resultKey() === paused.key) nextRound.resume();
+  }, {once:true});
+}
+
 function modal(title, content) {
   $('modal-content').innerHTML = '<h2 id="modal-title">' + escape(title) + '</h2>' + content;
   if (!$('modal').open) $('modal').showModal();
+  pauseCountdownForDialog();
 }
 
 function closeModal() {
@@ -265,6 +303,15 @@ function selectedLimit(container) {
   return Number(container.querySelector('[name="roundLimit"]:checked')?.value) || null;
 }
 
+function paceSetting(pace, editable = true) {
+  const selected = normalizeGameSpeed(pace);
+  const labels = {slow:'느리게', normal:'보통', fast:'빠르게'};
+  if (!editable) return '<p class="series-summary"><strong>진행 속도</strong> ' + labels[selected] + '</p>';
+  const choices = Object.entries(labels).map(([value, label]) =>
+    `<label><input type="radio" name="pace" value="${value}"${value === selected ? ' checked' : ''}><span>${label}</span></label>`);
+  return '<fieldset class="series-picker pace-picker"><legend>진행 속도</legend><div>' + choices.join('') + '</div></fieldset>';
+}
+
 function seriesSummary(board) {
   const limit = board?.roundLimit;
   const target = limit === 10 || limit === 20 ? limit + '판' : '무제한';
@@ -282,6 +329,7 @@ $('nav-rules').onclick = showRules;
 
 function stopSession(message) {
   generation++;
+  nextRound.sync(null);
   preparing?.consent.close();
   preparing = acceptedOffer = null;
   $('room').inert = $('game').inert = false;
@@ -447,7 +495,7 @@ function drawRoom() {
     '<div class="seat-heading"><h2>' + (canChoose ? '자리 선택' : '참가자') + '</h2><span>참가 ' + occupied + ' / 5</span></div>' +
     (canChoose ? '<p class="seat-hint">자리 번호 순으로 진행합니다. 빈자리에 앉거나 다른 참가자에게 교환을 요청하세요.</p>' : '') +
     '<ol class="seat-list ' + (canChoose ? 'seat-map' : 'seat-readonly') + '" aria-label="자리 번호 순서">' + seats + '</ol>' + swapPanel +
-    (canSetLimit ? seriesPicker(board?.roundLimit) : seriesSummary(board)) +
+    (canSetLimit ? seriesPicker(board?.roundLimit) : seriesSummary(board)) + paceSetting(snapshot.pace, host) +
     (host ? modelSettings(snapshot.botModels, hostSeat, snapshot.players) : modelSummary(snapshot)) +
     (host ? ruleEditor(activeRules()) : '<h2 class="room-heading">테이블 규칙</h2>' + rulesSummary(activeRules())) +
     '<section class="public-audience" hidden></section><p>' + (host ? (occupied < 5 ? '지금 시작하면 빈자리 ' + (5-occupied) + '곳은 AI가 맡습니다.' : '다섯 명이 모였습니다. 게임을 시작하세요.') : snapshot.spectator ? '방장이 게임을 시작하면 보드에서 관전할 수 있습니다.' : '방장이 게임을 시작하면 카드를 받습니다.') +
@@ -467,7 +515,7 @@ function drawRoom() {
   if ($('swap-cancel')) $('swap-cancel').onclick = cancelSwap;
   if (host) {
     $('start-round').onclick = startRound;
-    const series = room.querySelector('.series-picker');
+    const series = room.querySelector('[name="roundLimit"]')?.closest('fieldset');
     if (series) {
       series.onchange = () => {
         const roundLimit = selectedLimit(series);
@@ -477,6 +525,13 @@ function drawRoom() {
       };
       if (focus?.name === 'roundLimit') series.querySelector('input:checked')?.focus({preventScroll:true});
     }
+    const pacePicker = room.querySelector('.pace-picker');
+    pacePicker.onchange = event => {
+      authority.setPace(event.target.value);
+      rememberRoom({pace:authority.pace});
+      publish();
+    };
+    if (focus?.name === 'pace') pacePicker.querySelector('input:checked')?.focus({preventScroll:true});
     room.querySelector('.model-details').open = Boolean(modelDetailsOpen);
     bindModelSettings(room, hostSeat, (models, changedSeat) => {
       authority.setBotModels(models);
@@ -541,12 +596,28 @@ function draw() {
   renderGame($('game'),remote?.game ?? snapshot.game,{
     names:remote?.names ?? snapshot.players.map(p => p?.name), isHost: Boolean(authority), scoreboard:snapshot.scoreboard,
     seatBalances:mode === 'practice' ? practiceSeatBalances(accountClient.state) : remote?.seatBalances,
-    chipDelta:remote?.myDelta, resumed:mode === 'resume',
+    chipDelta:remote?.myDelta, resumed:mode === 'resume', pace:remote?.pace ?? snapshot.pace,
     modelLabels:remote ? remote.models.map((id,i) => remote.bots[i] ? modelLabel(id) : '') :
       snapshot.players.map(p => p?.bot && p.modelId ? modelLabel(p.modelId) : ''),
     replaySetupLabel: mode === 'practice' ? (snapshot.scoreboard?.complete ? '새 연습 경기 설정' : '규칙·AI 바꿔서 시작') : '대기실로 돌아가기',
+    nextRound:authority ? nextRound.state : snapshot.nextRound,
+    onResultShown() {
+      const key = resultKey();
+      if (key) {
+        nextRound.sync(key);
+        if ($('modal').open) pauseCountdownForDialog();
+      }
+    },
+    onToggleNextRound() {
+      if (!resultKey()) return;
+      if (nextRound.state?.status === 'paused') nextRound.resume();
+      else nextRound.pause();
+    },
     onRules:showRules, onLeave:requestLeave, onReplay() {
-      if (authority?.round?.phase === 'result' && !snapshot.scoreboard?.complete) startRound();
+      const key = resultKey();
+      if (!key) return;
+      nextRound.sync(key);
+      nextRound.startNow();
     },
     onReplaySetup() {
       if (authority?.round?.phase !== 'result') return;
@@ -581,7 +652,7 @@ function publishAudience(joinedId) {
   const nextDeal = expectedChipTable();
   for (const id of authority.connections.keys()) {
     const view = authority.viewFor(id);
-    const packet = id === joinedId ? {type:'state', view:{...view,chipHost:roomAccounts.get(null),nextDeal}} :
+    const packet = id === joinedId ? {type:'state', view:{...view,chipHost:roomAccounts.get(null),nextDeal,nextRound:nextRound.state},sentAt:Date.now()} :
       {type:'audience', spectators:view.spectators, reservation:view.reservation,nextDeal};
     transport.send(id, packet);
   }
@@ -597,20 +668,15 @@ function expectedChipTable() {
 
 function publish() {
   clearTimeout(botTimer);
+  if (authority.round?.phase !== 'result') nextRound.sync(null);
   const nextDeal = expectedChipTable();
   for (const id of authority.connections.keys()) {
-    transport?.send(id,{type:'state',view:{...authority.viewFor(id),chipHost:roomAccounts.get(null),nextDeal}});
+    transport?.send(id,{type:'state',view:{...authority.viewFor(id),chipHost:roomAccounts.get(null),nextDeal,nextRound:nextRound.state},sentAt:Date.now()});
   }
   snapshot = authority.hostView();
   draw();
   if (mode === 'practice' && authority.botTurn) {
-    const game = snapshot.game;
-    let pause = 560;
-    if (game.phase === 'bid') pause = game.bidHistory.length ? AUCTION_BEAT_MS : 1800 + (game.dealNo > 1 ? AUCTION_BEAT_MS : 0);
-    else if (game.phase === 'discard') pause += AUCTION_BEAT_MS;
-    else if (game.phase === 'play' && game.trickNo === 1 && !game.trick.length) pause = FRIEND_ANNOUNCEMENT_MS;
-    else if (game.phase === 'play' && game.lastTrick && !game.trick.length) pause = 1050;
-    botTimer = setTimeout(takeBotTurn,pause);
+    botTimer = setTimeout(takeBotTurn, botTurnDelay(snapshot.game, authority.pace));
   }
 }
 
@@ -720,9 +786,9 @@ async function startRound() {
     authority.start();
     publish();
     window.scrollTo(0,0);
-    return;
+    return true;
   }
-  if (mode !== 'host' || preparing) return;
+  if (mode !== 'host' || preparing) return false;
   const table = authority;
   let pending;
   try {
@@ -755,8 +821,10 @@ async function startRound() {
     trackChipHand(spec.handId, initial);
     publish();
     window.scrollTo(0,0);
+    return true;
   } catch (error) {
     if (table === authority) toast(error.message);
+    return false;
   } finally {
     if (pending && preparing === pending) {
       preparing = null;
@@ -774,7 +842,8 @@ function openPracticeSetup() {
   const board = replay ? snapshot.scoreboard : null;
   const canSetLimit = !replay || board.complete;
   modal('연습 게임 설정', '<form id="practice-setup">' +
-    (canSetLimit ? seriesPicker(board?.roundLimit) : seriesSummary(board)) + modelSettings(replay ? authority.botModels : undefined) +
+    (canSetLimit ? seriesPicker(board?.roundLimit) : seriesSummary(board)) +
+    paceSetting(replay ? authority.pace : roomPreferences().pace) + modelSettings(replay ? authority.botModels : undefined) +
     ruleEditor(replay ? activeRules() : DEFAULT_RULES) +
     '<button type="submit" class="primary-button form-submit" id="start-practice">연습 시작</button></form>');
   bindModelSettings($('practice-setup'));
@@ -782,15 +851,18 @@ function openPracticeSetup() {
     event.preventDefault();
     const rules = readRules(event.currentTarget);
     const models = readModelSettings(event.currentTarget);
+    const pace = normalizeGameSpeed(event.currentTarget.elements.pace.value);
+    rememberRoom({pace});
     if (replay) {
       authority.returnToRoom();
+      authority.setPace(pace);
       if (canSetLimit) authority.setRoundLimit(selectedLimit(event.currentTarget));
       authority.setRules(rules);
       authority.setBotModels(models);
     } else {
       pauseDirectory();
       mode = 'practice';
-      authority = new HostSession(nickname, rules, models, selectedLimit(event.currentTarget));
+      authority = new HostSession(nickname, rules, models, selectedLimit(event.currentTarget), {pace});
     }
     closeModal();
     startRound();
@@ -804,7 +876,7 @@ async function connectRoom(kind, name, code, signal, {roundLimit, publicRoom, in
   pauseDirectory();
   if (kind === 'create') {
     const preferences = roomPreferences();
-    const session = new HostSession(name, preferences.rules, roomModels(preferences.models), roundLimit, {publicRoom});
+    const session = new HostSession(name, preferences.rules, roomModels(preferences.models), roundLimit, {publicRoom, pace:preferences.pace});
     link = await hostRoom({
       signal,
       onJoin(id, guestName, guestIntent, accountId) {
@@ -898,6 +970,12 @@ async function connectRoom(kind, name, code, signal, {roundLimit, publicRoom, in
       signal, intent, accountId:accountClient.state.user?.id,
       onMessage(packet) {
         if (!active()) return;
+        if (packet?.type === 'next-round' && snapshot?.game?.phase === 'result' &&
+            packet.nextRound?.key === snapshot.chipHandId) {
+          snapshot.nextRound = receivedCountdown(packet.nextRound, snapshot.chipHandId, packet.sentAt);
+          if (mode === 'guest') draw();
+          return;
+        }
         if (packet?.type === 'chat-message') { chat.receive(packet.message, packet.own === true); return; }
         if (packet?.type === 'chat-history') { chat.restore(packet.messages); return; }
         if (packet?.type === 'chip-offer' && mode === 'guest') {
@@ -914,6 +992,7 @@ async function connectRoom(kind, name, code, signal, {roundLimit, publicRoom, in
         if (packet?.type === 'error') { toast(packet.message); if (mode === 'guest') draw(); return; }
         if (packet?.type === 'state') {
           snapshot = packet.view;
+          snapshot.nextRound = receivedCountdown(snapshot.nextRound, snapshot.chipHandId, packet.sentAt);
           if (!snapshot.chipHost && intent !== 'watch') {
             stopSession('이 방은 이전 버전입니다. 새 버전의 방에서 칩 대국에 참가해 주세요.');
             return;

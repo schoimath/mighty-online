@@ -3,7 +3,7 @@ import {DECK, DEFAULT_RULES, leadSuit, mighty} from "./engine.js";
 import {VERSION} from "./release.js";
 import {jokerWasPlayed, withJokerStatus} from "./table-joker.js";
 import {playTableSound, soundControl, toggleSound} from "./sound.js";
-import {AUCTION_BEAT_MS, FRIEND_ANNOUNCEMENT_MS} from "./table-timing.js";
+import {AUCTION_BEAT_MS, FRIEND_ANNOUNCEMENT_MS, paceMultiplier, tableDelay} from "./table-timing.js";
 import {settlementDetails, TABLE_SCORING_VERSION} from "./table-scoring.js";
 import {settlements as archivedSettlements} from "./lab/scoring.js";
 
@@ -100,7 +100,7 @@ function announceFriend(ui, view) {
   const regularCard = call.kind === "card" && call.card !== "JK" && call.card !== mighty(bid.suit);
   banner.lastElementChild.textContent = regularCard ? name + " 프렌드" : name;
   banner.hidden = false;
-  ui.friendTimer = setTimeout(() => { banner.hidden = true; }, FRIEND_ANNOUNCEMENT_MS);
+  ui.friendTimer = setTimeout(() => { banner.hidden = true; }, tableDelay(FRIEND_ANNOUNCEMENT_MS, ui.options.pace));
 }
 function select(label, control, options, current) {
   return `<label class="g-field"><span>${label}</span><select data-field="${control}">${options.map(([value, text]) => `<option value="${escapeHtml(value)}"${String(value) === String(current) ? " selected" : ""}>${escapeHtml(text)}</option>`).join("")}</select></label>`;
@@ -559,6 +559,34 @@ function settingLineMarkup(view) {
     <ol start="${firstTrick}" style="--setting-columns:${Math.min(5, line.length)}">${cards}</ol></section>`;
 }
 
+function nextRoundControls(options) {
+  const {isHost, nextRound} = options;
+  if (!nextRound) return isHost ? button("다시 한 판", "replay") : "<p>방장이 다음 판을 시작할 때까지 기다려 주세요.</p>";
+  if (nextRound.status === "starting") return "<p>다음 판을 준비하고 있습니다.</p>";
+  if (nextRound.status === "manual") return isHost
+    ? "<p>다음 판을 자동으로 시작하지 못했습니다.</p>" + button("다음 판 다시 시작", "replay")
+    : "<p>방장이 다음 판을 다시 시작할 때까지 기다려 주세요.</p>";
+  const countdown = '<p class="g-next-round" data-next-countdown role="timer" aria-live="off"></p>';
+  if (!isHost) return countdown;
+  return countdown + button("지금 시작", "replay") +
+    button(nextRound.status === "paused" ? "자동 진행 재개" : "잠시 멈춤", "toggle-next-round", true, "secondary");
+}
+
+function updateNextCountdown(ui) {
+  clearTimeout(ui.countdownTimer);
+  const node = ui.root.querySelector("[data-next-countdown]");
+  const next = ui.options.nextRound;
+  if (!node || !next) return;
+  const paused = next.status === "paused";
+  const remaining = Math.max(0, paused ? next.remainingMs : next.deadline - Date.now());
+  const seconds = Math.ceil(remaining / 1000);
+  node.textContent = paused ? `자동 진행 일시정지 · 남은 시간 ${seconds}초` :
+    seconds > 0 ? `${seconds}초 후 다음 판이 시작됩니다.` : "다음 판을 준비하고 있습니다.";
+  if (!paused && seconds > 0) {
+    ui.countdownTimer = setTimeout(() => updateNextCountdown(ui), remaining - (seconds - 1) * 1000);
+  }
+}
+
 function resultControls(view, ui) {
   const result = view.result;
   const setting = result.setting;
@@ -585,8 +613,8 @@ function resultControls(view, ui) {
   const role = view.seat === result.declarer ? (result.friend == null ? "주공 ×4" : "주공 ×2")
     : view.seat === result.friend ? "프렌드" : "야당";
   const next = board?.complete || ui.options.resumed ? "" : scoreTable(board, view.seat)
-    + (ui.options.isHost ? button("다시 한 판", "replay") : "<p>방장이 다시 한 판을 누르면 이 자리에서 다음 판이 시작됩니다.</p>")
-    + (ui.options.isHost && ui.options.onReplaySetup ? button(escapeHtml(ui.options.replaySetupLabel), "replay-setup", true, "secondary") : "");
+    + nextRoundControls(ui.options)
+    + (ui.options.isHost && ui.options.onReplaySetup ? button(escapeHtml(ui.options.replaySetupLabel), "replay-setup", ui.options.nextRound?.status !== "starting", "secondary") : "");
   return `<h2>주공 팀 ${result.won ? "승리" : "패배"}</h2>
     ${claimResult}<p>공약은 ${escapeHtml(result.target)}점, 주공 팀은 ${escapeHtml(result.points)}점을 획득했어요.</p>
     <div class="g-result-score"><strong>${escapeHtml(result.points)}</strong><span>/ 20점</span></div>
@@ -731,6 +759,7 @@ function redraw(ui, newDeal = false) {
   if (newDeal) dealToOtherSeats(root, view.seat);
   const panel = root.querySelector(".g-panel");
   panel.innerHTML = panelMarkup(view, ui, nameAt);
+  updateNextCountdown(ui);
   panel.classList.toggle("g-result-arrive", view.phase === "result");
   if (openLog && panel.querySelector(".g-log")) panel.querySelector(".g-log").open = true;
   if (openBids && panel.querySelector("details.g-bid-history")) panel.querySelector("details.g-bid-history").open = true;
@@ -739,6 +768,11 @@ function redraw(ui, newDeal = false) {
     const [attr, value] = oldFocus;
     const radio = focused.type === "radio" ? `[value="${focused.value}"]` : "";
     root.querySelector(`[data-${attr}="${value}"]${radio}`)?.focus({ preventScroll: true });
+  }
+  if (view.phase !== "result") ui.resultWasShown = false;
+  else if (!ui.resultWasShown && !finished && !options.resumed && options.onResultShown) {
+    ui.resultWasShown = true;
+    options.onResultShown();
   }
 }
 function submit(ui, kind) {
@@ -789,6 +823,7 @@ function bind(ui) {
     if (kind === "rules") return ui.options.onRules?.();
     if (kind === "leave") return ui.options.onLeave?.();
     if (kind === "replay") return ui.options.onReplay?.();
+    if (kind === "toggle-next-round") return ui.options.onToggleNextRound?.();
     if (kind === "replay-setup") return ui.options.onReplaySetup?.();
     if (kind && ui.view.seat === ui.view.turn) {
       const action = submit(ui, kind);
@@ -850,7 +885,7 @@ function displayLatest(ui) {
         ui.auctionTimer = setTimeout(() => {
           ui.auctionTimer = null;
           displayLatest(ui);
-        }, AUCTION_BEAT_MS);
+        }, tableDelay(AUCTION_BEAT_MS, ui.options.pace));
         return;
       }
     }
@@ -892,7 +927,7 @@ function collectTrick(ui) {
   if (covered) ui.root.querySelector(".g-call-announcement").textContent = "";
   trick.classList.add("g-collecting");
   playTableSound("collect");
-  ui.timer = setTimeout(() => finishCollection(ui), COLLECT_MS);
+  ui.timer = setTimeout(() => finishCollection(ui), tableDelay(COLLECT_MS, ui.options.pace));
 }
 
 export function clearGame(container) {
@@ -901,7 +936,9 @@ export function clearGame(container) {
   clearTimeout(ui.timer);
   clearTimeout(ui.auctionTimer);
   clearTimeout(ui.friendTimer);
+  clearTimeout(ui.countdownTimer);
   ui.auctionTimer = null;
+  ui.resultWasShown = false;
   ui.view = ui.latest = ui.resolving = ui.signature = null;
   container.replaceChildren();
 }
@@ -928,6 +965,7 @@ export function renderGame(container, publicView, options = {}) {
     mountTable(container);
     ui.auctionMarkup = ui.centerMarkup = ui.settingsHtml = ui.finalHtml = null;
   }
+  container.firstElementChild.style.setProperty("--table-pace", paceMultiplier(options.pace));
   publicView = withRememberedJoker(publicView, ui.latest);
   if (ui.latest && !hasSettingDeclaration(ui.latest) && hasSettingDeclaration(publicView)) {
     playTableSound("setting");
@@ -969,7 +1007,7 @@ export function renderGame(container, publicView, options = {}) {
     ui.view = {...publicView, phase: "play", trickNo: last.number, trick: cards, turn: null};
     updateDefaults(ui, ui.view);
     redraw(ui);
-    ui.timer = setTimeout(() => collectTrick(ui), TRICK_HOLD_MS);
+    ui.timer = setTimeout(() => collectTrick(ui), tableDelay(TRICK_HOLD_MS, options.pace));
     return;
   }
   displayLatest(ui);
