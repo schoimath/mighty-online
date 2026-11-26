@@ -851,7 +851,7 @@ function draw() {
   renderGame($('game'),remote?.game ?? snapshot.game,{
     names:remote?.names ?? snapshot.players.map(p => p?.name), isHost: Boolean(authority), scoreboard:snapshot.scoreboard,
     seatBalances:mode === 'practice' ? practiceSeatBalances(accountClient.state) : remote?.seatBalances,
-    chipDelta:remote?.myDelta, resumed:mode === 'resume',
+    chipDelta:remote?.myDelta, settlementSeat:remote?.mySettlementSeat, resumed:mode === 'resume',
     turnDeadline:remote ? chipReader.localTurnDeadline : null,
     pace:remote?.game.result && mode !== 'resume' ? snapshot.pace : remote?.pace ?? snapshot.pace,
     pendingPace:pendingPace && pendingPace.reader === chipReader ? pendingPace.pace : null,

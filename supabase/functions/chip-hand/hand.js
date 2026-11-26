@@ -89,7 +89,7 @@ function present(row, id, now) {
   return {handId:row.hand, room:row.room, revision:row.revision, seat, game, bots:state.bots,
     names:state.names.map((_, i) => nameAt(row, i)), seatBalances, models:state.models, firstSeat:state.firstSeat, pace:normalizeGameSpeed(state.pace),
     dueAt:deadline ?? state.dueAt, turnDeadline:deadline, serverNow:now, lastTimedAction:state.lastTimedAction ?? null,
-    deltas, ...(owner >= 0 && deltas ? {myDelta:deltas[owner]} : {}),
+    deltas, ...(owner >= 0 && deltas ? {myDelta:deltas[owner], mySettlementSeat:owner} : {}),
     ...(id === row.host ? {publicGame} : {})};
 }
 

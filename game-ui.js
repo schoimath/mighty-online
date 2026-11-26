@@ -1,10 +1,10 @@
-import {isCoveredSeat, scoreTable, seatPile, seatStanding, settingPenaltyPile, signedScore} from "./score-ui.js";
+import {handOutcome, isCoveredSeat, scoreTable, seatPile, seatStanding, settingPenaltyPile, signedScore} from "./score-ui.js";
 import {DECK, DEFAULT_RULES, leadSuit, mighty} from "./engine.js";
 import {VERSION} from "./release.js";
 import {jokerWasPlayed, withJokerStatus} from "./table-joker.js";
 import {playTableSound, soundControl, toggleSound} from "./sound.js";
 import {AUCTION_BEAT_MS, FRIEND_ANNOUNCEMENT_MS, normalizeGameSpeed, paceMultiplier, tableDelay} from "./table-timing.js";
-import {settlementDetails, TABLE_SCORING_VERSION} from "./table-scoring.js";
+import {settlementDetails, settlements, TABLE_SCORING_VERSION} from "./table-scoring.js";
 import {settlements as archivedSettlements} from "./lab/scoring.js";
 
 const suitInfo = {
@@ -89,18 +89,31 @@ function callName(call, trump) {
   if (!call) return "미지정";
   if (call.kind === "card") {
     if (call.card === mighty(trump)) return "마이티 프렌드";
-    return call.card === "JK" ? "조커 프렌드" : cardName(call.card);
+    return call.card === "JK" ? "조커 프렌드" : cardName(call.card) + " 프렌드";
   }
   return call.kind === "first" ? "초구 프렌드" : "노프렌드";
 }
 function announceFriend(ui, view) {
   const banner = ui.root.querySelector(".g-friend-call");
-  const {call, bid} = view;
-  const name = callName(call, bid.suit);
-  const regularCard = call.kind === "card" && call.card !== "JK" && call.card !== mighty(bid.suit);
-  banner.lastElementChild.textContent = regularCard ? name + " 프렌드" : name;
+  banner.lastElementChild.textContent = callName(view.call, view.bid.suit);
   banner.hidden = false;
   ui.friendTimer = setTimeout(() => { banner.hidden = true; }, tableDelay(FRIEND_ANNOUNCEMENT_MS, ui.options.pace));
+}
+function updateFriendTag(tag, view, nameAt) {
+  tag.hidden = !view.call && view.phase !== "discard" && view.phase !== "friend";
+  if (tag.hidden) return;
+  const declaration = view.call ? callName(view.call, view.bid.suit) :
+    view.phase === "friend" ? "프렌드 지정 중" : "프렌드 지정 전";
+  let holder = "";
+  if (view.call && view.call.kind !== "none") {
+    if (view.friendKnown) holder = view.friend == null ? "노프렌드" : nameAt(view.friend);
+    else if (view.seat >= 0 && view.selfRole === "friend") holder = "나";
+  }
+  const text = holder ? declaration + " · " + holder : declaration;
+  if (tag.textContent !== text) {
+    tag.textContent = text;
+    tag.title = text;
+  }
 }
 function select(label, control, options, current) {
   return `<label class="g-field"><span>${label}</span><select data-field="${control}">${options.map(([value, text]) => `<option value="${escapeHtml(value)}"${String(value) === String(current) ? " selected" : ""}>${escapeHtml(text)}</option>`).join("")}</select></label>`;
@@ -218,9 +231,9 @@ function dealToOtherSeats(root, localSeat) {
   }
 }
 
-function roundSweep(view, board) {
+function roundSweep(view, options) {
   if (view.phase !== "result") return null;
-  if (!board) {
+  if (!options.scoreboard && !options.resumed) {
     // The original host awards a backrun for a ten-point contract shortfall.
     const {won, target, points} = view.result;
     if (won && points === 20) return "run";
@@ -344,14 +357,24 @@ function canDeclareSetting(ui) {
 function renderHand(ui, newDeal) {
   const {view, root} = ui;
   const hand = root.querySelector(".g-hand");
+  const shortcut = root.querySelector(".g-choice-shortcut");
   hand.hidden = view.seat < 0 || view.phase === "result";
   if (view.seat < 0 && hand.firstChild) hand.replaceChildren();
-  if (hand.hidden) return;
+  if (hand.hidden) { shortcut.hidden = true; return; }
   let row = hand.querySelector(".g-cards");
   if (!row) {
+    ui.decisionHtml = null;
     hand.setAttribute("aria-label", "내 손패");
-    hand.innerHTML = '<div class="g-section-heading"><h2>내 손패 <span></span></h2><div class="g-hand-actions"><span class="g-role"></span><button type="button" class="g-btn g-claim-open" data-do="claim" aria-haspopup="dialog" hidden>세팅 선언</button></div></div><div class="g-cards"></div><div class="g-play-settings" hidden></div>';
+    hand.innerHTML = '<div class="g-section-heading"><h2>내 손패 <span></span></h2><div class="g-hand-actions"><span class="g-role"></span><button type="button" class="g-btn g-claim-open" data-do="claim" aria-haspopup="dialog" hidden>세팅 선언</button></div></div><div class="g-cards"></div><section id="g-hand-decision" class="g-decision g-action" aria-label="내 차례 선택" hidden></section><div class="g-play-settings" hidden></div>';
     row = hand.querySelector(".g-cards");
+    ui.decisionObserver?.disconnect();
+    ui.decisionInView = false;
+    ui.decisionObserver = new IntersectionObserver(([entry]) => {
+      if (!entry.target.isConnected) return;
+      ui.decisionInView = entry.intersectionRatio >= .99;
+      shortcut.hidden = hand.hidden || entry.target.hidden || ui.decisionInView;
+    }, {threshold:[0, .99]});
+    ui.decisionObserver.observe(hand.querySelector(".g-decision"));
   }
   const cards = ui.playPending ? view.hand.filter(card => card !== ui.playPending.move.card) : view.hand;
   hand.querySelector("h2 span").textContent = cards.length + "장";
@@ -360,6 +383,14 @@ function renderHand(ui, newDeal) {
   role.textContent = roleAt(view, view.seat) || roleLabels[view.selfRole] || "";
   role.hidden = !role.textContent;
   hand.querySelector('[data-do="claim"]').hidden = !canDeclareSetting(ui);
+  const decision = hand.querySelector(".g-decision");
+  const choices = {bid:bidControls, discard:discardControls, friend:friendControls};
+  const markup = view.turn === view.seat && choices[view.phase] ? choices[view.phase](view, ui) : "";
+  if (markup !== ui.decisionHtml) decision.innerHTML = markup;
+  ui.decisionHtml = markup;
+  decision.hidden = !markup;
+  shortcut.hidden = !markup || ui.decisionInView;
+  if (markup) shortcut.textContent = {bid:"공약 선택 ↓", discard:"묻을 패 선택 ↓", friend:"프렌드 선택 ↓"}[view.phase];
   if (newDeal) row.replaceChildren();
   const existing = new Map(Array.from(row.children, el => [el.dataset.card, el]));
   for (const [card, el] of existing) if (!cards.includes(card)) el.remove();
@@ -481,10 +512,6 @@ function friendControls(view, ui) {
     : "함께할 사람이 가진 카드를 부르세요.";
   const solo = ui.friendKind === "card" && (view.hand.includes(ui.friendCard) || view.discarded.includes(ui.friendCard));
   return `<h2>프렌드를 정하세요</h2><p>${solo ? "내 손에 있거나 묻은 카드를 부르면 노프렌드로 진행해요." : hint}</p>${select("지정 방식", "friendKind", kinds, ui.friendKind)}${cardControls}${button("프렌드 확정", "friend")}`;
-}
-function playControls(view) {
-  const hasChoice = view.choices.plays.some(move => move.suit || move.jokerCall);
-  return "<h2>카드를 내세요</h2><p>" + (hasChoice ? "낼 카드를 누르세요. 조커의 요구 무늬와 조커콜은 카드를 고른 뒤 정해요." : "낼 수 있는 손패를 한 번 누르면 테이블에 놓입니다.") + "</p>";
 }
 function specialPlaySettings(view, ui) {
   if (!ui.pendingCard) return "";
@@ -641,9 +668,17 @@ function resultControls(view, ui) {
       ? `걸린 ${escapeHtml(setting.remainingPoints)}점을 ${recipient} 가져갔어요.` : "점수 카드가 없었어요."}</p>${settingPenaltyPile(view)}</div>` : "";
   const board = ui.options.scoreboard;
   const chipDelta = ui.options.chipDelta;
-  const net = chipDelta ?? (board ? board.members.find(m => m.seat === view.seat)?.lastDelta : archivedSettlements(result, view.bid.suit)[view.seat]);
+  const seat = ui.options.settlementSeat ?? view.seat;
+  const outcome = handOutcome(result, seat);
+  const currentRules = board?.scoringVersion === TABLE_SCORING_VERSION || ui.options.resumed;
+  let net = chipDelta;
+  if (outcome.role && net == null) {
+    if (currentRules) net = settlements(result, view.bid.suit)[seat];
+    else if (board) net = board.members.find(m => m.seat === seat)?.lastDelta;
+    else net = archivedSettlements(result, view.bid.suit)[seat];
+  }
   let breakdown = "";
-  if (board?.scoringVersion === TABLE_SCORING_VERSION || ui.options.resumed) {
+  if (currentRules) {
     const {base, bonuses, unit} = settlementDetails(result, view.bid.suit);
     const factors = bonuses.map(name => {
       const label = name === "노기루다" ? '<abbr title="노기루다">NT</abbr>' : name;
@@ -654,22 +689,22 @@ function resultControls(view, ui) {
       : `<strong>${signedScore(unit)}점</strong>`;
     breakdown = `<div class="g-settlement-formula"><span>여당 기준점수</span><div class="g-equation">${equation}</div></div>`;
   }
-  const role = view.seat === result.declarer ? (result.friend == null ? "주공 ×4" : "주공 ×2")
-    : view.seat === result.friend ? "프렌드" : "야당";
+  const role = outcome.role === '주공' ? (result.friend == null ? '주공 ×4' : '주공 ×2') : outcome.role;
+  const roleLabel = role ? `<small>내 역할 · ${role}</small>` : "";
+  const payout = Number.isSafeInteger(net) ? `<div class="g-result-score g-my-settlement" data-sign="${Math.sign(net)}">
+    <span>${chipDelta == null ? "내 정산" : "내 칩 증감"}</span><strong>${signedScore(net)}</strong><span>${chipDelta == null ? "점" : "칩"}</span></div>` : "";
   const next = ui.options.departing ? '<p role="status">나가기 예약에 따라 잠시 후 로비로 돌아갑니다.</p>' :
-    board?.complete || ui.options.resumed ? "" : scoreTable(board, view.seat)
+    board?.complete || ui.options.resumed ? "" : scoreTable(board, seat)
     + nextRoundControls(ui.options)
     + (ui.options.isHost && ui.options.onReplaySetup ? button(escapeHtml(ui.options.replaySetupLabel), "replay-setup", ui.options.nextRound?.status !== "starting", "secondary") : "");
-  return `<h2>주공 팀 ${result.won ? "승리" : "패배"}</h2>
-    ${claimResult}<p>공약은 ${escapeHtml(result.target)}점, 주공 팀은 ${escapeHtml(result.points)}점을 획득했어요.</p>
-    <div class="g-result-score"><strong>${escapeHtml(result.points)}</strong><span>/ 20점</span></div>
-    ${breakdown}${net == null ? '' : `<p class="g-my-settlement">${chipDelta == null ? '내 정산' : '내 칩 증감'} <strong>${signedScore(net)}${chipDelta == null ? '점' : '칩'}</strong>${view.seat < 0 ? '' : ` <small>(${role})</small>`}</p>`}
-    ${next}`;
+  return `<div class="g-outcome-heading"${outcome.role ? ` data-won="${outcome.won}"` : ""}><h2>${outcome.title}</h2>${roleLabel}</div>
+    ${payout}<p>공약 ${escapeHtml(result.target)}점 ${result.won ? "달성" : "실패"} · 여당 ${escapeHtml(result.points)}점 · 야당 ${20 - result.points}점</p>
+    ${claimResult}${breakdown}${next}`;
 }
 function previousTrick(view, nameAt) {
   const last = view.lastTrick;
   if (!last || isCoveredSeat(view, last.winner)) return "";
-  return `<details class="g-log"><summary>지난 트릭 <b>${escapeHtml(nameAt(last.winner))} 승리</b></summary><p>${escapeHtml(last.number)}트릭 · ${escapeHtml(last.points)}점 획득</p><ul>${last.cards.map(m => `<li><span>${escapeHtml(nameAt(m.seat))}</span><strong>${m.card === "JK" ? "★ 조커" : suitMark(m.card[0]) + " " + escapeHtml(m.card.slice(1))}${m.card === mighty(view.bid.suit) ? " · 마이티" : ""}</strong></li>`).join("")}</ul></details>`;
+  return `<section class="g-log"><h3>지난 트릭</h3><p>${escapeHtml(last.number)}트릭 · ${escapeHtml(nameAt(last.winner))} 승리 · ${escapeHtml(last.points)}점 획득</p><ul>${last.cards.map(m => `<li><span>${escapeHtml(nameAt(m.seat))}</span><strong>${m.card === "JK" ? "★ 조커" : suitMark(m.card[0]) + " " + escapeHtml(m.card.slice(1))}${m.card === mighty(view.bid.suit) ? " · 마이티" : ""}</strong></li>`).join("")}</ul></section>`;
 }
 function bidHistoryMarkup(view, nameAt) {
   const history = view.bidHistory;
@@ -682,42 +717,22 @@ function bidHistoryMarkup(view, nameAt) {
       : `<strong>${suitMark(entry.suit)} ${escapeHtml(suitInfo[entry.suit][1])} ${escapeHtml(entry.points)}점</strong>`}</li>`;
   }).join("");
   const list = `<ol aria-label="최근 입찰부터 표시">${entries}</ol>`;
-  if (view.phase === "bid") return `<section class="g-bid-history"><h3>입찰 기록 <small>최근순</small></h3>${list}</section>`;
-  return `<details class="g-bid-history"><summary>입찰 기록 · ${history.length}회</summary>${list}</details>`;
+  return `<section class="g-bid-history"><h3>입찰 기록 <small>최근순</small></h3>${list}</section>`;
 }
-function infoMarkup(view, nameAt) {
-  if (view.phase === "bid") {
-    const misdeal = view.misdealCount ? `<p class="g-misdeal" role="status">파토 · 첫 손패에 점수 카드가 없는 자리가 있어 다시 나눴습니다.${view.misdealCount > 1 ? ' (' + Number(view.misdealCount) + '회)' : ''}</p>` : "";
-    return misdeal + bidHistoryMarkup(view, nameAt);
-  }
-  const rows = [];
-  if (view.bid) rows.push(["공약", suitInfo[view.bid.suit].join(" ") + " · " + view.bid.points + "점"]);
-  if (view.declarer != null) rows.push(["주공", nameAt(view.declarer)]);
-  if (view.call) rows.push(["프렌드", view.friendKnown && view.friend == null ? "노프렌드" : (view.friend != null ? nameAt(view.friend) + " · " : "") + callName(view.call, view.bid.suit)]);
-  if (view.phase === "play") rows.push(["진행", view.trickNo + " / 10 트릭"]);
-  return `<dl class="g-info">${rows.map(([a, b]) => `<div><dt>${a}</dt><dd>${escapeHtml(b)}</dd></div>`).join("")}</dl>` + bidHistoryMarkup(view, nameAt);
+function renderRecords(ui) {
+  const {view, options, root} = ui;
+  const nameAt = seat => nameAtSeat(ui, seat);
+  const markup = previousTrick(view, nameAt) + bidHistoryMarkup(view, nameAt) + scoreTable(options.scoreboard, options.settlementSeat ?? view.seat);
+  if (markup === ui.recordsHtml) return;
+  root.querySelector(".g-records-body").innerHTML = markup || "<p>아직 기록된 입찰이나 트릭이 없습니다.</p>";
+  ui.recordsHtml = markup;
 }
-function panelMarkup(view, ui, nameAt) {
-  if (view.phase === "bid" && view.turn === null) {
-    const title = view.bid ? escapeHtml(nameAt(view.bid.seat)) + "님 낙찰" : "모두 패스했어요";
-    return `<div class="g-panel-body"><div class="g-panel-caption">경매 종료</div><div class="g-action" aria-live="polite"><h2>${title}</h2></div>${infoMarkup(view, nameAt)}</div>`;
-  }
-  if (ui.resolving) {
-    const last = ui.resolving;
-    const message = isCoveredSeat(view, last.winner) ? "획득한 카드를 덮었어요."
-      : last.points + "점을 가져갔어요.";
-    return `<div class="g-panel-body"><div class="g-panel-caption">트릭 결과</div><div class="g-action" aria-live="polite"><h2>${escapeHtml(nameAt(last.winner))} 승리</h2><p>${escapeHtml(last.number)}번째 트릭 · ${escapeHtml(message)}</p></div>${infoMarkup(view, nameAt)}</div>${previousTrick(view, nameAt)}`;
-  }
-  const mine = view.seat === view.turn;
-  const controls = { bid: bidControls, discard: discardControls, friend: friendControls, play: playControls, result: resultControls };
-  const waiting = view.phase !== "result" && !mine;
-  const pending = view.claimPending || ui.claimSubmitting;
-  const content = pending ? `<h2>세팅 판정 중</h2><p>${escapeHtml(nameAt(view.declarer))}님이 남은 트릭을 모두 딸 수 있는지 확인하고 있어요.</p>`
-    : waiting ? `<h2>${escapeHtml(nameAt(view.turn))}님 차례</h2><p>${({ bid: "입찰을 기다리고 있어요.", discard: "주공이 바닥패를 교환하고 있어요.", friend: "주공이 프렌드를 정하고 있어요.", play: "카드를 고르고 있어요." })[view.phase]}</p>` : controls[view.phase](view, ui);
-  const firstFriend = view.settingAwaitingFriend ? '<p class="g-claim-outcome" data-success="false"><strong>세팅 실패</strong>초구 프렌드를 정하기 위해 첫 트릭만 진행합니다.</p>' : "";
-  const standings = view.phase === "result" ? "" : scoreTable(ui.options.scoreboard, view.seat, {collapsed:true});
-  const resultCaption = ui.options.scoreboard?.complete ? "마지막 판 결과" : "최종 결과";
-  return `<div class="g-panel-body"><div class="g-panel-caption"><i class="${waiting ? "g-wait-dot" : ""}"></i>${view.phase === "result" ? resultCaption : pending ? "세팅 선언" : mine ? "내 차례" : "상대 차례"}</div><div class="g-action" aria-live="polite">${firstFriend}${content}</div>${standings}${infoMarkup(view, nameAt)}</div>${previousTrick(view, nameAt)}`;
+
+function tableNotice(view, ui) {
+  if (view.claimPending || ui.claimSubmitting) return "세팅 판정 중입니다.";
+  if (view.settingAwaitingFriend) return "세팅 실패 · 초구 프렌드를 정하기 위해 첫 트릭을 진행합니다.";
+  if (view.phase === "bid" && view.misdealCount) return "파토 · 점수 카드가 없는 손패가 있어 다시 나눴습니다.";
+  return "";
 }
 function mountTable(root) {
   root.innerHTML = `<div class="g-screen">
@@ -735,8 +750,9 @@ function mountTable(root) {
     </div></header>
     <div class="g-main">
       <div class="g-heading"><div class="g-eyebrow"><i aria-hidden="true">♠</i> 마이티 · 5인전
-        <span class="g-match-progress" hidden></span><small class="g-release-note">v${VERSION}</small></div>
-        <div class="g-title-row"><div class="g-title-context"><h1></h1><span class="g-round-tag"></span></div>
+        <span class="g-match-progress" hidden></span><small class="g-release-note">v${VERSION}</small>
+        <button type="button" class="g-records-open" data-do="records" aria-haspopup="dialog" aria-controls="g-records-dialog">대국 기록</button></div>
+        <div class="g-title-row"><div class="g-title-context"><h1></h1><div class="g-round-tags"><span class="g-round-tag"></span><span class="g-friend-tag" aria-live="polite" aria-atomic="true" hidden></span></div></div>
           <label class="g-pace"><span>진행 속도</span>
             <select data-table-pace><option value="slow">느리게</option><option value="normal">보통</option><option value="fast">빠르게</option></select>
             <strong class="g-pace-value" hidden></strong></label></div></div>
@@ -745,13 +761,19 @@ function mountTable(root) {
           <div class="g-table-center"></div><div class="g-auction-calls" hidden></div><div class="g-trick" hidden></div><div class="g-seats"></div>
           <div class="g-friend-call" role="status" aria-atomic="true" hidden><small>프렌드 선언</small><strong></strong></div>
           <span class="g-call-announcement" role="status" aria-atomic="true"></span>
-          <p class="g-trick-result" hidden><span></span><b></b></p></div></section>
+          <p class="g-trick-result" hidden><span></span><b></b></p></div>
+          <button type="button" class="g-choice-shortcut" data-do="jump-choice" aria-controls="g-hand-decision" hidden></button></section>
+        <p class="g-table-notice" role="status" hidden></p>
         <section class="g-hand"></section>
+        <section class="g-round-result g-action" aria-label="이번 판 결과" hidden></section>
         <section class="g-match-final" aria-label="경기 최종 결과" hidden></section>
-        <aside class="g-panel"></aside>
       </div>
       <section class="g-public-audience public-audience" hidden></section>
     </div>
+    <dialog id="g-records-dialog" class="modal g-records-dialog" aria-labelledby="g-records-title">
+      <div class="modal-inner"><h2 id="g-records-title">대국 기록</h2>
+        <button type="button" class="close-icon" data-do="close-records" aria-label="대국 기록 닫기">×</button>
+        <div class="g-records-body"></div></div></dialog>
     <dialog class="modal g-claim-dialog" aria-labelledby="g-claim-title" aria-describedby="g-claim-description g-claim-warning">
       <div class="modal-inner"><h2 id="g-claim-title">세팅을 선언할까요?</h2>
         <p id="g-claim-description">다른 사람이 어떤 카드를 내도 남은 <b class="g-claim-count"></b>개 트릭을 주공 혼자 모두 딸 수 있어야 합니다.</p>
@@ -793,10 +815,6 @@ function redraw(ui, newDeal = false) {
   const nameAt = seat => nameAtSeat(ui, seat);
   const focused = root.contains(document.activeElement) ? document.activeElement : null;
   const oldFocus = focused && ["card", "field", "do"].map(attr => [attr, focused.dataset[attr]]).find(([, value]) => value != null);
-  const openLog = root.querySelector(".g-log")?.open;
-  const openBids = root.querySelector("details.g-bid-history")?.open;
-  const scoreDisclosure = root.querySelector("details.match-standings");
-  if (scoreDisclosure) ui.scoresOpen = scoreDisclosure.open;
   const board = options.scoreboard;
   const finished = view.phase === "result" && board?.complete;
   root.querySelector("h1").textContent = finished ? `${board.rounds}판 경기 종료`
@@ -812,7 +830,7 @@ function redraw(ui, newDeal = false) {
   const final = root.querySelector(".g-match-final");
   if (finished) {
     const action = options.isHost && !options.departing && options.onReplaySetup ? button(escapeHtml(options.replaySetupLabel), "replay-setup") : "";
-    const summary = scoreTable(board, view.seat, {final:true, title:"최종 순위"}) + action;
+    const summary = scoreTable(board, options.settlementSeat ?? view.seat, {final:true, title:"최종 순위"}) + action;
     if (ui.finalHtml !== summary) final.innerHTML = summary;
     ui.finalHtml = summary;
   } else if (!final.hidden) {
@@ -827,23 +845,29 @@ function redraw(ui, newDeal = false) {
     const {suit, points} = view.bid;
     tag.innerHTML = `<span class="g-contract-prefix">공약 </span>${suitMark(suit)} ${suitInfo[suit][1]} <strong>${escapeHtml(points)}점</strong>`;
   } else if (finished) {
-    tag.innerHTML = `주공 팀 ${view.result.won ? "승리" : "패배"} <span class="g-final-points">(${escapeHtml(view.result.points)}점)</span>`;
+    tag.textContent = handOutcome(view.result, options.settlementSeat ?? view.seat).title;
   } else {
     tag.textContent = view.phase === "result" ? (view.result.setting ? "세팅 종료" : "10트릭 완료") : "경매 " + view.bidHistory.length + "회";
   }
+  updateFriendTag(root.querySelector(".g-friend-tag"), view, nameAt);
   // Read the departing card's position before reconciling the player's hand.
   renderTable(ui, nameAt);
   renderHand(ui, newDeal);
   const claimDialog = root.querySelector(".g-claim-dialog");
   if (claimDialog.open && !canDeclareSetting(ui)) claimDialog.close();
   if (newDeal) dealToOtherSeats(root, view.seat);
-  const panel = root.querySelector(".g-panel");
-  panel.innerHTML = panelMarkup(view, ui, nameAt);
+  const notice = root.querySelector(".g-table-notice");
+  const message = tableNotice(view, ui);
+  if (notice.textContent !== message) notice.textContent = message;
+  notice.hidden = !message;
+  const result = root.querySelector(".g-round-result");
+  const resultHtml = view.phase === "result" ? resultControls(view, ui) : "";
+  if (resultHtml !== ui.resultHtml) result.innerHTML = resultHtml;
+  ui.resultHtml = resultHtml;
+  result.hidden = !resultHtml;
+  result.classList.toggle("g-result-arrive", !result.hidden);
+  if (root.querySelector(".g-records-dialog").open) renderRecords(ui);
   updateNextCountdown(ui);
-  panel.classList.toggle("g-result-arrive", view.phase === "result");
-  if (openLog && panel.querySelector(".g-log")) panel.querySelector(".g-log").open = true;
-  if (openBids && panel.querySelector("details.g-bid-history")) panel.querySelector("details.g-bid-history").open = true;
-  if (ui.scoresOpen && panel.querySelector("details.match-standings")) panel.querySelector("details.match-standings").open = true;
   if (oldFocus && document.activeElement !== focused) {
     const [attr, value] = oldFocus;
     const radio = focused.type === "radio" ? `[value="${focused.value}"]` : "";
@@ -900,6 +924,21 @@ function bind(ui) {
     if (kind === "cancel-play") return cancelPlay(ui);
     if (kind === "confirm-play") return playCard(ui, ui.pendingCard, true);
     if (kind === "sound") return toggleSound(el);
+    if (kind === "jump-choice") {
+      const hand = ui.root.querySelector(".g-hand");
+      const choice = hand.querySelector(".g-decision");
+      if (!choice || choice.hidden || hand.hidden) return;
+      const target = ui.view.phase === "discard" ? hand.querySelector(".g-hand-card:enabled")
+        : choice.querySelector("select, input:checked, button:enabled");
+      hand.scrollIntoView({block:"start"});
+      target?.focus({preventScroll:true});
+      return;
+    }
+    if (kind === "records") {
+      renderRecords(ui);
+      return ui.root.querySelector(".g-records-dialog").showModal();
+    }
+    if (kind === "close-records") return ui.root.querySelector(".g-records-dialog").close();
     if (kind === "rules") return ui.options.onRules?.();
     if (kind === "community") return ui.options.onCommunity?.();
     if (kind === "support") return ui.options.onSupport?.();
@@ -982,7 +1021,7 @@ function displayLatest(ui) {
     clearTimeout(ui.friendTimer);
     ui.root.querySelector(".g-friend-call").hidden = true;
   }
-  ui.sweep = roundSweep(view, ui.options.scoreboard);
+  ui.sweep = roundSweep(view, ui.options);
   if (ui.sweep && previous && previous.phase !== "result") playTableSound(ui.sweep);
   ui.view = view;
   updateDefaults(ui, view);
@@ -1024,6 +1063,7 @@ export function clearGame(container) {
   clearTimeout(ui.friendTimer);
   clearTimeout(ui.countdownTimer);
   clearTimeout(ui.turnTimer);
+  ui.decisionObserver?.disconnect();
   ui.auctionTimer = null;
   ui.resultWasShown = false;
   ui.view = ui.latest = ui.resolving = ui.signature = ui.playPending = null;
@@ -1050,7 +1090,7 @@ export function renderGame(container, publicView, options = {}) {
   }
   if (!container.firstElementChild) {
     mountTable(container);
-    ui.auctionMarkup = ui.centerMarkup = ui.settingsHtml = ui.finalHtml = null;
+    ui.auctionMarkup = ui.centerMarkup = ui.settingsHtml = ui.finalHtml = ui.recordsHtml = ui.resultHtml = null;
   }
   publicView = withRememberedJoker(publicView, ui.latest);
   if (ui.latest && !hasSettingDeclaration(ui.latest) && hasSettingDeclaration(publicView)) {

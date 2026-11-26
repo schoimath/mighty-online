@@ -102,6 +102,7 @@ test('server plays abandoned hands to completion and only its terminal deltas ar
   assert.equal(left.seat,-1);
   assert.equal(left.turnDeadline,null);
   assert.equal(left.myDelta,undefined);
+  assert.equal(left.mySettlementSeat,undefined);
   assert.deepEqual(left.game.hand,[]);
   await assert.rejects(t.call(host,'act',{revision:left.revision,action:{type:'pass'}}),{status:403});
   for (let i=0; i<100 && !t.row().settled; i++) {
@@ -113,11 +114,16 @@ test('server plays abandoned hands to completion and only its terminal deltas ar
   assert.deepEqual(result.deltas,settlements(actual.state.round.result,actual.state.round.bid.suit));
   assert.deepEqual(result.seatBalances,[120+result.deltas[0],300+result.deltas[1],null,null,null]);
   assert.equal(result.myDelta,undefined);
+  assert.equal(result.mySettlementSeat,undefined);
   const departed = await t.call(host,'view'), timedOut = await t.call(guest,'view');
   assert.equal(departed.seat,-1);
   assert.equal(departed.myDelta,result.deltas[0]);
+  assert.equal(departed.mySettlementSeat,0);
   assert.equal(timedOut.myDelta,result.deltas[1]);
-  assert.equal((await t.call(host,'watch')).myDelta,undefined);
+  assert.equal(timedOut.mySettlementSeat,1);
+  const watching = await t.call(host,'watch');
+  assert.equal(watching.myDelta,undefined);
+  assert.equal(watching.mySettlementSeat,undefined);
   assert.deepEqual(actual.seats,game.seats);
   assert.equal(result.deltas.reduce((a,b)=>a+b,0),0);
   await t.call(null,'tick');

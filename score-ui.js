@@ -34,6 +34,17 @@ export function signedScore(points) {
   return Number.isSafeInteger(points) ? (points > 0 ? '+' : '') + points : '—';
 }
 
+export function handOutcome(result, seat) {
+  if (!Number.isInteger(seat) || seat < 0 || seat > 4) {
+    return {title:result.won ? '여당 승리' : '야당 승리', role:null, won:null};
+  }
+  const declarer = seat === result.declarer;
+  const friend = seat === result.friend;
+  const won = result.won === (declarer || friend);
+  const role = declarer ? '주공' : friend ? '프렌드' : '야당';
+  return {title:won ? '이번 판 승리' : '이번 판 패배', role, won};
+}
+
 // These cards form one opposition pile, with no seat-of-origin information.
 export function settingPenaltyPile(view) {
   const cards = view.settingPenaltyCards?.filter(isPointCard);
@@ -60,7 +71,8 @@ export function scoreTable(board, mySeat, {collapsed = false, final = false, tit
   const rows = members.map((member, index) => {
     const name = String(member.name).replace(/[&<>]/g, c => ({'&':'&amp;', '<':'&lt;', '>':'&gt;'}[c]));
     const seat = Number.isInteger(member.seat) ? member.seat + 1 + '번' : '이전 참가자';
-    const mine = Number.isInteger(mySeat) && member.seat === mySeat;
+    const original = board.panelMemberIds?.[mySeat];
+    const mine = Number.isInteger(mySeat) && mySeat >= 0 && (original == null ? member.seat === mySeat : member.id === original);
     const tied = final && (members[index - 1]?.rank === member.rank || members[index + 1]?.rank === member.rank);
     const rank = final ? `<td class="standing-rank">${tied ? '공동 ' : ''}${member.rank}위</td>` : '';
     return `<tr${mine ? ' class="standing-mine"' : ''}>${rank}<th scope="row"><small>${seat}</small> ${name}${mine ? ' <small>나</small>' : ''}</th>

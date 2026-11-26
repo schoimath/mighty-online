@@ -39,7 +39,7 @@
 .match-standings thead th { font-size: .75rem; font-weight: 500; }
 .match-standings tbody th { font-weight: 550; }
 .standing-mine { background: #a9b97922; }
-.g-panel .match-standings { color: #e1eadb; }
+.g-round-result .match-standings { color: #e1eadb; }
 .g-action .match-standings strong { color: #f3dea6; }
 .g-match-final {
   grid-column: 1; min-width: 0; padding: clamp(14px, 2.4vw, 24px); color: #e6eddf;
@@ -67,7 +67,12 @@
 .g-equation small { color: #cadacb; font-size: .8rem; }
 .g-equation abbr { text-decoration: none; }
 .g-equation strong { color: #f5d48e; }
-.g-my-settlement small { color: #c1cebf; white-space: nowrap; }
+.g-outcome-heading { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 12px; }
+.g-outcome-heading small { color: #c1cebf; white-space: nowrap; }
+.g-outcome-heading[data-won="true"] h2 { color: #b4e4aa; }
+.g-outcome-heading[data-won="false"] h2 { color: #f4b5a9; }
+.g-my-settlement[data-sign="1"] strong { color: #b4e4aa; }
+.g-my-settlement[data-sign="-1"] strong { color: #f4b5a9; }
 .g-misdeal { color: #efd79b; font-size: .85rem; }
 .g-score-mighty { background: #f7e4a7; border-color: #e1bb62; }
 .g-setting-pile { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 6px; }
