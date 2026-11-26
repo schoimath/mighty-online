@@ -57,7 +57,8 @@ export function setupAccountUI(client, {onChange} = {}) {
         emailField + passField('비밀번호 (8자 이상)',true), '인증 메일 받기') +
         '<p>이메일 인증을 마치면 처음 한 번 1,000칩을 받습니다.</p>' + actions(link('signin','로그인'));
     } else if (page === 'sent') {
-      body.innerHTML = '<p>받은 메일에서 인증 링크를 열어 주세요. 확인 후 같은 계정으로 로그인할 수 있습니다.</p>' +
+      body.innerHTML = '<p>메일에 적힌 숫자 코드를 입력하거나 메일의 인증 링크를 열어 주세요.</p>' +
+        form(emailField + field('code','이메일 인증 코드','text','autocomplete="one-time-code" inputmode="numeric" pattern="[0-9]{6,10}" maxlength="10"'), '인증 확인') +
         actions(link('signin','로그인'),link('resend','인증 메일 다시 받기'));
     } else if (page === 'forgot' || page === 'resend') {
       const resendHelp = '<p>처음 회원가입에서 메일 발송 오류가 떴다면 회원가입부터 다시 진행해 주세요.</p>';
@@ -67,7 +68,7 @@ export function setupAccountUI(client, {onChange} = {}) {
       body.innerHTML = form(passField('새 비밀번호 (8자 이상)',true),'새 비밀번호 저장');
     } else {
       body.innerHTML = form(emailField + passField('비밀번호',false),'로그인') +
-        actions(link('signup','회원가입'),link('forgot','비밀번호 재설정'),link('resend','인증 메일 다시 받기'));
+        actions(link('signup','회원가입'),link('sent','인증 코드 입력'),link('forgot','비밀번호 재설정'),link('resend','인증 메일 다시 받기'));
     }
     const address = body.querySelector('[name=email]');
     if (address) address.value = email;
@@ -85,7 +86,8 @@ export function setupAccountUI(client, {onChange} = {}) {
     page = next;
     note(message);
     render();
-    if (focus) body.querySelector('input, button')?.focus({preventScroll:true});
+    const first = page === 'sent' && email ? body.querySelector('[name=code]') : body.querySelector('input, button');
+    if (focus) first?.focus({preventScroll:true});
   }
   function open(message = '') {
     if (!dialog.open) dialog.showModal();
@@ -134,6 +136,9 @@ export function setupAccountUI(client, {onChange} = {}) {
         case 'signin':
           await client.signIn(email,password);
           return ['account'];
+        case 'sent':
+          await client.verifySignupCode(email,values.get('code'));
+          return ['account','이메일 인증을 확인했습니다.'];
         case 'forgot':
           await client.resetPassword(email);
           return ['signin','가입한 주소라면 재설정 메일을 받습니다. 메일을 요청한 브라우저에서 링크를 열어 주세요.'];
@@ -155,7 +160,7 @@ export function setupAccountUI(client, {onChange} = {}) {
       open(state.error || (state.recovering ? '새 비밀번호를 입력해 주세요.' : state.user ? '이메일 인증을 확인했습니다.' : ''));
     } else if (dialog.open && !busy) {
       if (previousId && !state.user && page === 'account') show('signin');
-      else if (state.user && page === 'signin') show(state.recovering ? 'password' : 'account');
+      else if (state.user && ['signin','sent','signup','resend'].includes(page)) show(state.recovering ? 'password' : 'account');
       else if (page === 'account') updateWalletDetails();
     }
     previousId = state.user?.id;

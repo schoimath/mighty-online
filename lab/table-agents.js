@@ -1,9 +1,9 @@
 import {botDecision, policyPlay} from '../engine.js';
 import {withJokerStatus} from '../table-joker.js';
-import {conserveMightyOnTrumpAce, conserveOpeningJoker, protectCalledJoker} from '../table-tactics.js?v=1.1.20261126113739';
+import {conserveMightyOnTrumpAce, conserveOpeningJoker, protectCalledJoker} from '../table-tactics.js?v=1.1.20261126115112';
 import {preferTrumpLead} from '../table-trump-lead.js';
-import {preferSideAcePlan} from '../table-side-ace.js?v=1.1.20261126113739';
-import {coordinateFriendPlay} from '../table-friend-play.js?v=1.1.20261126113739';
+import {preferSideAcePlan} from '../table-side-ace.js?v=1.1.20261126115112';
+import {coordinateFriendPlay} from '../table-friend-play.js?v=1.1.20261126115112';
 import {rngFor} from './game.js';
 import {protectPartner} from './partnership-policy.js';
 import {contractSearchAction} from './contract-search.js';

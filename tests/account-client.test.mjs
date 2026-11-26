@@ -29,6 +29,12 @@ function authStub(initialUser,callbackType) {
       handler(callbackType === 'recovery' ? 'PASSWORD_RECOVERY' : 'SIGNED_IN',session);
       return ok({session,redirectType:callbackType});
     },
+    async verifyOtp(input) {
+      calls.push(['verify',input]);
+      session = authSession(person());
+      handler('SIGNED_IN',session);
+      return ok({session});
+    },
     async updateUser(input) { calls.push(['update',input]); return ok({user:session.user}); },
     async signOut(options) { calls.push(['signout',options]); session = null; handler('SIGNED_OUT',null); return ok({}); },
     async resetPasswordForEmail(...args) { calls.push(['reset',...args]); return ok({}); },
@@ -102,6 +108,35 @@ test('ordinary server and login errors retain their own messages', async () => {
   await assert.rejects(client.signUp(email,'password123','회원'), /계정 요청을 마치지 못했습니다/);
   await assert.rejects(client.signIn(email,'password123'), /이메일 또는 비밀번호를 확인/);
   await assert.rejects(client.resend(email), /메일 요청이 많습니다/);
+});
+
+test('a signup code verifies its email and loads that account wallet', async () => {
+  for (const code of ['000021','01234567','1234567890']) {
+    const auth = authStub();
+    const client = new AccountClient(config,{makeAuth:async () => auth, fetcher:async () => mockWallet(1000)});
+    await client.verifySignupCode(' Player@example.org ',code);
+    assert.equal(client.state.user.id,'player');
+    assert.equal(client.state.balance,1000);
+    assert.deepEqual(auth.calls,[['verify',{email:'player@example.org',token:code,type:'email'}]]);
+    await assert.rejects(client.verifySignupCode('other@example.org',code), /다른 계정/);
+    await client.verifySignupCode('player@example.org',code);
+    assert.equal(auth.calls.length,1);
+  }
+});
+
+test('invalid, expired and mismatched signup codes cannot produce a successful confirmation', async () => {
+  const auth = authStub(), client = new AccountClient(config,{makeAuth:async () => auth});
+  for (const token of ['12345','12345678901','abcdef']) {
+    await assert.rejects(client.verifySignupCode('player@example.org',token), /숫자 코드/);
+  }
+  assert.equal(auth.calls.length,0);
+  auth.verifyOtp = async () => ({data:null,error:{code:'otp_expired'}});
+  await assert.rejects(client.verifySignupCode('player@example.org','123456'), /가장 최근 메일.*로그인/);
+  for (const session of [null,authSession(person('other')),authSession(person('player',false))]) {
+    auth.verifyOtp = async () => ok({session});
+    await assert.rejects(client.verifySignupCode('player@example.org','123456'), /로그인을 확인하지 못했습니다/);
+    assert.equal(client.state.user,null);
+  }
 });
 
 test('wallet responses from a previous login are discarded after logout', async () => {

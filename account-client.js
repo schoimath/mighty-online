@@ -199,6 +199,27 @@ export class AccountClient {
     const auth = await this.#service();
     unwrap(await auth.resend({type:'signup',email:email.trim(),options:{emailRedirectTo:this.#redirect}}), 'resend');
   }
+  async verifySignupCode(email,code) {
+    const address = email.trim().toLowerCase();
+    const token = code.trim();
+    if (!/^[0-9]{6,10}$/.test(token)) throw new Error('메일에 표시된 숫자 코드 6~10자리를 입력해 주세요.');
+    const auth = await this.#service();
+    const current = this.state.user;
+    if (current) {
+      if (current.email.toLowerCase() === address) return this.refreshWallet();
+      throw new Error('다른 계정으로 로그인 중입니다. 로그아웃한 후 가입 인증을 진행해 주세요.');
+    }
+    const response = await auth.verifyOtp({type:'email',email:address,token});
+    if (response.error?.code === 'otp_expired') {
+      throw new Error('코드가 틀렸거나 만료되었습니다. 가장 최근 메일의 코드를 확인해 주세요. 인증을 이미 마쳤다면 비밀번호로 로그인하세요.');
+    }
+    const {session} = unwrap(response);
+    if (!session?.user.email_confirmed_at || session.user.email?.toLowerCase() !== address) {
+      throw new Error('인증한 계정의 로그인을 확인하지 못했습니다. 가입한 이메일과 비밀번호로 로그인해 주세요.');
+    }
+    this.#session(session);
+    return this.refreshWallet();
+  }
   async resetPassword(email) {
     const auth = await this.#service();
     unwrap(await auth.resetPasswordForEmail(email.trim(), {redirectTo:this.#redirect}), 'recovery');

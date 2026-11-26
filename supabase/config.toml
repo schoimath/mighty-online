@@ -8,6 +8,10 @@ additional_redirect_urls = ["https://schoimath.github.io/mighty-online/"]
 enable_signup = true
 enable_confirmations = true
 
+[auth.email.template.confirmation]
+subject = "마이티 온라인 가입 인증 코드"
+content_path = "./supabase/templates/confirmation.html"
+
 [functions.chip-hand]
 # Login-bearing operations check the access token against Auth. Watchers and
 # the unattended clock receive only the public projection / a tick receipt.
