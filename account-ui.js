@@ -60,7 +60,9 @@ export function setupAccountUI(client, {onChange} = {}) {
       body.innerHTML = '<p>받은 메일에서 인증 링크를 열어 주세요. 확인 후 같은 계정으로 로그인할 수 있습니다.</p>' +
         actions(link('signin','로그인'),link('resend','인증 메일 다시 받기'));
     } else if (page === 'forgot' || page === 'resend') {
-      body.innerHTML = form(emailField, page === 'forgot' ? '재설정 메일 받기' : '인증 메일 보내기') + actions(link('signin','로그인'));
+      const resendHelp = '<p>처음 회원가입에서 메일 발송 오류가 떴다면 회원가입부터 다시 진행해 주세요.</p>';
+      body.innerHTML = form(emailField, page === 'forgot' ? '재설정 메일 받기' : '인증 메일 보내기') +
+        (page === 'resend' ? resendHelp + actions(link('signup','회원가입'),link('signin','로그인')) : actions(link('signin','로그인')));
     } else if (page === 'password') {
       body.innerHTML = form(passField('새 비밀번호 (8자 이상)',true),'새 비밀번호 저장');
     } else {

@@ -16,9 +16,18 @@ const errorMessages = {
   over_request_rate_limit:'요청이 많습니다. 잠시 후 다시 시도해 주세요.'
 };
 
-function unwrap({data, error}) {
-  if (error) throw new Error(errorMessages[error.code] || '계정 요청을 마치지 못했습니다. 연결 상태와 입력한 내용을 확인해 주세요.');
-  return data;
+const mailFailureMessages = {
+  signup:'서버에서 가입 인증 메일을 보내지 못했습니다. 메일 발송이 복구되면 이 화면에서 회원가입을 다시 시도해 주세요.',
+  resend:'서버에서 인증 메일을 다시 보내지 못했습니다. 메일 발송이 복구되면 다시 요청해 주세요.',
+  recovery:'서버에서 비밀번호 재설정 메일을 보내지 못했습니다. 메일 발송이 복구되면 다시 요청해 주세요.'
+};
+
+function unwrap({data, error}, mailAction) {
+  if (!error) return data;
+  if (mailAction && error.status === 500 && /^Error sending (?:confirmation|recovery) email(?:$|:)/i.test(error.message)) {
+    throw new Error(mailFailureMessages[mailAction]);
+  }
+  throw new Error(errorMessages[error.code] || '계정 요청을 마치지 못했습니다. 연결 상태와 입력한 내용을 확인해 주세요.');
 }
 
 // Remove one-time credentials before any room invitation can reuse this URL.
@@ -177,7 +186,7 @@ export class AccountClient {
     nickname = nickname.trim();
     if (!nickname || nickname.length > 16) throw new Error('닉네임은 1~16자로 입력해 주세요.');
     const auth = await this.#service();
-    const data = unwrap(await auth.signUp({email:email.trim(),password,options:{data:{nickname},emailRedirectTo:this.#redirect}}));
+    const data = unwrap(await auth.signUp({email:email.trim(),password,options:{data:{nickname},emailRedirectTo:this.#redirect}}), 'signup');
     if (data.session) this.#session(data.session);
   }
   async signIn(email,password) {
@@ -188,11 +197,11 @@ export class AccountClient {
   }
   async resend(email) {
     const auth = await this.#service();
-    unwrap(await auth.resend({type:'signup',email:email.trim(),options:{emailRedirectTo:this.#redirect}}));
+    unwrap(await auth.resend({type:'signup',email:email.trim(),options:{emailRedirectTo:this.#redirect}}), 'resend');
   }
   async resetPassword(email) {
     const auth = await this.#service();
-    unwrap(await auth.resetPasswordForEmail(email.trim(), {redirectTo:this.#redirect}));
+    unwrap(await auth.resetPasswordForEmail(email.trim(), {redirectTo:this.#redirect}), 'recovery');
   }
   async updatePassword(password) {
     const auth = await this.#service();

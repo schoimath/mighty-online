@@ -75,6 +75,35 @@ test('verified login reads chips from the authenticated RPC, including zero and 
   assert.equal(await client.accessToken(),null);
 });
 
+test('signup, resend and password recovery identify mail delivery failures and give the appropriate retry action', async () => {
+  const auth = authStub();
+  const failSending = message => async () => ({data:null,error:{status:500,code:'unexpected_failure',message}});
+  auth.signUp = auth.resend = failSending('Error sending confirmation email');
+  auth.resetPasswordForEmail = failSending('Error sending recovery email: private provider detail');
+  const client = new AccountClient(config,{makeAuth:async () => auth});
+  const email = 'member@example.org';
+  await assert.rejects(client.signUp(email,'password123','회원'), /가입 인증 메일을 보내지 못했습니다.*회원가입을 다시/);
+  await assert.rejects(client.resend(email), /인증 메일을 다시 보내지 못했습니다.*다시 요청/);
+  await assert.rejects(client.resetPassword(email), error => {
+    assert.match(error.message, /비밀번호 재설정 메일을 보내지 못했습니다.*다시 요청/);
+    assert.doesNotMatch(error.message, /private provider detail/);
+    return true;
+  });
+  assert.equal(client.state.user,null);
+});
+
+test('ordinary server and login errors retain their own messages', async () => {
+  const auth = authStub();
+  auth.signUp = async () => ({data:null,error:{status:500,code:'unexpected_failure',message:'Database error saving new user'}});
+  auth.signInWithPassword = async () => ({data:null,error:{status:400,code:'invalid_credentials'}});
+  auth.resend = async () => ({data:null,error:{status:429,code:'over_email_send_rate_limit'}});
+  const client = new AccountClient(config,{makeAuth:async () => auth});
+  const email = 'member@example.org';
+  await assert.rejects(client.signUp(email,'password123','회원'), /계정 요청을 마치지 못했습니다/);
+  await assert.rejects(client.signIn(email,'password123'), /이메일 또는 비밀번호를 확인/);
+  await assert.rejects(client.resend(email), /메일 요청이 많습니다/);
+});
+
 test('wallet responses from a previous login are discarded after logout', async () => {
   const auth = authStub(person());
   let release, first = true;
