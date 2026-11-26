@@ -8,46 +8,47 @@
   <meta name="description" content="친구와 방 코드를 나누고 즐기는 5인 마이티 카드 게임. AI와 함께 연습할 수도 있어요.">
   <title>Mighty Club · 마이티 온라인</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 60 60'%3E%3Crect width='60' height='60' rx='12' fill='%23174639'/%3E%3Ctext x='30' y='48' text-anchor='middle' font-size='50' fill='%23f8f3de'%3E♠%3C/text%3E%3C/svg%3E">
-  <link rel="stylesheet" href="./style.css?v=1.1.20261126164634">
-  <link rel="stylesheet" href="./game.css?v=1.1.20261126164634">
-  <link rel="stylesheet" href="./score.css?v=1.1.20261126164634">
-  <link rel="stylesheet" href="./auction.css?v=1.1.20261126164634">
-  <link rel="stylesheet" href="./chat.css?v=1.1.20261126164634">
-  <link rel="stylesheet" href="./public-room.css?v=1.1.20261126164634">
-  <link rel="stylesheet" href="./account.css?v=1.1.20261126164634">
+  <link rel="stylesheet" href="./style.css?v=1.1.20261126195953">
+  <link rel="stylesheet" href="./game.css?v=1.1.20261126195953">
+  <link rel="stylesheet" href="./score.css?v=1.1.20261126195953">
+  <link rel="stylesheet" href="./auction.css?v=1.1.20261126195953">
+  <link rel="stylesheet" href="./chat.css?v=1.1.20261126195953">
+  <link rel="stylesheet" href="./public-room.css?v=1.1.20261126195953">
+  <link rel="stylesheet" href="./account.css?v=1.1.20261126195953">
   <script type="importmap">
     {
       "imports": {
-        "./table-timing.js": "./table-timing.js?v=1.1.20261126164634",
-        "./next-round.js": "./next-round.js?v=1.1.20261126164634",
-        "./account-config.js": "./account-config.js?v=1.1.20261126164634",
-        "./account-client.js": "./account-client.js?v=1.1.20261126164634",
-        "./account-ui.js": "./account-ui.js?v=1.1.20261126164634",
-        "./chip-play.js": "./chip-play.js?v=1.1.20261126164634",
-        "./chat.js": "./chat.js?v=1.1.20261126164634",
-        "./chat-device.js": "./chat-device.js?v=1.1.20261126164634",
-        "./room-chat-relay.js": "./room-chat-relay.js?v=1.1.20261126164634",
-        "./room-chat-store.js": "./room-chat-store.js?v=1.1.20261126164634",
-        "./host-transfer.js": "./host-transfer.js?v=1.1.20261126164634",
-        "./network.js": "./network.js?v=1.1.20261126164634",
-        "./public-directory.js": "./public-directory.js?v=1.1.20261126164634",
-        "./public-room-ui.js": "./public-room-ui.js?v=1.1.20261126164634",
-        "./lab/table-agents.js": "./lab/table-agents.js?v=1.1.20261126164634",
-        "./model-picker.js": "./model-picker.js?v=1.1.20261126164634",
-        "./room-preferences.js": "./room-preferences.js?v=1.1.20261126164634",
-        "./game-ui.js": "./game-ui.js?v=1.1.20261126164634",
-        "./sound.js": "./sound.js?v=1.1.20261126164634",
-        "./release.js": "./release.js?v=1.1.20261126164634",
-        "./session.js": "./session.js?v=1.1.20261126164634",
-        "./bot-setting.js": "./bot-setting.js?v=1.1.20261126164634",
-        "./table-claim.js": "./table-claim.js?v=1.1.20261126164634",
-        "./table-setting.js": "./table-setting.js?v=1.1.20261126164634",
-        "./table-deal.js": "./table-deal.js?v=1.1.20261126164634",
-        "./score-ui.js": "./score-ui.js?v=1.1.20261126164634"
+        "./table-timing.js": "./table-timing.js?v=1.1.20261126195953",
+        "./next-round.js": "./next-round.js?v=1.1.20261126195953",
+        "./account-config.js": "./account-config.js?v=1.1.20261126195953",
+        "./account-client.js": "./account-client.js?v=1.1.20261126195953",
+        "./account-ui.js": "./account-ui.js?v=1.1.20261126195953",
+        "./chip-leaderboard.js": "./chip-leaderboard.js?v=1.1.20261126195953",
+        "./chip-play.js": "./chip-play.js?v=1.1.20261126195953",
+        "./chat.js": "./chat.js?v=1.1.20261126195953",
+        "./chat-device.js": "./chat-device.js?v=1.1.20261126195953",
+        "./room-chat-relay.js": "./room-chat-relay.js?v=1.1.20261126195953",
+        "./room-chat-store.js": "./room-chat-store.js?v=1.1.20261126195953",
+        "./host-transfer.js": "./host-transfer.js?v=1.1.20261126195953",
+        "./network.js": "./network.js?v=1.1.20261126195953",
+        "./public-directory.js": "./public-directory.js?v=1.1.20261126195953",
+        "./public-room-ui.js": "./public-room-ui.js?v=1.1.20261126195953",
+        "./lab/table-agents.js": "./lab/table-agents.js?v=1.1.20261126195953",
+        "./model-picker.js": "./model-picker.js?v=1.1.20261126195953",
+        "./room-preferences.js": "./room-preferences.js?v=1.1.20261126195953",
+        "./game-ui.js": "./game-ui.js?v=1.1.20261126195953",
+        "./sound.js": "./sound.js?v=1.1.20261126195953",
+        "./release.js": "./release.js?v=1.1.20261126195953",
+        "./session.js": "./session.js?v=1.1.20261126195953",
+        "./bot-setting.js": "./bot-setting.js?v=1.1.20261126195953",
+        "./table-claim.js": "./table-claim.js?v=1.1.20261126195953",
+        "./table-setting.js": "./table-setting.js?v=1.1.20261126195953",
+        "./table-deal.js": "./table-deal.js?v=1.1.20261126195953",
+        "./score-ui.js": "./score-ui.js?v=1.1.20261126195953"
       }
     }
   </script>
-  <script type="module" src="./app.js?v=1.1.20261126164634"></script>
+  <script type="module" src="./app.js?v=1.1.20261126195953"></script>
 </head>
 <body>
   <header class="site-header" id="site-header">
@@ -67,6 +68,7 @@
       <div><h2 id="active-hand-title">진행 중인 내 칩 대국</h2><p>방이 목록에서 사라져도 이곳에서 이전 판을 열 수 있습니다.</p></div>
       <div class="room-actions"><button id="resume-chip-hand" class="primary-button" type="button">이전 판 열기</button><button id="leave-chip-hand" class="plain-button" type="button">AI에게 맡기고 나가기</button></div>
     </section>
+    <div class="lobby-intro">
     <section class="hero" aria-labelledby="hero-title">
       <div class="hero-frame" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
       <div class="hero-copy">
@@ -83,6 +85,20 @@
         <div class="art-card card-ace"><span class="rank upper">A<small>♠</small></span><div class="ace-crest"><span class="crest-top">✧</span><span class="ace-spade">♠</span><span class="crest-letter">M</span><span class="crest-line">✦</span></div><span class="rank lower">A<small>♠</small></span></div>
       </div>
     </section>
+    <section id="chip-leaderboard" class="chip-leaderboard" aria-labelledby="leaderboard-title">
+      <header><h2 id="leaderboard-title">전체 칩 랭킹</h2><button type="button" id="rank-refresh" class="public-refresh" aria-label="칩 랭킹 새로고침">새로고침</button></header>
+      <p id="rank-status" role="status">순위를 불러오는 중…</p>
+      <table aria-labelledby="leaderboard-title" hidden>
+        <thead><tr><th scope="col">순위</th><th scope="col">닉네임</th><th scope="col">보유 칩</th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <nav aria-label="칩 랭킹 페이지" hidden>
+        <button type="button" id="rank-prev" class="public-refresh" aria-label="이전 순위 페이지">이전</button>
+        <span id="rank-page" aria-live="polite"></span>
+        <button type="button" id="rank-next" class="public-refresh" aria-label="다음 순위 페이지">다음</button>
+      </nav>
+    </section>
+    </div>
     <section class="public-tables" id="public-tables" aria-labelledby="public-title">
       <div class="section-heading">
         <span class="heading-ornament" aria-hidden="true">♠</span><h2 id="public-title">공개 테이블</h2>

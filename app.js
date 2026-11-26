@@ -14,10 +14,12 @@ import {modelLabel, modelSettings, modelSummary, roomModelOption} from './model-
 import {VERSION} from './release.js';
 import {rememberRoom, roomPreferences} from './room-preferences.js';
 import {accountClient} from './account-client.js';
+import {setupChipLeaderboard} from './chip-leaderboard.js';
 import {setupAccountUI} from './account-ui.js';
 import {accountIdValid, callChipService, chipManifest, consentWindow, followChipHand, offeredSeat} from './chip-play.js';
 
 const $ = id => document.getElementById(id);
+const chipLeaderboard = setupChipLeaderboard($('chip-leaderboard'), accountClient);
 if ($('release-version')) $('release-version').textContent = 'v' + VERSION;
 const escape = text => String(text ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const icons = {
@@ -355,6 +357,7 @@ function toast(message, duration = 4500) {
 
 function showScreen(screen) {
   for (const name of ['lobby','room','game']) $(name).hidden = screen !== name;
+  if (screen === 'lobby' && !document.hidden) chipLeaderboard.refresh();
   $('site-header').hidden = $('site-footer').hidden = screen === 'game';
   $('profile-btn').disabled = screen !== 'lobby';
   $('community-open').hidden = $('developer-contact').hidden = screen !== 'lobby';
@@ -383,6 +386,7 @@ function releaseUnusedRoom(store, code) {
 
 async function refreshDirectory() {
   if (mode !== 'lobby' || pendingConnect || document.hidden || directoryScan) return;
+  chipLeaderboard.refreshIfStale();
   clearTimeout(directoryTimer);
   const controller = new AbortController();
   directoryScan = controller;
