@@ -168,6 +168,10 @@ export function updateSeatBalances(container, seatBalances) {
   }
 }
 
+function nameAtSeat(ui, seat) {
+  return String(ui.options.names?.[seat] ?? ((seat + 1) + "번 플레이어"));
+}
+
 function seatMarkup(ui, nameAt) {
   const {view, options, resolving} = ui;
   const beforeSettlement = resolving && ui.latest.phase === "result";
@@ -268,10 +272,17 @@ function renderTable(ui, nameAt) {
     caption.firstElementChild.textContent = nameAt(resolving.winner);
     caption.lastElementChild.textContent = isCoveredSeat(view, resolving.winner) ? "트릭 승리" : resolving.points + "점 획득";
   }
+  renderTrick(ui, nameAt);
+}
+
+function renderTrick(ui, nameAt) {
+  const {view, root, playPending} = ui;
+  const felt = root.querySelector(".g-felt");
+  const moves = playPending ? [...view.trick, playPending.move] : view.trick;
   const trick = felt.querySelector(".g-trick");
   const center = felt.querySelector(".g-table-center");
-  center.hidden = view.trick.length > 0;
-  trick.hidden = !view.trick.length;
+  center.hidden = moves.length > 0;
+  trick.hidden = !moves.length;
   if (trick.hidden || trick.dataset.number !== String(view.trickNo)) {
     trick.replaceChildren();
     felt.querySelector(".g-call-announcement").textContent = "";
@@ -286,18 +297,25 @@ function renderTable(ui, nameAt) {
     }
     return;
   }
-  // Keep cards already on the felt mounted when another player acts.
-  const lead = leadSuit(view.trick);
-  for (const move of view.trick.slice(trick.children.length)) {
+  // Keep the clicked card mounted when its authoritative move arrives. A rejected
+  // play (or another choice made in a second tab) only replaces the differing suffix.
+  const moveKey = move => [move.seat, move.card, move.suit || '', Boolean(move.jokerCall)].join('/');
+  let kept = 0;
+  while (kept < moves.length && trick.children[kept]?.dataset.move === moveKey(moves[kept])) kept++;
+  while (trick.children.length > kept) trick.lastElementChild.remove();
+  if (!moves[0].jokerCall) felt.querySelector(".g-call-announcement").textContent = "";
+  const lead = leadSuit(moves);
+  for (const move of moves.slice(kept)) {
     const offset = (move.seat - Math.max(0, view.seat) + 5) % 5;
     const isMighty = move.card === mighty(view.bid.suit);
-    const called = move.jokerCall && (!view.jokerPlayed || view.trick.some(play => play.card === "JK"));
+    const called = move.jokerCall && (!view.jokerPlayed || moves.some(play => play.card === "JK"));
     const ruff = move.card[0] === view.bid.suit && lead !== view.bid.suit;
     const label = nameAt(move.seat) + " · " + cardName(move.card) + (called ? " · 조커콜" : isMighty ? " · 마이티" : "");
     const caption = move.suit ? suitMark(move.suit) + " 요구" : escapeHtml(nameAt(move.seat));
     const effect = called ? " g-joker-call-play" : isMighty ? " g-mighty-play" : "";
     const badge = called ? jokerCallBadge : isMighty ? mightyBadge : "";
     trick.insertAdjacentHTML("beforeend", `<div class="g-played g-played-${offset}" data-play-seat="${move.seat}"><div class="g-on-table${effect}" role="img" aria-label="${escapeHtml(label)}">${cardFace(move.card)}${badge}</div><span class="g-play-label">${caption}</span></div>`);
+    trick.lastElementChild.dataset.move = moveKey(move);
     const face = trick.lastElementChild.firstElementChild;
     if (called) {
       felt.querySelector(".g-call-announcement").textContent = label;
@@ -335,7 +353,8 @@ function renderHand(ui, newDeal) {
     hand.innerHTML = '<div class="g-section-heading"><h2>내 손패 <span></span></h2><div class="g-hand-actions"><span class="g-role"></span><button type="button" class="g-btn g-claim-open" data-do="claim" aria-haspopup="dialog" hidden>세팅 선언</button></div></div><div class="g-cards"></div><div class="g-play-settings" hidden></div>';
     row = hand.querySelector(".g-cards");
   }
-  hand.querySelector("h2 span").textContent = view.hand.length + "장";
+  const cards = ui.playPending ? view.hand.filter(card => card !== ui.playPending.move.card) : view.hand;
+  hand.querySelector("h2 span").textContent = cards.length + "장";
   const role = hand.querySelector(".g-role");
   hand.dataset.seatRole = visibleRole(view, view.seat);
   role.textContent = roleAt(view, view.seat) || roleLabels[view.selfRole] || "";
@@ -343,7 +362,7 @@ function renderHand(ui, newDeal) {
   hand.querySelector('[data-do="claim"]').hidden = !canDeclareSetting(ui);
   if (newDeal) row.replaceChildren();
   const existing = new Map(Array.from(row.children, el => [el.dataset.card, el]));
-  for (const [card, el] of existing) if (!view.hand.includes(card)) el.remove();
+  for (const [card, el] of existing) if (!cards.includes(card)) el.remove();
   const interactive = view.turn === view.seat && !ui.playPending && !ui.claimSubmitting && !view.claimPending &&
     (view.phase === "discard" || view.phase === "play");
   const settings = hand.querySelector(".g-play-settings");
@@ -359,8 +378,8 @@ function renderHand(ui, newDeal) {
   const mightyCard = trump && mighty(trump);
   const jokerCallCard = trump && (trump === "C" ? "S3" : "C3");
   const orderedHand = view.phase !== "bid" && trump && trump !== "N"
-    ? [...view.hand.filter(card => card[0] === trump), ...view.hand.filter(card => card[0] !== trump)]
-    : view.hand;
+    ? [...cards.filter(card => card[0] === trump), ...cards.filter(card => card[0] !== trump)]
+    : cards;
   const incoming = new Set(view.incomingCards);
   const arrivals = [];
   for (const [i, card] of orderedHand.entries()) {
@@ -395,7 +414,6 @@ function renderHand(ui, newDeal) {
     const selected = ui.selected.includes(card);
     const allowed = interactive && (view.phase === "discard" ? (selected || ui.selected.length < 3) : moves.length > 0);
     el.classList.toggle("g-selected", selected);
-    el.classList.toggle("g-sending", ui.playPending === card);
     el.classList.toggle("g-illegal", interactive && !allowed);
     el.disabled = !allowed;
     el.title = label;
@@ -503,15 +521,28 @@ function playCard(ui, card, confirmed = false) {
   const choice = moves.length === 1 ? moves[0] : moves.find(move =>
     (!move.suit || move.suit === ui.jokerSuit) && Boolean(move.jokerCall) === ui.jokerCall);
   if (!choice) return;
-  ui.playPending = card;
+  const pending = {dealNo:ui.view.dealNo, trickNo:ui.view.trickNo, move:{seat:ui.view.seat, ...choice}};
+  ui.playPending = pending;
   ui.pendingCard = null;
+  // Measure the source while its hand button is still on screen.
+  renderTrick(ui, seat => nameAtSeat(ui, seat));
   renderHand(ui, false);
-  if (ui.options.onAction({type: "play", ...choice}) === false) {
-    ui.playPending = false;
+  function rollback() {
+    if (ui.playPending !== pending) return;
+    ui.playPending = null;
     if (confirmed) ui.pendingCard = card;
+    renderTrick(ui, seat => nameAtSeat(ui, seat));
     renderHand(ui, false);
     const retry = confirmed ? '[data-do="confirm-play"]' : `.g-hand-card[data-card="${card}"]`;
     ui.root.querySelector(retry)?.focus({preventScroll:true});
+  }
+  try {
+    const result = ui.options.onAction({type:"play", ...choice});
+    if (result === false) rollback();
+    else if (result?.then) result.then(accepted => { if (accepted === false) rollback(); }, rollback);
+  } catch (error) {
+    rollback();
+    throw error;
   }
 }
 
@@ -737,7 +768,7 @@ export function updateGamePace(container, pace, pendingPace = null) {
 function redraw(ui, newDeal = false) {
   const { view, options, root } = ui;
   root.querySelector(".g-nav-phase").textContent = view.seat < 0 ? "테이블 관전" : "게임 테이블";
-  const nameAt = seat => String(options.names?.[seat] ?? ((seat + 1) + "번 플레이어"));
+  const nameAt = seat => nameAtSeat(ui, seat);
   const focused = root.contains(document.activeElement) ? document.activeElement : null;
   const oldFocus = focused && ["card", "field", "do"].map(attr => [attr, focused.dataset[attr]]).find(([, value]) => value != null);
   const openLog = root.querySelector(".g-log")?.open;
@@ -970,7 +1001,7 @@ export function clearGame(container) {
   clearTimeout(ui.countdownTimer);
   ui.auctionTimer = null;
   ui.resultWasShown = false;
-  ui.view = ui.latest = ui.resolving = ui.signature = null;
+  ui.view = ui.latest = ui.resolving = ui.signature = ui.playPending = null;
   container.replaceChildren();
 }
 
@@ -1001,7 +1032,15 @@ export function renderGame(container, publicView, options = {}) {
     playTableSound("setting");
   }
   ui.latest = publicView;
-  ui.playPending = false;
+  const pending = ui.playPending;
+  if (pending) {
+    const sameTurn = publicView.phase === "play" && !publicView.claimPending &&
+      publicView.dealNo === pending.dealNo && publicView.trickNo === pending.trickNo &&
+      publicView.seat === pending.move.seat && publicView.turn === pending.move.seat;
+    const canStillPlay = sameTurn && publicView.choices.plays.some(move =>
+      move.card === pending.move.card && move.suit === pending.move.suit && Boolean(move.jokerCall) === Boolean(pending.move.jokerCall));
+    if (!canStillPlay) ui.playPending = null;
+  }
   ui.claimSubmitting = false;
   const previousBalances = ui.options?.seatBalances;
   ui.options = options;

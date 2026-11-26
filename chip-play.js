@@ -80,6 +80,22 @@ function onlyPaceChanged(previous, next) {
     field => JSON.stringify(previous[field]) === JSON.stringify(next[field]));
 }
 
+function sameDealAndSeat(first, next) {
+  return first.handId === next.handId && first.seat === next.seat && first.game.dealNo === next.game.dealNo;
+}
+
+function cardHasLeft(first, next, card) {
+  if (!sameDealAndSeat(first, next) || next.revision <= first.revision ||
+      (next.game.phase !== 'play' && next.game.phase !== 'result') ||
+      !Array.isArray(next.game.hand) || next.game.hand.includes(card)) return false;
+  if (!next.game.result?.setting) return true;
+  // A setting clears every hand, including unplayed cards. Its final friend
+  // trick can still confirm a card the player actually put on the table.
+  const last = next.game.lastTrick;
+  const matches = play => play?.seat === first.seat && play.card === card;
+  return last?.number === first.game.trickNo && Boolean(last?.cards?.some(matches) || matches(last?.finalPlay));
+}
+
 export function followChipHand(request, handId, op, onState, onError, initial) {
   let current = null, closed = false, timer, busy = false, writing = null, submitting = false, changingPace = false, failures = 0;
   let wakeRevision = -1, wakeAfterRead = false;
@@ -149,6 +165,15 @@ export function followChipHand(request, handId, op, onState, onError, initial) {
     accept(data, order);
     return data;
   }
+  async function sendAction(before, action) {
+    let response = await send({op:'act', revision:before.revision, action});
+    // Replay only when a newer pace is the sole change to the game and actor.
+    if (!closed && response.handId === handId && response.revision > before.revision &&
+        onlyPaceChanged(before, response) && onlyPaceChanged(before, current)) {
+      response = await send({op:'act', revision:current.revision, action});
+    }
+    if (action.type === 'play' && !response.game) throw new Error('게임 서버 응답을 확인하지 못했습니다.');
+  }
   const result = {handId, get current() { return current; },
     start() { if (initial) accept(initial, 0); schedule(0); },
     wake(revision) {
@@ -160,20 +185,35 @@ export function followChipHand(request, handId, op, onState, onError, initial) {
       if (!busy && !writing) schedule(0);
     },
     async act(action) {
-      if (closed || submitting || !current || current.seat < 0 || current.game.turn !== current.seat) return;
+      const play = action?.type === 'play';
+      const selected = current;
+      if (closed || submitting || !selected || selected.seat < 0 || selected.game.turn !== selected.seat ||
+          (play && (selected.game.phase !== 'play' || !selected.game.hand?.includes(action.card)))) {
+        return play ? false : undefined;
+      }
       submitting = true;
       try {
-        await write(async () => {
+        const confirmed = await write(async () => {
           const before = current;
           if (before.seat < 0 || before.game.turn !== before.seat || before.game.result) return;
-          const response = await send({op:'act', revision:before.revision, action});
-          // A remote pace update can win the revision check. Replay only when
-          // the server confirms this move did not change the game or its actor.
-          if (!closed && response.handId === handId && response.revision > before.revision &&
-              onlyPaceChanged(before, response) && onlyPaceChanged(before, current)) {
-            await send({op:'act', revision:current.revision, action});
+          if (!play) return sendAction(before, action);
+          if (!sameDealAndSeat(selected, before) || before.game.phase !== 'play' ||
+              selected.game.trickNo !== before.game.trickNo || !before.game.hand?.includes(action.card)) return false;
+          try {
+            await sendAction(before, action);
+          } catch (error) {
+            if (closed) return false;
+            if (error.status && error.status < 500 && error.status !== 408) throw error;
+            // The server may have saved the play before the reply was lost.
+            // Verify with a private read. Re-sending the mutation is unsafe.
+            if (cardHasLeft(before, current, action.card)) return true;
+            let failure = error;
+            try { await send({op}); } catch (readError) { failure = readError; }
+            if (!closed && !cardHasLeft(before, current, action.card)) throw failure;
           }
+          return !closed && cardHasLeft(before, current, action.card);
         });
+        return play ? confirmed === true : undefined;
       } finally { submitting = false; }
     },
     async changePace(pace) {

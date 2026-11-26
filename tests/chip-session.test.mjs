@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {chipManifest, consentWindow, offeredSeat, followChipHand} from '../chip-play.js';
+import {callChipService, chipManifest, consentWindow, offeredSeat, followChipHand} from '../chip-play.js';
 import {HostSession} from '../session.js';
 import {applyAction, createGame, getSpectatorView, getView} from '../table-deal.js';
 import {settlements} from '../table-scoring.js';
@@ -153,7 +153,7 @@ test('spectator polling cannot submit a move and ignores a response after closin
   },handId,'watch',r=>seen.push(r),assert.fail,initial);
   try {
     follow.start();
-    await follow.act({type:'play',card:'SA'});
+    assert.equal(await follow.act({type:'play',card:'SA'}),false);
     await reading;
     follow.close();
     release({...initial,revision:2});
@@ -309,8 +309,118 @@ test('a player move retries the host pace revision without repeating a played ca
   try {
     reader.start();
     await assert.rejects(reader.changePace('slow'), /방장/);
-    await reader.act({type:'play',card:'H8'});
+    assert.equal(await reader.act({type:'play',card:'H8'}),true);
     assert.deepEqual(actionRevisions,[1,2]);
     assert.equal(reader.current,actionReply);
+  } finally { reader.close(); }
+});
+
+test('a card play needs a newer private hand from the same deal and seat to confirm it', async () => {
+  const handId = crypto.randomUUID(), seat = 2;
+  const first = {handId,seat,revision:5,game:{phase:'play',turn:seat,hand:['H8','SA'],dealNo:1,trickNo:4}};
+  const played = {...first,revision:6,game:{...first.game,turn:3,hand:['SA']}};
+  const setting = {...played,game:{...played.game,phase:'result',result:{setting:{}},hand:[]}};
+  for (const [reply, expected] of [
+    [first,false], [{...played,game:first.game},false], [{...played,revision:4},false],
+    [{...played,seat:-1},false], [{...played,handId:crypto.randomUUID()},false],
+    [{...played,game:{...played.game,dealNo:2}},false], [setting,false],
+    [{...setting,game:{...setting.game,lastTrick:{number:4,finalPlay:{seat,card:'H8'}}}},true],
+    [played,true]
+  ]) {
+    const reader = followChipHand(async () => reply,handId,'view',() => {},assert.fail,first);
+    try {
+      reader.start();
+      assert.equal(await reader.act({type:'play',card:'H8'}),expected);
+    } finally { reader.close(); }
+  }
+});
+
+test('a lost play reply is verified with one private read and no second submission', async () => {
+  const handId = crypto.randomUUID();
+  const first = {handId,seat:2,revision:1,game:{phase:'play',turn:2,hand:['H8'],dealNo:1,trickNo:5}};
+  const played = {...first,revision:2,game:{...first.game,turn:3,hand:[]}};
+  const failed = new TypeError('연결이 끊겼습니다.');
+  for (const [error, view, confirms, ops] of [
+    [failed,played,true,['act','view']],
+    [Object.assign(new Error('서버 응답 실패'),{status:503}),played,true,['act','view']],
+    [failed,first,false,['act','view']],
+    [failed,new Error('조회 실패'),false,['act','view']],
+    [Object.assign(new Error('카드를 낼 수 없습니다.'),{status:400}),played,false,['act']]
+  ]) {
+    const calls = [];
+    const reader = followChipHand(async req => {
+      calls.push(req.op);
+      if (req.op === 'act') throw error;
+      if (view instanceof Error) throw view;
+      return view;
+    },handId,'view',() => {},assert.fail,first);
+    try {
+      reader.start();
+      const receipt = reader.act({type:'play',card:'H8'});
+      if (confirms) assert.equal(await receipt,true);
+      else await assert.rejects(receipt,view instanceof Error ? view : error);
+      assert.deepEqual(calls,ops);
+    } finally { reader.close(); }
+  }
+});
+
+test('a card selected during a pace edit cannot be submitted in another trick', async () => {
+  const handId = crypto.randomUUID();
+  const first = {handId,seat:0,revision:4,pace:'normal',publicGame:{},game:{phase:'play',turn:0,hand:['H8','SA'],trickNo:1}};
+  const next = {...first,revision:10,pace:'fast',game:{...first.game,trickNo:2,hand:['H8']}};
+  const calls = [];
+  const reader = followChipHand(async req => { calls.push(req.op); return next; },handId,'view',() => {},assert.fail,first);
+  try {
+    reader.start();
+    const update = reader.changePace('fast');
+    const receipt = reader.act({type:'play',card:'H8'});
+    await update;
+    assert.equal(await receipt,false);
+    assert.deepEqual(calls,['pace']);
+  } finally { reader.close(); }
+});
+
+test('a truncated successful play response triggers a private read', async t => {
+  const handId = crypto.randomUUID(), ops = [];
+  const first = {handId,seat:1,revision:4,game:{phase:'play',turn:1,hand:['H8'],dealNo:1}};
+  const played = {...first,revision:5,game:{...first.game,turn:2,hand:[]}};
+  const client = {url:'https://example.invalid',publishableKey:'test',accessToken:async () => 'session'};
+  t.mock.method(globalThis,'fetch',async (_url, options) => {
+    const {op} = JSON.parse(options.body);
+    assert.equal(options.headers.Authorization,'Bearer session');
+    ops.push(op);
+    return op === 'act' ? new Response('{"game":') : Response.json(played);
+  });
+  const reader = followChipHand(req => callChipService(client,req),handId,'view',() => {},assert.fail,first);
+  try {
+    reader.start();
+    assert.equal(await reader.act({type:'play',card:'H8'}),true);
+    assert.deepEqual(ops,['act','view']);
+  } finally { reader.close(); }
+});
+
+test('an overlapping private poll can confirm the play even if the recovery read fails', async t => {
+  t.mock.timers.enable({apis:['setTimeout']});
+  const handId = crypto.randomUUID(), ops = [];
+  const first = {handId,seat:1,revision:4,game:{phase:'play',turn:1,hand:['H8'],dealNo:1}};
+  const played = {...first,revision:5,game:{...first.game,turn:2,hand:[]}};
+  let releasePoll, startRecovery, rejectRecovery;
+  const recoveryStarted = new Promise(resolve => { startRecovery = resolve; });
+  const reader = followChipHand(async req => {
+    ops.push(req.op);
+    if (ops.length === 1) return new Promise(resolve => { releasePoll = resolve; });
+    if (req.op === 'act') throw new TypeError('연결이 끊겼습니다.');
+    startRecovery();
+    return new Promise((_, reject) => { rejectRecovery = reject; });
+  },handId,'view',() => {},assert.fail,first);
+  try {
+    reader.start();
+    t.mock.timers.tick(0);
+    const receipt = reader.act({type:'play',card:'H8'});
+    await recoveryStarted;
+    releasePoll(played);
+    rejectRecovery(new Error('조회 실패'));
+    assert.equal(await receipt,true);
+    assert.deepEqual(ops,['view','act','view']);
   } finally { reader.close(); }
 });

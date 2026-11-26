@@ -472,7 +472,6 @@ html:has(.g-screen) { scrollbar-gutter: stable; }
     opacity: 0; pointer-events: none;
     animation: g-reveal-face calc(320ms * var(--table-pace)) ease-out calc(var(--deal-delay, 0ms) * var(--table-pace)) backwards;
   }
-  .g-hand-card.g-sending { transform: translateY(-7px); transition: transform 100ms ease-out; }
   .g-board:has(.g-play-enter) { z-index: 1; }
   .g-trick:has(.g-play-enter) { z-index: 3; pointer-events: none; }
   .g-on-table.g-play-enter { animation: g-play-card calc(var(--play-time) * var(--table-pace)) cubic-bezier(.22,.45,.38,1) backwards; }

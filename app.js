@@ -697,9 +697,18 @@ function draw() {
       if (snapshot.chipHandId) {
         if (!remote || remote.seat < 0) return false;
         const hand = chipReader;
-        hand.act(action).then(() => {
-          if (mode === 'guest' && hand === chipReader) transport?.send({type:'chip-wake',handId:hand.handId,revision:hand.current?.revision});
-        }).catch(error => toast(error.message)).finally(() => { if (hand === chipReader) draw(); });
+        const receipt = hand.act(action).then(accepted => {
+          if (hand !== chipReader) return false;
+          if (mode === 'guest' && (action.type !== 'play' || accepted)) {
+            transport?.send({type:'chip-wake',handId:hand.handId,revision:hand.current?.revision});
+          }
+          return accepted;
+        }).catch(error => {
+          if (hand === chipReader) toast(error.message);
+          return false;
+        });
+        if (action.type === 'play') return receipt;
+        void receipt.then(() => { if (hand === chipReader) draw(); });
         return true;
       }
       if (mode === 'practice' && authority) {
