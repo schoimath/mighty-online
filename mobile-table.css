@@ -1,0 +1,105 @@
+.g-bid-wait { display: none; }
+
+@media (max-width: 729px), (pointer: coarse) and (orientation: landscape) and (max-height: 540px) {
+  html:has(#game:not([hidden]) .g-screen:not([data-phase="result"])) { overflow: hidden; scrollbar-gutter: auto; }
+  .g-screen:not([data-phase="result"]) {
+    display: flex; flex-direction: column; height: 100vh; height: 100dvh; min-height: 0; overflow: hidden;
+  }
+  .g-screen:not([data-phase="result"]) .g-main {
+    flex: 1; min-height: 0; overflow: auto; overscroll-behavior-y: contain;
+    padding: 5px max(6px, env(safe-area-inset-right)) max(6px, env(safe-area-inset-bottom)) max(6px, env(safe-area-inset-left));
+  }
+  .g-nav { flex: none; }
+  .g-nav .g-nav-inner {
+    display: flex; flex-wrap: wrap; min-height: 40px; gap: 3px 6px;
+    padding: 3px max(6px, env(safe-area-inset-right)) 3px max(6px, env(safe-area-inset-left));
+  }
+  .g-nav .g-brand, .g-nav .g-nav-divider, .g-nav .g-nav-phase,
+  .g-table-kicker, .g-release-note { display: none; }
+  .g-nav-links { display: flex; margin: 0; }
+  .g-nav-links .g-btn, .g-nav-actions button { min-height: 36px; }
+  .g-nav-actions { margin-inline-start: auto; gap: 4px; }
+  .g-heading { display: flex; align-items: center; flex-wrap: wrap; gap: 3px 6px; margin: 0 0 5px; }
+  .g-eyebrow, .g-title-row { display: contents; }
+  .g-title-context { display: flex; flex: 1 1 90px; gap: 3px 6px; order: 0; }
+  .g-heading h1 { font-size: 1.05rem; }
+  .g-round-tags:has(.g-friend-tag[hidden]) { margin-inline-start: 0; }
+  .g-round-tag, .g-friend-tag { padding: 2px 5px; font-size: .73rem; }
+  .g-match-progress { order: 1; font-size: .73rem; }
+  .g-records-open { order: 2; min-height: 32px; }
+  .g-pace { order: 3; }
+  .g-pace > span { position: absolute; clip-path: inset(50%); width: 1px; height: 1px; overflow: hidden; }
+  .g-pace select { min-height: 34px; font-size: 1rem; }
+  .g-layout { gap: 5px; }
+  .g-board { padding: 8px 3px; }
+  .g-felt {
+    --center-height: clamp(108px, calc(100dvh - 465px - var(--mobile-clock-space, 0px) - env(safe-area-inset-bottom)), 308px);
+    grid-template-rows: clamp(47px, 8dvh, 70px) var(--center-height) clamp(47px, 8dvh, 70px);
+    padding-block: 3px; gap: 2px;
+  }
+  .g-board:has(.g-turn-clock:not([hidden])) { --mobile-clock-space: 10px; padding-top: 18px; }
+  .g-section-heading { margin-bottom: 6px; }
+  .g-screen[data-phase="bid"][data-seated] {
+    --bid-card-height: clamp(46px, 8dvh, 66px);
+    --bid-tray-height: calc(var(--bid-card-height) + 9.75rem + env(safe-area-inset-bottom));
+  }
+  .g-screen[data-phase="bid"][data-seated] .g-main { margin-bottom: var(--bid-tray-height); }
+  .g-screen[data-phase="bid"] .g-choice-shortcut { display: none; }
+  .g-screen[data-phase="bid"] .g-auction-calls { height: calc(100% - 40px); }
+  .g-screen[data-phase="bid"] .g-hand {
+    position: fixed; z-index: 4; inset: auto 0 0; height: var(--bid-tray-height);
+    display: flex; flex-direction: column; gap: 4px;
+    padding: 6px max(8px, env(safe-area-inset-right)) max(6px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left));
+    border-radius: 10px 10px 0 0; background: #1b392c;
+  }
+  .g-screen[data-phase="bid"] .g-section-heading { margin: 0; }
+  .g-screen[data-phase="bid"] .g-section-heading h2 { font-size: .88rem; }
+  .g-screen[data-phase="bid"] .g-cards { display: grid; grid-template-columns: repeat(10,minmax(0,1fr)); gap: 2px; }
+  .g-screen[data-phase="bid"] .g-hand-card { width: 100%; height: var(--bid-card-height); max-width: 58px; }
+  .g-screen[data-phase="bid"] .g-hand-card :is(.g-pip,.g-corner-bottom,.g-joker-medallion) { display: none; }
+  .g-screen[data-phase="bid"] .g-hand-card .g-corner { left: 50%; transform: translateX(-50%); }
+  .g-screen[data-phase="bid"] .g-decision {
+    display: grid; grid-template-columns: minmax(0,1fr) minmax(64px,.34fr); align-items: end;
+    gap: 5px 8px; margin-top: auto; padding: 0; border: 0;
+  }
+  .g-screen[data-phase="bid"] .g-decision > :is(h2,p) {
+    position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); margin: 0;
+  }
+  .g-screen[data-phase="bid"] .g-decision:not(:has(.g-suit-picker)) > p {
+    position: static; width: auto; height: auto; clip-path: none; grid-column: 1 / -1;
+  }
+  .g-screen[data-phase="bid"] .g-decision .g-field { min-width: 0; gap: 2px; }
+  .g-screen[data-phase="bid"] .g-field select { height: 42px; font-size: 1rem; }
+  .g-screen[data-phase="bid"] .g-suit-options { margin-top: 2px; gap: 3px; }
+  .g-screen[data-phase="bid"] .g-suit-option .g-suit { min-width: 0; min-height: 42px; }
+  .g-screen[data-phase="bid"] .g-bid-actions { grid-column: 1 / -1; width: 100%; gap: 6px; }
+  .g-bid-actions:has(> :only-child) { grid-template-columns: 1fr; }
+  .g-bid-wait { display: grid; flex: 1; place-content: center; margin: 0; color: #d5e3d4; font-size: .9rem; }
+}
+
+@media (max-width: 729px) and (max-height: 610px),
+       (pointer: coarse) and (orientation: landscape) and (max-height: 540px) {
+  .g-screen[data-phase="bid"] .g-leading-bid > small,
+  .g-screen[data-phase="bid"] .g-auction-call > small { position: absolute; clip-path: inset(50%); }
+}
+
+@media (orientation: landscape) and (min-width: 530px) and (max-height: 540px) and (pointer: coarse),
+       (orientation: landscape) and (min-width: 530px) and (max-width: 729px) and (max-height: 540px) {
+  .g-screen[data-phase="bid"][data-seated] { --bid-side: clamp(232px, 35vw, 330px); }
+  .g-screen[data-phase="bid"][data-seated] .g-main {
+    width: calc(100% - var(--bid-side)); margin: 0 var(--bid-side) 0 0;
+  }
+  .g-screen[data-phase="bid"] .g-hand {
+    inset: auto 0 0 auto; width: var(--bid-side); height: auto; max-height: calc(100dvh - 48px); overflow-y: auto;
+  }
+  .g-screen[data-phase="bid"] .g-cards { grid-template-columns: repeat(5,minmax(0,1fr)); }
+  .g-screen[data-phase="bid"] .g-bid-actions .g-btn { padding-inline: 3px; }
+  .g-screen[data-phase="bid"] .g-bid-wait { min-height: 7rem; }
+  .g-screen .g-felt {
+    --center-height: clamp(90px, calc(100dvh - 224px), 210px);
+    grid-template-rows: 40px var(--center-height) 40px;
+  }
+  .g-screen .g-seat { padding: 3px; }
+  .g-screen .g-avatar { flex-basis: 24px; height: 24px; }
+  .g-screen .g-seat:is(.g-seat-1,.g-seat-4) .g-avatar { display: none; }
+}

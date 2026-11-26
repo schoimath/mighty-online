@@ -369,7 +369,7 @@ function renderHand(ui, newDeal) {
   if (!row) {
     ui.decisionHtml = null;
     hand.setAttribute("aria-label", "내 손패");
-    hand.innerHTML = '<div class="g-section-heading"><h2>내 손패 <span></span></h2><div class="g-hand-actions"><span class="g-role"></span><button type="button" class="g-btn g-claim-open" data-do="claim" aria-haspopup="dialog" hidden>세팅 선언</button></div></div><div class="g-cards"></div><section id="g-hand-decision" class="g-decision g-action" aria-label="내 차례 선택" hidden></section><div class="g-play-settings" hidden></div>';
+    hand.innerHTML = '<div class="g-section-heading"><h2>내 손패 <span></span></h2><div class="g-hand-actions"><span class="g-role"></span><button type="button" class="g-btn g-claim-open" data-do="claim" aria-haspopup="dialog" hidden>세팅 선언</button></div></div><div class="g-cards"></div><section id="g-hand-decision" class="g-decision g-action" aria-label="내 차례 선택" hidden></section><p class="g-bid-wait" role="status" hidden></p><div class="g-play-settings" hidden></div>';
     row = hand.querySelector(".g-cards");
     ui.decisionObserver?.disconnect();
     ui.decisionInView = false;
@@ -393,6 +393,12 @@ function renderHand(ui, newDeal) {
   if (markup !== ui.decisionHtml) decision.innerHTML = markup;
   ui.decisionHtml = markup;
   decision.hidden = !markup;
+  const wait = hand.querySelector(".g-bid-wait");
+  wait.hidden = view.phase !== "bid" || Boolean(markup);
+  if (!wait.hidden) {
+    const message = view.turn == null ? "경매가 끝났습니다." : nameAtSeat(ui, view.turn) + " 입찰 차례";
+    if (wait.textContent !== message) wait.textContent = message;
+  }
   shortcut.hidden = !markup || ui.decisionInView;
   if (markup) shortcut.textContent = {bid:"공약 선택 ↓", discard:"묻을 패 선택 ↓", friend:"프렌드 선택 ↓"}[view.phase];
   if (newDeal) row.replaceChildren();
@@ -766,7 +772,7 @@ function mountTable(root) {
       </button>${button("나가기", "leave", true, "top")}</div>
     </div></header>
     <div class="g-main">
-      <div class="g-heading"><div class="g-eyebrow"><i aria-hidden="true">♠</i> 마이티 · 5인전
+      <div class="g-heading"><div class="g-eyebrow"><span class="g-table-kicker"><i aria-hidden="true">♠</i> 마이티 · 5인전</span>
         <span class="g-match-progress" hidden></span><small class="g-release-note">v${VERSION}</small>
         <button type="button" class="g-records-open" data-do="records" aria-haspopup="dialog" aria-controls="g-records-dialog">대국 기록</button></div>
         <div class="g-title-row"><div class="g-title-context"><h1></h1><div class="g-round-tags"><span class="g-round-tag"></span><span class="g-friend-tag" aria-live="polite" aria-atomic="true" hidden></span></div></div>
@@ -825,6 +831,8 @@ export function updateGamePace(container, pace, pendingPace = null) {
 
 function redraw(ui, newDeal = false) {
   const { view, options, root } = ui;
+  root.firstElementChild.dataset.phase = view.phase;
+  root.firstElementChild.toggleAttribute("data-seated", view.seat >= 0);
   updateTurnCountdown(ui);
   root.querySelector(".g-nav-phase").textContent = view.seat < 0 ? "테이블 관전" : "게임 테이블";
   const leaveButton = root.querySelector('[data-do="leave"]');
