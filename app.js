@@ -10,6 +10,9 @@ import {scoreTable, seatStanding} from './score-ui.js';
 import {bindModelSettings, modelLabel, modelSettings, modelSummary, readModelSettings} from './model-picker.js';
 import {VERSION} from './release.js';
 import {rememberRoom, roomModels, roomPreferences} from './room-preferences.js';
+import {accountClient} from './account-client.js';
+import {setupAccountUI} from './account-ui.js';
+import {accountIdValid, callChipService, chipManifest, consentWindow, followChipHand, offeredSeat} from './chip-play.js';
 
 const $ = id => document.getElementById(id);
 if ($('release-version')) $('release-version').textContent = 'v' + VERSION;
@@ -55,6 +58,65 @@ let directoryScan = null;
 let directoryTimer;
 let listedRooms = [];
 const chat = setupChat(sendChat);
+const roomAccounts = new Map();
+const chipRequest = payload => callChipService(accountClient, payload);
+let chipReader = null, preparing = null, acceptedOffer = null, resumeHand = null;
+let lastAccount = null, settledChipHand = null;
+let accountUI;
+
+async function lookupActiveHand() {
+  const user = accountClient.state.user;
+  const hand = user ? await chipRequest({op:'active'}).catch(() => null) : null;
+  if (accountClient.state.user?.id !== user?.id) return;
+  resumeHand = hand?.handId ?? null;
+  $('resume-chip-hand').hidden = !resumeHand;
+}
+
+function onAccount(state) {
+  if (!state.ready) return;
+  const id = state.user?.id ?? null;
+  if (id === lastAccount) return;
+  if (lastAccount && ['host','guest','resume'].includes(mode)) stopSession('계정이 바뀌어 테이블에서 나왔습니다.');
+  lastAccount = id;
+  if (id) saveName(state.user.nickname);
+  lookupActiveHand();
+}
+
+async function mayPlay() {
+  await accountClient.ready;
+  if (!accountClient.state.user) {
+    accountUI.open('이메일 인증과 로그인 후 칩 대국에 참가할 수 있습니다.');
+    return false;
+  }
+  try {
+    const {balance, error} = await accountClient.refreshWallet();
+    if (balance > 0) return true;
+    if (balance == null && error) { toast(error); return false; }
+    toast('참가하려면 잔액이 양수여야 합니다. 잔액이 0 이하이면 한국시간 다음 날 100칩이 됩니다.');
+  } catch (error) { toast(error.message); }
+  return false;
+}
+
+function trackChipHand(handId, initial = null) {
+  if (chipReader?.handId === handId) { chipReader.wake(); return; }
+  chipReader?.close();
+  const watch = !accountClient.state.user || (!authority && mode !== 'resume' && snapshot?.spectator);
+  const reader = followChipHand(chipRequest, handId, watch ? 'watch' : 'view', data => {
+    if (reader !== chipReader) return;
+    if (data.game.result && settledChipHand !== handId) {
+      settledChipHand = handId;
+      if (accountClient.state.user) accountClient.refreshWallet().catch(error => toast(error.message));
+    }
+    if (mode === 'resume') {
+      snapshot = {chipHandId:handId, seat:data.seat, spectator:data.seat < 0, players:data.names.map((name,i) =>
+        ({name,bot:data.bots[i],modelId:data.models[i]})), rules:data.game.rules, game:data.game};
+    }
+    if (mode === 'host' && authority.syncChipHand(data)) publish();
+    else draw();
+  }, error => toast(error.message), initial);
+  chipReader = reader;
+  reader.start();
+}
 
 function broadcastChat(seat, text, senderId = null) {
   const name = authority.nameFor(senderId);
@@ -203,6 +265,12 @@ $('nav-rules').onclick = showRules;
 
 function stopSession(message) {
   generation++;
+  preparing?.consent.close();
+  preparing = acceptedOffer = null;
+  $('room').inert = $('game').inert = false;
+  chipReader?.close();
+  chipReader = null;
+  roomAccounts.clear();
   publicListing?.close();
   publicListing = null;
   clearTimeout(botTimer);
@@ -232,12 +300,13 @@ function stopSession(message) {
   listedRooms = [];
   renderPublicTables(listedRooms, {loading:true, capacity:PUBLIC_ROOM_LIMIT});
   refreshDirectory();
+  lookupActiveHand();
   window.scrollTo(0,0);
   if (message) toast(message);
 }
 
 function requestLeave() {
-  if (mode === 'lobby') return;
+  if (mode === 'lobby' || preparing) return;
   const canWatch = mode === 'host' && snapshot.publicRoom && !snapshot.spectator &&
     snapshot.game && snapshot.game.phase !== 'result';
   const reason = mode === 'host' ? '방장이 나가면 이 방이 닫히고 모든 참가자의 연결이 끝납니다.' :
@@ -247,8 +316,19 @@ function requestLeave() {
     '</p><div class="room-actions"><button class="plain-button" id="stay">계속하기</button>' + stepAside +
     '<button class="' + (canWatch ? 'plain-button' : 'primary-button') + '" id="quit">' + (mode === 'host' ? '방 닫기' : '나가기') + '</button></div>');
   $('stay').onclick = closeModal;
-  $('quit').onclick = () => stopSession();
-  if (canWatch) $('host-watch').onclick = () => {
+  $('quit').onclick = async () => {
+    const current = chipReader?.current;
+    if (current && current.seat >= 0 && !current.game.result) {
+      try { await chipRequest({op:'leave',handId:current.handId}); }
+      catch (error) { toast(error.message); }
+    }
+    stopSession();
+  };
+  if (canWatch) $('host-watch').onclick = async () => {
+    if (authority.chipHandId) {
+      try { await chipRequest({op:'leave',handId:authority.chipHandId}); }
+      catch (error) { toast(error.message); return; }
+    }
     try { authority.leaveHostSeat(); closeModal(); clearGame($('game')); publish(); }
     catch (error) { closeModal(); toast(error.message); }
   };
@@ -414,17 +494,19 @@ function drawRoom() {
 function drawAudience() {
   if (!snapshot) return;
   const node = $(snapshot.game ? 'game' : 'room').querySelector('.public-audience');
+  if (mode === 'resume') { if (node) node.hidden = true; return; }
   if (node) renderPublicAudience(node, snapshot, {
     onReserve:() => changeReservation(true), onCancel:() => changeReservation(false)
   });
 }
 
-function changeReservation(wanted) {
+async function changeReservation(wanted) {
   if (!snapshot?.spectator) return;
+  if (wanted && !await mayPlay()) return;
   if (mode === 'host') {
     try { applyReservation(authority, null, wanted); }
     catch (error) { toast(error.message); }
-  } else if (!transport?.send({type:'reservation', wanted})) toast('방장과의 연결을 확인해 주세요.');
+  } else if (!transport?.send({type:'reservation', wanted, accountId:accountClient.state.user?.id})) toast('방장과의 연결을 확인해 주세요.');
 }
 
 function applyReservation(session, id, wanted) {
@@ -438,9 +520,12 @@ function draw() {
   if (!snapshot) return;
   if (!snapshot.game) { clearGame($('game')); showScreen('room'); drawRoom(); return; }
   showScreen('game');
-  renderGame($('game'),snapshot.game,{
-    names:snapshot.players.map(p => p?.name), isHost: Boolean(authority), scoreboard:snapshot.scoreboard,
-    modelLabels:snapshot.players.map(p => p?.bot && p.modelId ? modelLabel(p.modelId) : ''),
+  const remote = chipReader?.handId === snapshot.chipHandId ? chipReader?.current : null;
+  renderGame($('game'),remote?.game ?? snapshot.game,{
+    names:remote?.names ?? snapshot.players.map(p => p?.name), isHost: Boolean(authority), scoreboard:snapshot.scoreboard,
+    chipDelta:remote?.myDelta, resumed:mode === 'resume',
+    modelLabels:remote ? remote.models.map((id,i) => remote.bots[i] ? modelLabel(id) : '') :
+      snapshot.players.map(p => p?.bot && p.modelId ? modelLabel(p.modelId) : ''),
     replaySetupLabel: mode === 'practice' ? (snapshot.scoreboard?.complete ? '새 연습 경기 설정' : '규칙·AI 바꿔서 시작') : '대기실로 돌아가기',
     onRules:showRules, onLeave:requestLeave, onReplay() {
       if (authority?.round?.phase === 'result' && !snapshot.scoreboard?.complete) startRound();
@@ -453,39 +538,54 @@ function draw() {
     },
     onAction(action) {
       if (snapshot.spectator) return false;
-      if (authority) {
+      if (snapshot.chipHandId) {
+        if (!remote || remote.seat < 0) return false;
+        const hand = chipReader;
+        hand.act(action).then(() => {
+          if (mode === 'guest' && hand === chipReader) transport?.send({type:'chip-wake',handId:hand.handId});
+        }).catch(error => toast(error.message)).finally(() => { if (hand === chipReader) draw(); });
+        return true;
+      }
+      if (mode === 'practice' && authority) {
         try { submitTurn(authority, authority.hostSeat, snapshot.revision, action); return true; }
         catch (error) { toast(error.message); return false; }
       }
-      if (transport?.send({type:'action',revision:snapshot.revision,action})) return true;
-      toast('방장과의 연결을 확인해 주세요.');
       return false;
     }
   });
   if (mode === 'host' || mode === 'guest') chat.attach($('game').querySelector('.g-nav-actions'));
+  accountUI.attach($('game').querySelector('.g-nav-actions'));
   drawAudience();
 }
 
 // Roster updates must not restart a bid clock or unlock a play awaiting confirmation.
 function publishAudience(joinedId) {
+  const nextDeal = expectedChipTable();
   for (const id of authority.connections.keys()) {
     const view = authority.viewFor(id);
-    const packet = id === joinedId ? {type:'state', view} :
-      {type:'audience', spectators:view.spectators, reservation:view.reservation};
+    const packet = id === joinedId ? {type:'state', view:{...view,chipHost:roomAccounts.get(null),nextDeal}} :
+      {type:'audience', spectators:view.spectators, reservation:view.reservation,nextDeal};
     transport.send(id, packet);
   }
   snapshot = authority.hostView();
   drawAudience();
 }
 
+function expectedChipTable() {
+  if (mode !== 'host' || (authority.round && authority.round.phase !== 'result') || authority.hostView().scoreboard.complete) return null;
+  const {seats, firstSeat} = authority.plannedTable();
+  return {firstSeat, seats:seats.map(p => ({name:p.name, bot:Boolean(p.bot)}))};
+}
+
 function publish() {
   clearTimeout(botTimer);
+  const nextDeal = expectedChipTable();
   for (const id of authority.connections.keys()) {
-    transport?.send(id,{type:'state',view:authority.viewFor(id)});
+    transport?.send(id,{type:'state',view:{...authority.viewFor(id),chipHost:roomAccounts.get(null),nextDeal}});
   }
   snapshot = authority.hostView();
   draw();
-  if (authority.botTurn) {
+  if (mode === 'practice' && authority.botTurn) {
     const game = snapshot.game;
     let pause = 560;
     if (game.phase === 'bid') pause = game.bidHistory.length ? AUCTION_BEAT_MS : 1800 + (game.dealNo > 1 ? AUCTION_BEAT_MS : 0);
@@ -597,10 +697,58 @@ function takeBotTurn() {
     fallback();
   }
 }
-function startRound() {
-  authority.start();
-  publish();
-  window.scrollTo(0,0);
+async function startRound() {
+  if (mode === 'practice') {
+    authority.start();
+    publish();
+    window.scrollTo(0,0);
+    return;
+  }
+  if (mode !== 'host' || preparing) return;
+  const table = authority;
+  let pending;
+  try {
+    const plan = table.plannedTable();
+    const spec = chipManifest(plan, roomCode, roomAccounts.get(null), roomAccounts);
+    const guestSeats = plan.seats.filter(p => !p.bot && p.id != null);
+    const consent = consentWindow(guestSeats.map(p => p.id), spec.handId);
+    pending = preparing = {consent, spec, departed:new Set(), denied:new Set()};
+    $('room').inert = $('game').inert = true;
+    // Guest departures and seat edits are applied after the server confirms
+    // the deal, so the roster cannot change halfway through its commit.
+    const revision = table.revision;
+    guestSeats.forEach(p => transport.send(p.id,{type:'chip-offer',spec}));
+    toast('참가자 계정과 칩 잔액을 확인하는 중입니다.');
+    await Promise.all([consent.ready, chipRequest({...spec, op:'ready'}).catch(error => {
+      if (error.code === 'insufficient_chips') pending.denied.add(null);
+      throw error;
+    })]);
+    if (preparing !== pending || table.revision !== revision) throw new Error('자리가 바뀌었습니다. 다시 시작해 주세요.');
+    let initial;
+    try { initial = await chipRequest({...spec, op:'start'}); }
+    catch (error) {
+      // A lost response can follow a successful database commit. Recover the
+      // same ID; a new deal must never replace a hand already charged.
+      initial = await chipRequest({op:'view', handId:spec.handId}).catch(() => null);
+      if (!initial) throw error;
+    }
+    if (preparing !== pending) return;
+    table.startChipHand(initial);
+    trackChipHand(spec.handId, initial);
+    publish();
+    window.scrollTo(0,0);
+  } catch (error) {
+    if (table === authority) toast(error.message);
+  } finally {
+    if (pending && preparing === pending) {
+      preparing = null;
+      $('room').inert = $('game').inert = false;
+      pending.consent.close();
+      pending.denied.forEach(id => table.sitOut(id));
+      pending.departed.forEach(id => { table.removeGuest(id); roomAccounts.delete(id); });
+      if (pending.denied.size || pending.departed.size) publish();
+    }
+  }
 }
 
 function openPracticeSetup() {
@@ -641,8 +789,11 @@ async function connectRoom(kind, name, code, signal, {roundLimit, publicRoom, in
     const session = new HostSession(name, preferences.rules, roomModels(preferences.models), roundLimit, {publicRoom});
     link = await hostRoom({
       signal,
-      onJoin(id, guestName, guestIntent) {
+      onJoin(id, guestName, guestIntent, accountId) {
         if (!active() || authority !== session) return '테이블을 준비하고 있습니다. 잠시 후 다시 시도해 주세요.';
+        if (preparing) return '새 판의 배패를 준비하고 있습니다. 잠시 후 입장해 주세요.';
+        if (guestIntent !== 'watch' && !accountIdValid(accountId)) return '새로고침하고 인증된 게임 계정으로 입장해 주세요.';
+        if (guestIntent !== 'watch' && [...roomAccounts.values()].includes(accountId)) return '이미 이 계정이 테이블에 있습니다.';
         // Earlier clients can take a seat but cannot display an observer projection.
         if (publicRoom && guestIntent === undefined && (session.round || session.players.every(Boolean))) {
           return '로비를 새로고침한 뒤 관전하거나 다음 판을 예약해 주세요.';
@@ -650,6 +801,7 @@ async function connectRoom(kind, name, code, signal, {roundLimit, publicRoom, in
         const revision = session.revision;
         const reason = session.addGuest(id,guestName,guestIntent);
         if (reason) return reason;
+        if (accountIdValid(accountId)) roomAccounts.set(id,accountId);
         if (session.revision === revision) publishAudience(id);
         else publish();
         transport.send(id, {type:'chat-history', messages:chat.log.messages});
@@ -658,18 +810,33 @@ async function connectRoom(kind, name, code, signal, {roundLimit, publicRoom, in
       onMessage(id, packet) {
         if (!active() || !packet || !session.connections.has(id)) return;
         const seat = session.seatFor(id);
+        if (packet.type === 'chip-answer') {
+          if (preparing?.spec.handId === packet.handId) {
+            const error = new Error((session.nameFor(id) || '참가자') + '님의 참가 확인을 마치지 못했습니다.');
+            if (preparing.consent.answer(id,packet.accepted === true,error) && packet.reason === 'insufficient_chips') preparing.denied.add(id);
+          }
+          return;
+        }
+        if (packet.type === 'chip-wake') { if (packet.handId === session.chipHandId) chipReader?.wake(); return; }
         if (packet.type === 'chat-send') {
           broadcastChat(seat, packet.text, id);
           return;
         }
         try {
+          if (preparing) throw new Error('배패를 준비하고 있습니다. 잠시 후 다시 시도해 주세요.');
           if (packet.type === 'reservation') {
+            if (packet.wanted) {
+              if (!accountIdValid(packet.accountId)) throw new Error('먼저 인증된 계정으로 로그인해 주세요.');
+              if ([...roomAccounts].some(([other, uid]) => other !== id && uid === packet.accountId &&
+                  (other === null ? session.hostSeat : session.seatFor(other)) >= 0)) {
+                throw new Error('이 계정은 이미 착석했습니다.');
+              }
+              roomAccounts.set(id, packet.accountId);
+            }
             applyReservation(session, id, packet.wanted);
           } else if (seat < 0) return;
           else if (packet.type === 'seat-choice') {
             if (applySeatChoice(session, id, packet)) publish();
-          } else if (packet.type === 'action') {
-            submitTurn(session, seat, packet.revision, packet.action);
           }
         } catch (error) {
           transport.send(id,{type:'error',message:error.message});
@@ -677,6 +844,12 @@ async function connectRoom(kind, name, code, signal, {roundLimit, publicRoom, in
       },
       onLeave(id) {
         if (!active()) return;
+        if (preparing) {
+          preparing.departed.add(id);
+          preparing.consent.answer(id,false,new Error('참가자 연결이 종료되었습니다. 다시 시작해 주세요.'));
+          return;
+        }
+        roomAccounts.delete(id);
         const seat = session.seatFor(id);
         const name = session.nameFor(id);
         const revision = session.revision;
@@ -699,24 +872,36 @@ async function connectRoom(kind, name, code, signal, {roundLimit, publicRoom, in
     }
     mode = 'host';
     authority = session;
+    roomAccounts.set(null, accountClient.state.user.id);
     rememberRoom({roundLimit});
   } else {
     mode = 'joining';
     link = await joinRoom(code,name,{
-      signal, intent,
+      signal, intent, accountId:accountClient.state.user?.id,
       onMessage(packet) {
         if (!active()) return;
         if (packet?.type === 'chat-message') { chat.receive(packet.message, packet.own === true); return; }
         if (packet?.type === 'chat-history') { chat.restore(packet.messages); return; }
+        if (packet?.type === 'chip-offer' && mode === 'guest') {
+          approveChipOffer(packet.spec, token);
+          return;
+        }
         if (packet?.type === 'audience' && snapshot) {
           snapshot.spectators = packet.spectators;
           snapshot.reservation = packet.reservation;
+          snapshot.nextDeal = packet.nextDeal;
           if (mode === 'guest') drawAudience();
           return;
         }
         if (packet?.type === 'error') { toast(packet.message); if (mode === 'guest') draw(); return; }
         if (packet?.type === 'state') {
           snapshot = packet.view;
+          if (!snapshot.chipHost && intent !== 'watch') {
+            stopSession('이 방은 이전 버전입니다. 새 버전의 방에서 칩 대국에 참가해 주세요.');
+            return;
+          }
+          if (snapshot.chipHandId) trackChipHand(snapshot.chipHandId);
+          else if (chipReader) { chipReader.close(); chipReader = null; }
           if (mode === 'guest') draw();
         }
       },
@@ -736,7 +921,8 @@ async function connectRoom(kind, name, code, signal, {roundLimit, publicRoom, in
   window.scrollTo(0,0);
 }
 
-function openForm(kind, code = '', publicIntent = null) {
+async function openForm(kind, code = '', publicIntent = null) {
+  if (kind !== 'profile' && publicIntent !== 'watch' && !await mayPlay()) return;
   const profile = kind === 'profile';
   const joining = kind === 'join';
   const publicTitles = {play:'공개 테이블 참가', watch:'테이블 관전', reserve:'다음 판 예약'};
@@ -749,6 +935,7 @@ function openForm(kind, code = '', publicIntent = null) {
     (kind === 'create' ? visibilityPicker() + seriesPicker(roomPreferences().roundLimit) : '') +
     '<div class="form-error" role="alert" id="form-error"></div><button class="primary-button form-submit" id="submit-form">' + (profile ? '저장' : title) + '</button></form>');
   $('name-field').value = nickname;
+  if (accountClient.state.user) $('name-field').readOnly = true;
   if (joining) { $('code-field').value = code; (code ? $('name-field') : $('code-field')).focus(); }
   else { $('name-field').focus(); $('name-field').select(); }
   $('setup-form').onsubmit = async event => {
@@ -787,7 +974,33 @@ function openForm(kind, code = '', publicIntent = null) {
 $('create-btn').onclick = () => openForm('create');
 $('join-btn').onclick = () => openForm('join');
 $('practice-btn').onclick = openPracticeSetup;
-$('profile-btn').onclick = () => openForm('profile');
+accountUI = setupAccountUI(accountClient, {onChange:onAccount});
+$('profile-btn').onclick = () => accountUI.open();
+$('resume-chip-hand').onclick = async () => {
+  if (!resumeHand || mode !== 'lobby') return;
+  try {
+    const data = await chipRequest({op:'view',handId:resumeHand});
+    if (mode !== 'lobby') return;
+    mode = 'resume';
+    pauseDirectory();
+    trackChipHand(data.handId, data);
+  } catch (error) { toast(error.message); lookupActiveHand(); }
+};
+
+async function approveChipOffer(spec, token) {
+  if (!spec || offeredSeat(snapshot, spec, roomCode, accountClient.state.user?.id) < 0) return;
+  if (acceptedOffer) return;
+  acceptedOffer = spec.handId;
+  let accepted = false, reason;
+  try {
+    await chipRequest({...spec, op:'ready'});
+    accepted = true;
+  } catch (error) { reason = error.code; toast(error.message); }
+  if (generation !== token || acceptedOffer !== spec.handId) return;
+  acceptedOffer = null;
+  if (offeredSeat(snapshot, spec, roomCode, accountClient.state.user?.id) < 0) accepted = false;
+  transport?.send({type:'chip-answer',handId:spec.handId,accepted,reason});
+}
 const tips = [
   ['마이티 카드','스페이드 A는 모든 카드를 이기는 마이티예요. 스페이드가 기루다일 때는 다이아몬드 A가 마이티가 됩니다.'],
   ['숨은 프렌드','주공이 부른 카드를 가진 사람이 프렌드예요. 그 카드가 테이블에 나오면 모두에게 정체가 공개됩니다.'],

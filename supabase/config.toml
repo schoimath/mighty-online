@@ -1,0 +1,15 @@
+project_id = "mighty-online"
+
+[auth]
+site_url = "https://schoimath.github.io/mighty-online/"
+additional_redirect_urls = ["https://schoimath.github.io/mighty-online/"]
+
+[auth.email]
+enable_signup = true
+enable_confirmations = true
+
+[functions.chip-hand]
+# Login-bearing operations check the access token against Auth. Watchers and
+# the unattended clock receive only the public projection / a tick receipt.
+verify_jwt = false
+entrypoint = "./functions/chip-hand/index.ts"

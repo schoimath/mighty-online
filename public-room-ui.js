@@ -70,7 +70,7 @@ const audienceMarkup = new WeakMap();
 
 export function renderPublicAudience(node, snapshot, {onReserve, onCancel} = {}) {
   if (!node) return;
-  node.hidden = !snapshot.publicRoom;
+  node.hidden = !snapshot.publicRoom && !snapshot.spectator && !snapshot.spectators?.length;
   if (node.hidden) return;
   node.classList.add('public-audience');
   node.setAttribute('aria-label', '관전자와 자리 예약');

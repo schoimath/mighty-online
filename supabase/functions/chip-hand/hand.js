@@ -1,0 +1,190 @@
+import {botObservation, validateRules} from '../../../engine.js';
+import {applyAction, canDeclareSetting, createGame, getSpectatorView, getView, resolveSetting} from '../../../table-deal.js';
+import {analyzeSetting} from '../../../table-claim.js';
+import {shouldDeclareSetting} from '../../../bot-setting.js';
+import {settlements} from '../../../table-scoring.js';
+import {jokerWasPlayed, withJokerStatus} from '../../../table-joker.js';
+import {decideTableTurn, hasSeatMemory, isModelId, memoryForReplacement} from '../../../lab/table-agents.js';
+import {AUCTION_BEAT_MS, FRIEND_ANNOUNCEMENT_MS} from '../../../table-timing.js';
+
+const RECONNECT_MS = 120_000;
+const SUBSTITUTE_NAMES = ['AI 솔', 'AI 달', 'AI 별', 'AI 구름', 'AI 바다'];
+const uuid = value => typeof value === 'string' &&
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+const five = value => Array.isArray(value) && value.length === 5;
+const check = (condition, message, status = 400) => {
+  if (!condition) throw Object.assign(new Error(message), {status});
+};
+
+function manifestOf(request) {
+  const {host, room, seats, names, models, firstSeat} = request;
+  check(uuid(host) && typeof room === 'string' && /^[A-Z0-9]{6}$/.test(room), '방 정보가 올바르지 않습니다.');
+  check(five(seats) && seats.every(id => id === null || uuid(id)), '참가자 계정을 확인해 주세요.');
+  const normalized = seats.map(id => id && id.toLowerCase());
+  const humans = normalized.filter(Boolean);
+  check(humans.length && new Set(humans).size === humans.length, '서로 다른 계정으로 자리에 참가해 주세요.');
+  check(five(names) && names.every(n => typeof n === 'string' && n.trim() && n.length <= 16), '자리별 닉네임을 확인해 주세요.');
+  check(five(models) && models.every(isModelId), '자리별 AI 모델을 확인해 주세요.');
+  check(Number.isInteger(firstSeat) && firstSeat >= 0 && firstSeat < 5, '첫 공약 자리를 확인해 주세요.');
+  return {host:host.toLowerCase(), room, seats:normalized, names:names.map(n => n.trim()),
+    models, rules:validateRules(request.rules), firstSeat};
+}
+
+async function hashManifest(spec) {
+  const bytes = new TextEncoder().encode(JSON.stringify(spec));
+  const hash = await crypto.subtle.digest('SHA-256', bytes);
+  return Array.from(new Uint8Array(hash), n => n.toString(16).padStart(2,'0')).join('');
+}
+
+function nextDue(state, now) {
+  const g = state.round;
+  if (g.result) return null;
+  if (!state.bots[g.turn]) return now + RECONNECT_MS;
+  if (g.phase === 'bid') return now + (g.bidHistory.length ? AUCTION_BEAT_MS : 1800);
+  if (g.phase === 'discard') return now + AUCTION_BEAT_MS + 560;
+  if (g.phase === 'play' && !g.trick.length) return now + (g.trickNo === 1 ? FRIEND_ANNOUNCEMENT_MS : 1050);
+  return now + 560;
+}
+
+function createState(spec, manifest, now) {
+  const state = {manifest, names:spec.names, models:spec.models, firstSeat:spec.firstSeat,
+    round:createGame({firstSeat:spec.firstSeat, rules:spec.rules}), bots:spec.seats.map(id => id === null),
+    history:Array.from({length:5}, () => []), memory:Array(5).fill(null), dueAt:null};
+  state.dueAt = nextDue(state, now);
+  return state;
+}
+
+function nameAt(row, seat) {
+  return row.seats[seat] && row.state.bots[seat] && !row.state.round.result
+    ? SUBSTITUTE_NAMES[seat] : row.state.names[seat];
+}
+
+function present(row, id) {
+  const {state} = row, round = state.round;
+  const owner = id ? row.seats.indexOf(id) : -1;
+  const seat = owner >= 0 && !state.bots[owner] ? owner : -1;
+  const seenJoker = jokerWasPlayed(round);
+  const publicGame = (id === row.host || seat < 0) ? withJokerStatus(getSpectatorView(round), seenJoker) : null;
+  const game = seat >= 0 ? withJokerStatus(getView(round, seat), seenJoker) : publicGame;
+  if (game.phase === 'discard' && seat === game.declarer) game.incomingCards = [...round.knownKitty];
+  const deltas = round.result ? settlements(round.result, round.bid.suit) : null;
+  return {handId:row.hand, room:row.room, revision:row.revision, seat, game, bots:state.bots,
+    names:state.names.map((_, i) => nameAt(row, i)), models:state.models, firstSeat:state.firstSeat,
+    dueAt:state.dueAt, deltas, ...(owner >= 0 && deltas ? {myDelta:deltas[owner]} : {}),
+    ...(id === row.host ? {publicGame} : {})};
+}
+
+function replaceSeat(state, seat) {
+  if (hasSeatMemory(state.models[seat])) {
+    state.memory[seat] = memoryForReplacement(state.models[seat], state.history[seat]);
+    state.history[seat] = [];
+  }
+  state.bots[seat] = true;
+}
+
+function move(row, action, now, memory = null) {
+  const s = row.state, r = s.round, seat = r.turn, before = r.dealNo;
+  const name = nameAt(row, seat);
+  const track = !s.bots[seat] && hasSeatMemory(s.models[seat]);
+  const observation = track ? withJokerStatus(botObservation(r, seat)) : null;
+  if (action?.type === 'claim') {
+    check(canDeclareSetting(r, seat), '현재 세팅을 선언할 수 없습니다.');
+    resolveSetting(r, seat, analyzeSetting(r));
+  } else {
+    applyAction(r, seat, action);
+    if (r.dealNo !== before) {
+      s.memory.fill(null);
+      s.history = Array.from({length:5}, () => []);
+    } else if (track) {
+      const entry = {observation};
+      if (observation.phase === 'discard') entry.action = {contract:{...r.bid}};
+      s.history[seat].push(entry);
+    } else if (memory !== null) s.memory[seat] = memory;
+    if (action.type === 'bid' || action.type === 'pass') {
+      const entry = r.bidHistory.at(-1);
+      if (entry) entry.name = name;
+    }
+  }
+  s.dueAt = nextDue(s, now);
+  if (r.result) { s.memory.fill(null); s.history = []; }
+}
+
+function advanceDue(row, now, catchup) {
+  const s = row.state;
+  if (s.round.result || s.dueAt > now) return false;
+  // With everyone gone the minute clock catches up in short bounded batches.
+  // A live viewer advances one action, preserving normal animation timing.
+  const limit = catchup ? 5 : 1;
+  for (let i = 0; i < limit && !s.round.result && s.dueAt <= now; i++) {
+    const seat = s.round.turn;
+    if (!s.bots[seat]) replaceSeat(s, seat);
+    const view = withJokerStatus(botObservation(s.round, seat));
+    const next = canDeclareSetting(s.round, seat) && shouldDeclareSetting(view)
+      ? {action:{type:'claim'}}
+      : decideTableTurn({modelId:s.models[seat], view, memory:s.memory[seat]});
+    move(row, next.action, catchup ? s.dueAt : now, next.memory);
+  }
+  return true;
+}
+
+// All persistence goes through trusted, transactional RPCs. The original
+// account roster is immutable even after a seat's bot flag changes.
+export async function operateHand(input, accountId, db, now = Date.now()) {
+  check(input && typeof input === 'object' && !Array.isArray(input), '요청을 확인해 주세요.');
+  const {op} = input;
+  check(['ready','start','active','view','act','leave','watch','tick'].includes(op), '지원하지 않는 요청입니다.');
+  const publicRead = op === 'watch' || op === 'tick';
+  const id = accountId?.toLowerCase() ?? null;
+  if (!publicRead) check(uuid(id), '이메일 인증 후 로그인해 주세요.', 401);
+  if (op === 'active') return {handId:await db.active()};
+  check(uuid(input.handId), '판 번호가 올바르지 않습니다.');
+  const hand = input.handId.toLowerCase();
+  if (op === 'ready' || op === 'start') {
+    const spec = manifestOf(input);
+    const hash = await hashManifest(spec);
+    const seat = spec.seats.indexOf(id);
+    if (op === 'ready') {
+      check(seat >= 0 || id === spec.host, '이 판의 참가 명단을 확인해 주세요.', 403);
+      await db.ready(hand, spec.room, seat, hash);
+      return {ready:true, seat};
+    }
+    check(id === spec.host, '방장만 판을 시작할 수 있습니다.', 403);
+    const row = await db.start(hand, spec, createState(spec, hash, now));
+    check(row.host === id && row.state.manifest === hash, '이미 다른 조건으로 시작된 판입니다.', 409);
+    return present(row, id);
+  }
+
+  let row = await db.read(hand);
+  check(row, '해당 판을 찾을 수 없습니다.', 404);
+  const seat = id ? row.seats.indexOf(id) : -1;
+  if (!publicRead) check(seat >= 0 || row.host === id, '이 판의 참가 계정을 확인해 주세요.', 403);
+  const state = row.state;
+  let changed = false;
+  if (op === 'leave') {
+    // A concurrent move may win the first CAS. Retry a voluntary departure
+    // until the database reports that this specific seat has a substitute.
+    check(seat >= 0, '참가한 자리에서만 나갈 수 있습니다.', 403);
+    for (let retry = 0; !row.state.round.result && !row.state.bots[seat]; retry++) {
+      check(retry < 4, '차례가 바뀌었습니다. 다시 시도해 주세요.', 409);
+      replaceSeat(row.state, seat);
+      if (row.state.round.turn === seat) row.state.dueAt = nextDue(row.state, now);
+      row = await db.save(row);
+    }
+  } else if (op === 'act') {
+    check(seat >= 0 && !state.bots[seat], '현재 이 자리에서 카드를 낼 수 없습니다.', 403);
+    check(Number.isSafeInteger(input.revision), '판의 버전을 확인해 주세요.');
+    if (input.revision === row.revision && !state.round.result) {
+      check(state.round.turn === seat, '지금은 내 차례가 아닙니다.');
+      move(row, input.action, now);
+      changed = true;
+    }
+  } else if (op === 'view' && !state.round.result && state.round.turn === seat &&
+             !state.bots[seat] && state.dueAt - now <= 45_000) {
+    // An authenticated read renews the active seat's presence while thinking.
+    state.dueAt = now + RECONNECT_MS;
+    changed = true;
+  } else changed = advanceDue(row, now, op === 'tick');
+  if (changed) row = await db.save(row);
+  if (op === 'tick') return {handId:hand, revision:row.revision, settled:row.settled};
+  return present(row, publicRead ? null : id);
+}

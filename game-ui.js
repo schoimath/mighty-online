@@ -548,9 +548,10 @@ function resultControls(view, ui) {
     <p>남은 ${escapeHtml(setting.remainingTricks)}개 트릭에 ${setting.remainingPoints
       ? `걸린 ${escapeHtml(setting.remainingPoints)}점을 ${recipient} 가져갔어요.` : "점수 카드가 없었어요."}</p>${settingPenaltyPile(view)}</div>` : "";
   const board = ui.options.scoreboard;
-  const net = board ? board.members.find(m => m.seat === view.seat)?.lastDelta : archivedSettlements(result, view.bid.suit)[view.seat];
+  const chipDelta = ui.options.chipDelta;
+  const net = chipDelta ?? (board ? board.members.find(m => m.seat === view.seat)?.lastDelta : archivedSettlements(result, view.bid.suit)[view.seat]);
   let breakdown = "";
-  if (board?.scoringVersion === TABLE_SCORING_VERSION) {
+  if (board?.scoringVersion === TABLE_SCORING_VERSION || ui.options.resumed) {
     const {base, bonuses, unit} = settlementDetails(result, view.bid.suit);
     const factors = bonuses.map(name => {
       const label = name === "노기루다" ? '<abbr title="노기루다">NT</abbr>' : name;
@@ -563,13 +564,13 @@ function resultControls(view, ui) {
   }
   const role = view.seat === result.declarer ? (result.friend == null ? "주공 ×4" : "주공 ×2")
     : view.seat === result.friend ? "프렌드" : "야당";
-  const next = board?.complete ? "" : scoreTable(board, view.seat)
+  const next = board?.complete || ui.options.resumed ? "" : scoreTable(board, view.seat)
     + (ui.options.isHost ? button("다시 한 판", "replay") : "<p>방장이 다시 한 판을 누르면 이 자리에서 다음 판이 시작됩니다.</p>")
     + (ui.options.isHost && ui.options.onReplaySetup ? button(escapeHtml(ui.options.replaySetupLabel), "replay-setup", true, "secondary") : "");
   return `<h2>주공 팀 ${result.won ? "승리" : "패배"}</h2>
     ${claimResult}<p>공약은 ${escapeHtml(result.target)}점, 주공 팀은 ${escapeHtml(result.points)}점을 획득했어요.</p>
     <div class="g-result-score"><strong>${escapeHtml(result.points)}</strong><span>/ 20점</span></div>
-    ${breakdown}${net == null ? '' : `<p class="g-my-settlement">내 정산 <strong>${signedScore(net)}점</strong> <small>(${role})</small></p>`}
+    ${breakdown}${net == null ? '' : `<p class="g-my-settlement">${chipDelta == null ? '내 정산' : '내 칩 증감'} <strong>${signedScore(net)}${chipDelta == null ? '점' : '칩'}</strong>${view.seat < 0 ? '' : ` <small>(${role})</small>`}</p>`}
     ${next}`;
 }
 function previousTrick(view, nameAt) {

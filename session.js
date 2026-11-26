@@ -39,6 +39,8 @@ export class HostSession {
   #guestDecisions = Array.from({length:5}, () => []);
   #claim = null;
   #skipBotClaim = false;
+  chipHandId = null;
+  #chipRevision = -1;
 
   constructor(hostName, rules = DEFAULT_RULES, botModels = randomSeatModels(), roundLimit = null, {publicRoom = false} = {}) {
     this.publicRoom = publicRoom === true;
@@ -101,7 +103,7 @@ export class HostSession {
   }
 
   setReservation(id, wanted) {
-    if (!this.publicRoom || !this.#observers.has(id) || typeof wanted !== 'boolean') {
+    if (!this.#observers.has(id) || typeof wanted !== 'boolean') {
       throw new Error('관전 중인 공개 테이블에서 자리를 예약할 수 있습니다.');
     }
     const index = this.#queue.findIndex(entry => entry.id === id);
@@ -163,16 +165,31 @@ export class HostSession {
     return true;
   }
 
+  // A player who is out of chips can keep watching this table, including
+  // an invitation-only table. Keep the original hand owner in the ledger.
+  sitOut(id) {
+    const seat = id === null ? this.hostSeat : this.seatFor(id);
+    if (!validSeat(seat)) {
+      if (this.#observers.has(id)) return this.setReservation(id, false);
+      return false;
+    }
+    this.#observers.set(id, this.players[seat].name);
+    if (id === null) this.hostSeat = -1;
+    else this.connections.set(id, -1);
+    this.#releaseSeat(seat);
+    return true;
+  }
+
   #releaseSeat(seat) {
     const memberId = this.players[seat].memberId;
     if (memberId === this.#nextBidder.memberId) this.#nextBidder.seat = seat;
     if (!this.round && !this.#members.get(memberId).rounds) this.#members.delete(memberId);
     this.#clearSwapsAt(seat);
-    if (this.publicRoom && this.#members.get(this.#botIds[seat])?.rounds) {
+    if ((this.publicRoom || this.chipHandId) && this.#members.get(this.#botIds[seat])?.rounds) {
       this.#botIds[seat] = 'sub-' + this.#nextBot++;
     }
     this.players[seat] = this.round ? this.botPlayer(seat) : null;
-    if (this.round && this.round.phase !== 'result' && hasSeatMemory(this.botModels[seat])) {
+    if (!this.chipHandId && this.round && this.round.phase !== 'result' && hasSeatMemory(this.botModels[seat])) {
       this.#botMemory[seat] = memoryForReplacement(this.botModels[seat], this.#guestDecisions[seat]);
       this.#guestDecisions[seat] = [];
     }
@@ -277,27 +294,72 @@ export class HostSession {
     return this.#roundLimit !== null && this.#completedRounds >= this.#roundLimit;
   }
 
-  start() {
+  plannedTable() {
     if (this.#complete) throw new Error('목표 판수를 모두 마쳤습니다. 새 대국을 시작해 주세요.');
     if (this.round && this.round.phase !== 'result') throw new Error('이미 게임이 진행 중입니다.');
     const returningHostSeat = this.#nextBidder.memberId === 'host' ? this.#queue.find(entry => entry.id === null)?.seat : null;
     const bidderSeat = returningHostSeat ?? this.players.findIndex(p => p && p.memberId === this.#nextBidder.memberId);
     const firstSeat = bidderSeat < 0 ? this.#nextBidder.seat : bidderSeat;
-    const round = createGame({firstSeat, rules: this.rules});
+    const seats = this.players.map((player, seat) => {
+      const queued = this.#queue.find(entry => entry.seat === seat);
+      if (queued) return {id:queued.id, name:this.#observers.get(queued.id)};
+      if (!player || player.bot) return {bot:true, name:'AI ' + BOT_NAMES[seat]};
+      const id = seat === this.hostSeat ? null : Array.from(this.connections).find(([, n]) => n === seat)?.[0];
+      return {id, name:player.name};
+    });
+    return {seats, firstSeat, models:[...this.botModels], rules:{...this.rules}};
+  }
+
+  start() {
+    const {firstSeat} = this.plannedTable();
+    this.#deal(createGame({firstSeat, rules:this.rules}));
+  }
+
+  #deal(round) {
     this.#seatReservedPlayers();
     this.round = round;
     this.#resetBotMemory();
     this.players = this.players.map((p, i) => p ?? this.botPlayer(i));
-    this.#dealtPlayers = this.publicRoom ? [...this.players] : null;
+    this.#dealtPlayers = (this.publicRoom || this.chipHandId) ? [...this.players] : null;
     // A substitute finishes on behalf of the member who received the original hand.
     this.#roundMembers = this.players.map(player => player.memberId);
     this.#swaps = [];
     this.revision++;
   }
 
+  startChipHand(reply) {
+    if (this.chipHandId && reply.handId === this.chipHandId) {
+      this.syncChipHand(reply);
+      return;
+    }
+    this.plannedTable();
+    if (reply.publicGame?.seat !== -1 || !reply.handId) throw new Error('서버의 공개 테이블 정보를 확인해 주세요.');
+    this.chipHandId = reply.handId;
+    this.#chipRevision = -1;
+    this.#deal(reply.publicGame);
+    this.syncChipHand(reply);
+  }
+
+  syncChipHand(reply) {
+    if (reply.handId !== this.chipHandId || reply.revision <= this.#chipRevision || reply.publicGame?.seat !== -1) return false;
+    this.#chipRevision = reply.revision;
+    this.round = reply.publicGame;
+    for (let seat = 0; seat < 5; seat++) {
+      if (reply.bots[seat] && this.players[seat] && !this.players[seat].bot) {
+        const id = seat === this.hostSeat ? null : Array.from(this.connections).find(([, n]) => n === seat)?.[0];
+        if (id !== undefined) this.sitOut(id);
+      }
+    }
+    this.#recordResult();
+    this.revision++;
+    return true;
+  }
+
   returnToRoom() {
     if (this.round?.phase !== 'result') throw new Error('게임을 끝낸 후 대기실로 돌아갈 수 있습니다.');
     this.round = null;
+    this.chipHandId = null;
+    this.#chipRevision = -1;
     this.#dealtPlayers = null;
     this.players = this.players.map(p => p?.bot ? null : p);
     if (this.#complete) {
@@ -314,6 +376,7 @@ export class HostSession {
   }
 
   act(seat, revision, action) {
+    if (this.chipHandId) throw new Error('칩 대국의 수는 게임 서버에서 처리합니다.');
     if (!this.round || !Number.isInteger(seat) || seat < 0 || seat > 4 || this.players[seat]?.bot) throw new Error('플레이어 자리를 확인해 주세요.');
     if (revision !== this.revision) throw new Error('테이블 상태가 바뀌었습니다. 다시 선택해 주세요.');
     if (this.#claim) throw new Error('세팅을 판정하고 있습니다.');
@@ -354,7 +417,7 @@ export class HostSession {
   }
 
   get botTurn() {
-    return Boolean(!this.#claim && this.round && this.round.phase !== 'result' && this.players[this.round.turn]?.bot);
+    return Boolean(!this.chipHandId && !this.#claim && this.round && this.round.phase !== 'result' && this.players[this.round.turn]?.bot);
   }
 
   botRequest(seed) {
@@ -467,21 +530,21 @@ export class HostSession {
   #view(seat, id) {
     const swap = this.#swapAt(seat);
     const spectator = seat === -1;
-    const projection = this.round && (spectator ? getSpectatorView(this.round) : getView(this.round, seat));
-    const game = projection && withJokerStatus(projection, jokerWasPlayed(this.round));
+    const projection = this.round && (this.chipHandId ? this.round : spectator ? getSpectatorView(this.round) : getView(this.round, seat));
+    const game = this.chipHandId ? projection : projection && withJokerStatus(projection, jokerWasPlayed(this.round));
     if (game && this.#claim) {
       game.claimPending = true;
       game.turn = null;
       game.choices.canDeclareSetting = false;
       game.choices.plays = [];
     }
-    if (game?.phase === 'discard' && seat === game.declarer) {
+    if (!this.chipHandId && game?.phase === 'discard' && seat === game.declarer) {
       game.incomingCards = [...(this.round.knownKitty || [])];
     }
     const positions = new Map(this.#queue.map(({id, seat}, i) => [id, {position:i + 1, seat}]));
     const spectators = Array.from(this.#observers, ([id, name]) => ({name, position:null, seat:null, ...positions.get(id)}));
     const roster = game?.result && this.#dealtPlayers ? this.#dealtPlayers : this.players;
-    return {revision: this.revision, seat, hostSeat: this.hostSeat, swap: swap ? {...swap} : null,
+    return {revision: this.revision, chipHandId:this.chipHandId, chipRevision:this.#chipRevision, seat, hostSeat: this.hostSeat, swap: swap ? {...swap} : null,
       publicRoom:this.publicRoom, spectator, spectators, reservation:positions.get(id) ?? null,
       rules: {...this.rules}, botModels: [...this.botModels], players: roster.map(p => p && {...p}),
       scoreboard: this.#scoreboard(), game};
