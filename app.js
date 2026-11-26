@@ -62,6 +62,8 @@ const chat = setupChat(sendChat);
 const roomAccounts = new Map();
 const chipRequest = payload => callChipService(accountClient, payload);
 let chipReader = null, preparing = null, acceptedOffer = null, resumeHand = null;
+let activeRead = null, activeTimer, settlingHand = null;
+let leavingGeneration = null;
 let pendingPace = null;
 let lastAccount = null, settledChipHand = null;
 let accountUI;
@@ -93,12 +95,55 @@ function receivedCountdown(state, handId, sentAt) {
   return {...state, deadline:Date.now() + Math.max(0, state.deadline - sentAt)};
 }
 
-async function lookupActiveHand() {
-  const user = accountClient.state.user;
-  const hand = user ? await chipRequest({op:'active'}).catch(() => null) : null;
-  if (accountClient.state.user?.id !== user?.id) return;
-  resumeHand = hand?.handId ?? null;
-  $('resume-chip-hand').hidden = !resumeHand;
+function setActiveHand(handId) {
+  resumeHand = handId;
+  $('active-chip-hand').hidden = !handId;
+}
+
+function scheduleActiveLookup() {
+  clearTimeout(activeTimer);
+  const waitingRoom = (mode === 'host' || mode === 'guest') && (!snapshot?.game || snapshot.game.result);
+  if (!resumeHand || document.hidden || (mode !== 'lobby' && !(settlingHand && waitingRoom))) return;
+  activeTimer = setTimeout(refreshActiveHand, settlingHand?.delay ?? 20000);
+}
+
+function lookupActiveHand() {
+  const userId = accountClient.state.user?.id;
+  if (!userId) return Promise.resolve(null);
+  if (activeRead) return activeRead.promise;
+  const read = {};
+  activeRead = read;
+  const current = () => activeRead === read && accountClient.state.user?.id === userId;
+  read.promise = (async () => {
+    let {handId} = await chipRequest({op:'active'});
+    if (!current()) return null;
+    if (handId !== null && !accountIdValid(handId)) throw new Error('진행 중인 판을 확인하지 못했습니다.');
+    const waiting = settlingHand;
+    if (waiting?.allBots && waiting.handId === handId && !document.hidden) {
+      // The server has accepted this player's departure. Advance its AI-only
+      // hand in bounded batches even after the room directory entry is gone.
+      const data = await chipRequest({op:'view', handId});
+      if (!current()) return null;
+      if (data.handId === handId && data.game?.result) handId = null;
+    }
+    setActiveHand(handId);
+    if (waiting && waiting.handId !== handId) {
+      settlingHand = null;
+      accountClient.refreshWallet().catch(error => toast(error.message));
+      toast('이전 판의 칩 정산이 끝났습니다.');
+    } else if (waiting) waiting.delay = waiting.allBots ? 1200 : 12000;
+    return handId;
+  })().catch(error => {
+    if (current() && settlingHand) settlingHand.delay = Math.min(30000, settlingHand.delay * 2);
+    throw error;
+  }).finally(() => {
+    if (activeRead === read) { activeRead = null; scheduleActiveLookup(); }
+  });
+  return read.promise;
+}
+
+function refreshActiveHand() {
+  lookupActiveHand().catch(() => {});
 }
 
 function onAccount(state) {
@@ -106,10 +151,14 @@ function onAccount(state) {
   if (!state.ready) return;
   const id = state.user?.id ?? null;
   if (id === lastAccount) return;
+  clearTimeout(activeTimer);
+  activeRead = settlingHand = null;
+  setActiveHand(null);
+  if ($('modal').open && $('confirm-hand-leave')) closeModal();
   if (lastAccount && ['host','guest','resume'].includes(mode)) stopSession('계정이 바뀌어 테이블에서 나왔습니다.');
   lastAccount = id;
   if (id) saveName(state.user.nickname);
-  lookupActiveHand();
+  refreshActiveHand();
 }
 
 async function mayPlay() {
@@ -146,6 +195,14 @@ function trackChipHand(handId, initial = null, hintRevision) {
   let lastSeatBalance;
   const reader = followChipHand(chipRequest, handId, watch ? 'watch' : 'view', (data, balancesOnly, paceOnly) => {
     if (reader !== chipReader) return;
+    if (!data.game.result && data.seat >= 0 && resumeHand !== handId) {
+      activeRead = settlingHand = null;
+      setActiveHand(handId);
+    }
+    if (data.game.result && resumeHand === handId) {
+      activeRead = settlingHand = null;
+      setActiveHand(null);
+    }
     const ownBalance = data.seatBalances?.[data.seat];
     if (!data.game.result && Number.isSafeInteger(ownBalance) && ownBalance !== lastSeatBalance) {
       lastSeatBalance = ownBalance;
@@ -248,6 +305,7 @@ function showScreen(screen) {
 }
 
 function pauseDirectory() {
+  clearTimeout(activeTimer);
   clearTimeout(directoryTimer);
   directoryScan?.abort();
   directoryScan = null;
@@ -279,8 +337,12 @@ async function refreshDirectory() {
   }
 }
 
-document.addEventListener('visibilitychange', () => document.hidden ? pauseDirectory() : refreshDirectory());
-$('public-refresh').onclick = refreshDirectory;
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) { clearTimeout(activeTimer); pauseDirectory(); return; }
+  if (mode === 'lobby' || settlingHand) refreshActiveHand();
+  refreshDirectory();
+});
+$('public-refresh').onclick = () => { refreshActiveHand(); refreshDirectory(); };
 $('public-tables').addEventListener('click', event => {
   const button = event.target.closest('[data-public-code][data-public-intent]');
   if (button) openForm('join', button.dataset.publicCode, button.dataset.publicIntent);
@@ -423,16 +485,76 @@ function stopSession(message) {
   listedRooms = [];
   renderPublicTables(listedRooms, {loading:true, capacity:PUBLIC_ROOM_LIMIT});
   refreshDirectory();
-  lookupActiveHand();
+  refreshActiveHand();
   window.scrollTo(0,0);
   if (message) toast(message);
 }
 
+async function handOverToAI(handId, finishIfAlone) {
+  const data = await chipRequest({op:'leave', handId, ...(finishIfAlone ? {finishIfAlone:true} : {})});
+  if (data.handId !== handId || !data.game || (!data.game.result && data.seat !== -1)) {
+    throw new Error('서버에서 퇴장을 확인하지 못했습니다. 다시 시도해 주세요.');
+  }
+  return data;
+}
+
+function rememberDeparture(data, finishIfAlone) {
+  activeRead = null;
+  if (data.game.result) {
+    settlingHand = null;
+    setActiveHand(null);
+    accountClient.refreshWallet().catch(error => toast(error.message));
+  } else {
+    setActiveHand(data.handId);
+    const allBots = finishIfAlone && data.bots?.length === 5 && data.bots.every(Boolean);
+    settlingHand = {handId:data.handId, allBots, delay:allBots ? 1200 : 12000};
+  }
+  scheduleActiveLookup();
+}
+
+function confirmPreviousHandLeave(handId, inRoom = false) {
+  const userId = accountClient.state.user?.id, token = generation;
+  modal('이전 칩 대국을 AI에게 맡길까요?', '<p>AI가 남은 패를 대신 치고, 이 판의 칩은 내 계정에 정산됩니다. 다른 플레이어가 남아 있으면 그 판이 끝난 뒤 새 칩 대국을 시작할 수 있습니다.' +
+    (inRoom ? ' 지금 있는 방은 그대로 유지됩니다.' : '') +
+    '</p><p class="form-error" role="alert" id="hand-leave-error"></p><div class="room-actions"><button class="plain-button" id="keep-hand">취소</button><button class="primary-button" id="confirm-hand-leave">이전 판을 AI에게 맡기기</button></div>');
+  $('keep-hand').onclick = closeModal;
+  $('confirm-hand-leave').onclick = async event => {
+    const button = event.currentTarget;
+    if (!$('modal').open || !button.isConnected || token !== generation || accountClient.state.user?.id !== userId) return;
+    if (resumeHand !== handId) {
+      closeModal(); toast('이전 판이 이미 종료되었습니다.'); return;
+    }
+    button.disabled = true;
+    $('hand-leave-error').textContent = '';
+    try {
+      const data = await handOverToAI(handId, true);
+      if (generation !== token || accountClient.state.user?.id !== userId) return;
+      rememberDeparture(data, true);
+      if (button.isConnected && $('modal').open) closeModal();
+      toast(data.game.result ? '이전 판의 칩 정산이 끝났습니다.' : 'AI가 이전 판을 마저 진행합니다. 정산이 끝나면 새 판에 참가할 수 있습니다.');
+    } catch (error) {
+      if (button.isConnected && $('modal').open && accountClient.state.user?.id === userId) $('hand-leave-error').textContent = error.message;
+    } finally { button.disabled = false; }
+  };
+}
+
+function handleChipError(error) {
+  if (error.code !== 'active_hand') { toast(error.message); return; }
+  const token = generation, userId = accountClient.state.user?.id;
+  lookupActiveHand().then(handId => {
+    if (token !== generation || accountClient.state.user?.id !== userId) return;
+    if (handId) confirmPreviousHandLeave(handId, true);
+    else toast('이전 판이 정산되었습니다. 다시 시작해 주세요.');
+  }).catch(error => { if (token === generation) toast(error.message); });
+}
+
 function requestLeave() {
-  if (mode === 'lobby' || preparing) return;
+  if (mode === 'lobby' || preparing || leavingGeneration === generation) return;
   const canWatch = mode === 'host' && snapshot.publicRoom && !snapshot.spectator &&
     snapshot.game && snapshot.game.phase !== 'result';
-  const playing = snapshot?.chipHandId && snapshot.game?.phase !== 'result';
+  const handId = snapshot?.chipHandId, token = generation;
+  const playing = handId && snapshot.game?.phase !== 'result';
+  const leavingOwnHand = playing && (!snapshot.spectator || resumeHand === snapshot.chipHandId);
   let reason = '이 방에서 나갑니다.';
   if (mode === 'host') {
     reason = playing ? '대기실과 채팅은 닫히고, 남은 참가자는 이 판을 계속합니다.' : '방을 닫고 로비로 돌아갑니다.';
@@ -441,25 +563,38 @@ function requestLeave() {
   if (playing && !snapshot.spectator) reason += ' AI가 내 패를 마저 치고, 이 판의 칩은 내 계정에 정산됩니다.';
   const stepAside = canWatch ? '<button class="primary-button" id="host-watch">AI에게 맡기고 관전</button>' : '';
   modal('로비로 나갈까요?', '<p>' + reason + (canWatch ? ' 방을 유지하려면 AI에게 자리를 맡기고 이 탭에서 관전하세요.' : '') +
-    '</p><div class="room-actions"><button class="plain-button" id="stay">계속하기</button>' + stepAside +
+    '</p><p class="form-error" role="alert" id="quit-error"></p><div class="room-actions"><button class="plain-button" id="stay">계속하기</button>' + stepAside +
     '<button class="' + (canWatch ? 'plain-button' : 'primary-button') + '" id="quit">' + (mode === 'host' ? '방 닫기' : '나가기') + '</button></div>');
   $('stay').onclick = closeModal;
-  $('quit').onclick = async () => {
-    const current = chipReader?.current;
-    if (current && current.seat >= 0 && !current.game.result) {
-      try { await chipRequest({op:'leave',handId:current.handId}); }
-      catch (error) { toast(error.message); }
+  const buttons = $('quit').parentElement.querySelectorAll('button');
+  const errorLine = $('quit-error');
+  async function leave(watch) {
+    if (generation !== token || leavingGeneration === token || !$('modal').open || !errorLine.isConnected) return;
+    leavingGeneration = token;
+    buttons.forEach(button => { button.disabled = true; });
+    errorLine.textContent = '';
+    try {
+      if (leavingOwnHand) {
+        const otherSpectators = (snapshot.spectators?.length ?? 0) > (snapshot.spectator ? 1 : 0);
+        const finishIfAlone = !watch && !otherSpectators;
+        const data = await handOverToAI(handId, finishIfAlone);
+        if (generation !== token) return;
+        if (!watch) rememberDeparture(data, finishIfAlone);
+      }
+      if (watch) {
+        authority.leaveHostSeat(); closeModal(); clearGame($('game')); publish();
+      } else stopSession();
+    } catch (error) {
+      if (generation !== token) return;
+      if ($('modal').open && errorLine.isConnected) errorLine.textContent = error.message;
+      else toast(error.message);
+    } finally {
+      if (leavingGeneration === token) leavingGeneration = null;
+      buttons.forEach(button => { button.disabled = false; });
     }
-    stopSession();
-  };
-  if (canWatch) $('host-watch').onclick = async () => {
-    if (authority.chipHandId) {
-      try { await chipRequest({op:'leave',handId:authority.chipHandId}); }
-      catch (error) { toast(error.message); return; }
-    }
-    try { authority.leaveHostSeat(); closeModal(); clearGame($('game')); publish(); }
-    catch (error) { closeModal(); toast(error.message); }
-  };
+  }
+  $('quit').onclick = () => leave(false);
+  if (canWatch) $('host-watch').onclick = () => leave(true);
 }
 $('nav-lobby').onclick = requestLeave;
 document.querySelector('.brand').addEventListener('click', event => {
@@ -906,7 +1041,7 @@ async function startRound() {
     window.scrollTo(0,0);
     return true;
   } catch (error) {
-    if (table === authority) toast(error.message);
+    if (table === authority) handleChipError(error);
     return false;
   } finally {
     if (pending && preparing === pending) {
@@ -1180,15 +1315,25 @@ $('join-btn').onclick = () => openForm('join');
 $('practice-btn').onclick = openPracticeSetup;
 accountUI = setupAccountUI(accountClient, {onChange:onAccount});
 $('profile-btn').onclick = () => accountUI.open();
+$('leave-chip-hand').onclick = () => {
+  if (resumeHand && mode === 'lobby') confirmPreviousHandLeave(resumeHand);
+};
 $('resume-chip-hand').onclick = async () => {
   if (!resumeHand || mode !== 'lobby') return;
+  const handId = resumeHand, userId = accountClient.state.user?.id, token = generation;
   try {
-    const data = await chipRequest({op:'view',handId:resumeHand});
-    if (mode !== 'lobby') return;
+    const data = await chipRequest({op:'view',handId});
+    if (mode !== 'lobby' || generation !== token || accountClient.state.user?.id !== userId || data.handId !== handId) return;
+    clearTimeout(activeTimer);
+    activeRead = settlingHand = null;
     mode = 'resume';
     pauseDirectory();
     trackChipHand(data.handId, data);
-  } catch (error) { toast(error.message); lookupActiveHand(); }
+  } catch (error) {
+    if (mode === 'lobby' && generation === token && accountClient.state.user?.id === userId) {
+      toast(error.message); refreshActiveHand();
+    }
+  }
 };
 
 async function approveChipOffer(spec, token) {
@@ -1199,7 +1344,10 @@ async function approveChipOffer(spec, token) {
   try {
     await chipRequest({...spec, op:'ready'});
     accepted = true;
-  } catch (error) { reason = error.code; toast(error.message); }
+  } catch (error) {
+    reason = error.code;
+    if (generation === token) handleChipError(error);
+  }
   if (generation !== token || acceptedOffer !== spec.handId) return;
   acceptedOffer = null;
   if (offeredSeat(snapshot, spec, roomCode, accountClient.state.user?.id) < 0) accepted = false;

@@ -3,8 +3,10 @@
   font-size: .79rem; font-weight: 700; color: #32573a; background: #e7efdf;
   border-radius: 6px; font-variant-numeric: tabular-nums;
 }
-.account-chip[hidden], .account-notice[hidden], #resume-chip-hand[hidden] { display: none; }
-#resume-chip-hand { margin-bottom: 12px; }
+.account-chip[hidden], .account-notice[hidden] { display: none; }
+#active-chip-hand { display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:12px 24px; margin-bottom:16px; padding:16px 20px; background:#eaf0e7; border:1px solid #bdcfbb; border-radius:12px; }
+#active-chip-hand h2 { margin:0; font-size:1.05rem; }
+#active-chip-hand p { margin:4px 0 0; color:var(--muted); font-size:.92rem; }
 #account-dialog { max-width: min(400px, 94vw); }
 #account-dialog .field { margin: 12px 0; }
 #account-dialog .form-submit { margin-top: 6px; }

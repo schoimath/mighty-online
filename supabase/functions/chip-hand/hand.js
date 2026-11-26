@@ -8,6 +8,8 @@ import {decideTableTurn, hasSeatMemory, isModelId, memoryForReplacement} from '.
 import {botTurnDelay, normalizeGameSpeed, paceMultiplier} from '../../../table-timing.js';
 
 const RECONNECT_MS = 120_000;
+const CATCHUP_BUDGET_MS = 120;
+const MAX_UNATTENDED_MOVES = 64;
 const SUBSTITUTE_NAMES = ['AI 솔', 'AI 달', 'AI 별', 'AI 구름', 'AI 바다'];
 const uuid = value => typeof value === 'string' &&
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
@@ -114,10 +116,14 @@ function move(row, action, now, memory = null) {
 
 function advanceDue(row, now, catchup) {
   const s = row.state;
+  const allBots = s.bots.every(Boolean);
+  const finishing = s.finishUnattended === true && allBots;
   if (s.round.result || s.dueAt > now) return false;
-  // With everyone gone the minute clock catches up in short bounded batches.
-  // A live viewer advances one action, preserving normal animation timing.
-  const limit = catchup ? 5 : 1;
+  // The clock only replays elapsed turns. An account explicitly closing an
+  // all-AI hand also waives the pauses between moves. Persist a bounded batch
+  // so expensive bot decisions or repeated redeals can resume on another call.
+  const limit = finishing || (catchup && allBots) ? MAX_UNATTENDED_MOVES : catchup ? 5 : 1;
+  const deadline = performance.now() + CATCHUP_BUDGET_MS;
   for (let i = 0; i < limit && !s.round.result && s.dueAt <= now; i++) {
     const seat = s.round.turn;
     if (!s.bots[seat]) replaceSeat(s, seat);
@@ -125,7 +131,9 @@ function advanceDue(row, now, catchup) {
     const next = canDeclareSetting(s.round, seat) && shouldDeclareSetting(view)
       ? {action:{type:'claim'}}
       : decideTableTurn({modelId:s.models[seat], view, memory:s.memory[seat]});
-    move(row, next.action, catchup ? s.dueAt : now, next.memory);
+    move(row, next.action, catchup && !finishing ? s.dueAt : now, next.memory);
+    if (finishing && !s.round.result) s.dueAt = now;
+    if (performance.now() >= deadline) break;
   }
   return true;
 }
@@ -194,12 +202,23 @@ export async function operateHand(input, accountId, db, now = Date.now()) {
     // A concurrent move may win the first CAS. Retry a voluntary departure
     // until the database reports that this specific seat has a substitute.
     check(seat >= 0, '참가한 자리에서만 나갈 수 있습니다.', 403);
-    for (let retry = 0; !row.state.round.result && !row.state.bots[seat]; retry++) {
+    for (let retry = 0; !row.state.round.result; retry++) {
+      const s = row.state;
+      const finish = input.finishIfAlone === true && !s.finishUnattended &&
+        s.bots.every((bot, index) => bot || index === seat);
+      if (s.bots[seat] && !finish) break;
       check(retry < 4, '차례가 바뀌었습니다. 다시 시도해 주세요.', 409);
-      replaceSeat(row.state, seat);
-      if (row.state.round.turn === seat) row.state.dueAt = nextDue(row.state, now);
+      if (!s.bots[seat]) {
+        replaceSeat(s, seat);
+        if (s.round.turn === seat) s.dueAt = nextDue(s, now);
+      }
+      if (finish) {
+        s.finishUnattended = true;
+        s.dueAt = now;
+      }
       row = await db.save(row);
     }
+    if (row.state.finishUnattended) changed = advanceDue(row, now, true);
   } else if (op === 'act') {
     check(seat >= 0 && !state.bots[seat], '현재 이 자리에서 카드를 낼 수 없습니다.', 403);
     check(Number.isSafeInteger(input.revision), '판의 버전을 확인해 주세요.');

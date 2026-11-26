@@ -140,6 +140,65 @@ test('a spectating host starts only with separate host and actual player consent
   await assert.rejects(t.call(host,'ready',{...spec,seats:Array(5).fill(null)}));
 });
 
+test('a lone original player can settle a missing room, including after an earlier substitution', async () => {
+  for (const alreadyLeft of [false,true]) {
+    const t = table(), spec = {...game,seats:[host,null,null,null,null]};
+    await t.call(host,'ready',spec);
+    await t.call(host,'start',spec);
+    if (alreadyLeft) {
+      const watching = await t.call(host,'leave');
+      assert.equal(watching.bots.every(Boolean),true);
+      const tick = await t.call(null,'tick',{},at);
+      assert.equal(tick.revision,watching.revision);
+      assert.equal(t.row().state.finishUnattended,undefined);
+    }
+    await assert.rejects(t.call(other,'leave',{finishIfAlone:true}),{status:403});
+    const left = await t.call(host,'leave',{finishIfAlone:true});
+    assert.equal(left.seat,-1);
+    for (let batch=0; batch<32 && !t.row().settled; batch++) await t.call(null,'tick');
+    const result = await t.call(host,'view');
+    assert.ok(result.game.result);
+    assert.equal(result.myDelta,result.deltas[0]);
+    assert.equal(result.seatBalances[0],120+result.myDelta);
+    assert.deepEqual(t.row().seats,spec.seats);
+    await t.call(host,'leave',{finishIfAlone:true});
+    await t.call(null,'tick');
+    assert.equal(t.charges(),1);
+  }
+});
+
+test('a departure preserves other human turns and overlapping last departures are recoverable', async () => {
+  const t = table();
+  for (const id of [host,guest]) await t.call(id,'ready',game);
+  const start = await t.call(host,'start',game);
+  const guestLeft = () => t.call(guest,'leave',{finishIfAlone:true});
+  t.beforeNextSave(async () => {
+    const watching = await guestLeft();
+    assert.deepEqual(watching.bots,[false,true,true,true,true]);
+    assert.equal(watching.dueAt,start.dueAt);
+    assert.equal(watching.game.turn,0);
+    assert.equal(t.row().state.finishUnattended,undefined);
+  });
+  await t.call(host,'leave',{finishIfAlone:true});
+  for (let batch=0; batch<32 && !t.row().settled; batch++) await t.call(host,'view');
+  const result = await t.call(guest,'view');
+  assert.ok(result.game.result);
+  assert.equal(result.myDelta,result.deltas[1]);
+  assert.equal(t.charges(),1);
+});
+
+test('a clock tick on a watched all-bot table cannot play ahead of real time', async () => {
+  const t = table(), spec = {...game,seats:[host,null,null,null,null]};
+  await t.call(host,'ready',spec);
+  await t.call(host,'start',spec);
+  const watching = await t.call(host,'leave');
+  const tick = await t.call(null,'tick',{},watching.dueAt);
+  assert.equal(tick.revision,watching.revision+1);
+  assert.equal(t.row().state.round.bidHistory.length,1);
+  assert.ok(t.row().state.dueAt>watching.dueAt);
+  assert.equal((await t.call(null,'tick',{},watching.dueAt)).revision,tick.revision);
+});
+
 test('only the host can change pace mid-hand and repeat requests do not restart an AI delay', async () => {
   const t=table(), spec={...game,firstSeat:2};
   for (const id of [host,guest]) await t.call(id,'ready',spec);
