@@ -1,4 +1,4 @@
-import {clearGame, renderGame, rulesContent} from './game-ui.js';
+import {clearGame, renderGame, rulesContent, updateSeatBalances} from './game-ui.js';
 import {AUCTION_BEAT_MS, FRIEND_ANNOUNCEMENT_MS} from './table-timing.js';
 import {hostRoom, joinRoom, normalizeRoomCode} from './network.js';
 import {listPublicRooms, publishPublicRoom, PUBLIC_ROOM_LIMIT} from './public-directory.js';
@@ -73,6 +73,7 @@ async function lookupActiveHand() {
 }
 
 function onAccount(state) {
+  if (mode === 'practice' && snapshot?.game) updateSeatBalances($('game'), practiceSeatBalances(state));
   if (!state.ready) return;
   const id = state.user?.id ?? null;
   if (id === lastAccount) return;
@@ -97,12 +98,28 @@ async function mayPlay() {
   return false;
 }
 
+function practiceSeatBalances(state) {
+  return snapshot.players.map((_, seat) => seat === snapshot.seat && state.user ? state.balance : null);
+}
+
 function trackChipHand(handId, initial = null) {
   if (chipReader?.handId === handId) { chipReader.wake(); return; }
   chipReader?.close();
   const watch = !accountClient.state.user || (!authority && mode !== 'resume' && snapshot?.spectator);
-  const reader = followChipHand(chipRequest, handId, watch ? 'watch' : 'view', data => {
+  let lastSeatBalance;
+  const reader = followChipHand(chipRequest, handId, watch ? 'watch' : 'view', (data, balancesOnly) => {
     if (reader !== chipReader) return;
+    const ownBalance = data.seatBalances?.[data.seat];
+    if (!data.game.result && Number.isSafeInteger(ownBalance) && ownBalance !== lastSeatBalance) {
+      lastSeatBalance = ownBalance;
+      if (accountClient.state.user && accountClient.state.balance !== ownBalance) {
+        accountClient.refreshWallet().catch(error => toast(error.message));
+      }
+    }
+    if (balancesOnly) {
+      if (snapshot?.chipHandId === handId) updateSeatBalances($('game'), data.seatBalances);
+      return;
+    }
     if (data.game.result && settledChipHand !== handId) {
       settledChipHand = handId;
       if (accountClient.state.user) accountClient.refreshWallet().catch(error => toast(error.message));
@@ -523,6 +540,7 @@ function draw() {
   const remote = chipReader?.handId === snapshot.chipHandId ? chipReader?.current : null;
   renderGame($('game'),remote?.game ?? snapshot.game,{
     names:remote?.names ?? snapshot.players.map(p => p?.name), isHost: Boolean(authority), scoreboard:snapshot.scoreboard,
+    seatBalances:mode === 'practice' ? practiceSeatBalances(accountClient.state) : remote?.seatBalances,
     chipDelta:remote?.myDelta, resumed:mode === 'resume',
     modelLabels:remote ? remote.models.map((id,i) => remote.bots[i] ? modelLabel(id) : '') :
       snapshot.players.map(p => p?.bot && p.modelId ? modelLabel(p.modelId) : ''),

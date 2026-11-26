@@ -67,9 +67,14 @@ begin
   end;
   result := public.chips_start_hand(first_hand,'ABC234',alice,seats,initial);
   assert (result->>'revision')::int=0 and result->'state'=initial and result->'seats'=seats;
+  assert result->'seatBalances'='[5,1000,null,null,null]'::jsonb, 'opening balances must follow seat order';
   assert result=public.chips_start_hand(first_hand,'ABC234',alice,seats,initial||'{"random":123}'), 'retried start re-dealt';
   assert first_hand=any(public.chips_due_hands(100));
   reset role;
+  update mighty_private.wallets set balance=27 where user_id=alice;
+  assert public.chips_read_hand(first_hand)->'seatBalances'='[27,1000,null,null,null]'::jsonb,
+    'in-hand wallet changes must be visible before a play';
+  update mighty_private.wallets set balance=5 where user_id=alice;
   set local role authenticated;
   assert public.chips_active_hand()=first_hand;
   begin
@@ -91,6 +96,7 @@ begin
   exception when raise_exception then null; end;
   result := public.chips_update_hand(first_hand,1,initial||'{"phase":"result"}','[-12,12,0,0,0]');
   assert result->'applied'='true'::jsonb and result->'settled'='true'::jsonb;
+  assert result->'seatBalances'='[-7,1012,null,null,null]'::jsonb, 'settlement must include the booked balances';
   result := public.chips_update_hand(first_hand,2,initial,'[-12,12,0,0,0]');
   assert result->'applied'='false'::jsonb;
   reset role;
@@ -112,7 +118,8 @@ begin
   perform public.chips_ready(next_hand,'DEF567',1,manifest);
   reset role;
   set local role service_role;
-  perform public.chips_start_hand(next_hand,'DEF567',alice,spectator_host_seats,initial);
+  result := public.chips_start_hand(next_hand,'DEF567',alice,spectator_host_seats,initial);
+  assert result->'seatBalances'='[null,1012,null,null,null]'::jsonb, 'spectating host has no seat balance';
   reset role;
   assert (select active_hand is null from mighty_private.wallets where user_id=alice), 'spectator host locked';
   set local role service_role;
@@ -133,6 +140,8 @@ begin
   assert (select balance=100 and recover_on is null from mighty_private.wallets where user_id=carol), 'zero balance not recovered';
   assert (select count(*)=1 and sum(delta)=107 from mighty_private.chip_entries where user_id=alice and kind='recovery');
   assert (select count(*)=1 and sum(delta)=100 from mighty_private.chip_entries where user_id=carol and kind='recovery');
+  assert public.chips_read_hand(first_hand)->'seatBalances'='[-7,1012,null,null,null]'::jsonb,
+    'reading an old hand must not disclose later wallet changes';
 end;
 $test$;
 select 'ok 1 - verified wallets, consent, private access, atomic deals and Seoul recovery';

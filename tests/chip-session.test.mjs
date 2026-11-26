@@ -138,6 +138,55 @@ test('spectator polling cannot submit a move and ignores a response after closin
   } finally {follow.close();}
 });
 
+test('a spectator receives wallet changes between turns without replacing the game frame', {timeout:3000}, async () => {
+  const handId = crypto.randomUUID();
+  const initial = {handId, revision:5, seat:-1, game:{phase:'play',turn:4}, seatBalances:[40,80,null,null,null]};
+  const balances = [40,-12,null,null,null];
+  let received;
+  const refreshed = new Promise(resolve => { received = resolve; });
+  const follow = followChipHand(async () => ({...initial, game:{phase:'result'}, seatBalances:balances}),
+    handId,'watch', (data, balancesOnly) => { if (balancesOnly) received(data); },assert.fail,initial);
+  try {
+    follow.start();
+    const data = await refreshed;
+    assert.equal(data.game,initial.game);
+    assert.deepEqual(data.seatBalances,balances);
+    assert.equal(data,follow.current);
+  } finally { follow.close(); }
+});
+
+test('duplicate and out-of-order wallet replies are ignored and settlement applies the final balances', {timeout:3000}, async () => {
+  const handId = crypto.randomUUID(), seen = [];
+  const initial = {handId, revision:3, seat:0, game:{phase:'play',turn:0}, seatBalances:[60,20,null,null,null]};
+  const balances = [100,0,null,null,null];
+  let finishRead, startRead;
+  const reading = new Promise(resolve => { startRead = resolve; });
+  const actionReplies = [
+    {...initial, seatBalances:balances},
+    {...initial, seatBalances:[...balances]},
+    {...initial, revision:2},
+    {...initial, handId:crypto.randomUUID()},
+    {...initial, revision:4, game:{phase:'result'}, seatBalances:[108,-8,null,null,null]}
+  ];
+  const follow = followChipHand(req => {
+    if (req.op === 'act') return actionReplies.shift();
+    startRead();
+    return new Promise(resolve => { finishRead = resolve; });
+  },handId,'view',(data, balancesOnly) => seen.push([data.revision,data.seatBalances,Boolean(balancesOnly)]),assert.fail,initial);
+  try {
+    follow.start();
+    await reading;
+    await follow.act({type:'pass'});
+    finishRead(initial);
+    await new Promise(resolve => setImmediate(resolve));
+    const remainingReplies = actionReplies.length;
+    for (let i = 0; i < remainingReplies; i++) await follow.act({type:'pass'});
+    assert.deepEqual(seen,[
+      [3,initial.seatBalances,false], [3,balances,true], [4,[108,-8,null,null,null],false]
+    ]);
+  } finally { follow.close(); }
+});
+
 test('ordinary practice deals remain local with a real hand and working turn controls', () => {
   const practice = new HostSession('연습', undefined, models);
   practice.start();

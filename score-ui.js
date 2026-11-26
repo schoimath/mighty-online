@@ -50,7 +50,7 @@ export function seatStanding(board, seat, beforeSettlement = false) {
   const previousChange = beforeSettlement && Number.isSafeInteger(member.lastDelta) ? member.lastDelta : 0;
   const points = member.total - previousChange;
   const total = signedScore(points);
-  return `<span class="seat-standing" data-total-seat="${seat}" data-sign="${Math.sign(points)}" title="누적 점수 ${total}점"><span class="visually-hidden">누적 점수 </span><b>${total}</b></span>`;
+  return `<span class="seat-standing" data-total-seat="${seat}" data-sign="${Math.sign(points)}" title="경기 누적 점수 ${total}점"><span class="visually-hidden">경기 누적 점수 </span><b>${total}</b>점</span>`;
 }
 
 export function scoreTable(board, mySeat, {collapsed = false, final = false, title = '누적 점수'} = {}) {

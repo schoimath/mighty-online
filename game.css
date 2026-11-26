@@ -172,6 +172,7 @@ html:has(.g-screen) { scrollbar-gutter: stable; }
 .g-seat-identity { display: flex; flex-wrap: wrap; align-items: baseline; gap: 1px 4px; min-width: 0; }
 .g-seat-name { display: block; max-width: 112px; padding-right: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .83rem; font-weight: 700; }
 .g-seat-name small { color: #d4c39a; margin-left: 4px; font-size: .72rem; }
+.g-seat-balance { color: #f1dfa9; font-size: .75rem; line-height: 1.3; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .g-seat-detail { display: flex; align-items: center; gap: 4px; color: #b6c8b6; font-size: .75rem; word-break: keep-all; }
 .g-seat-detail:empty { display: none; }
 .g-seat-active .g-seat-detail { color: #f7d88e; }

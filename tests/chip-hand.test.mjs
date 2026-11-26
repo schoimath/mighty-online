@@ -24,7 +24,8 @@ function table() {
           for (const player of new Set([spec.host,...spec.seats.filter(Boolean)])) {
             assert.deepEqual(grants.get(player),{hand,room:spec.room,seat:spec.seats.indexOf(player),hash:state.manifest});
           }
-          row = {hand, room:spec.room, host:spec.host, seats:spec.seats, revision:0, state:clone(state), settled:false};
+          row = {hand, room:spec.room, host:spec.host, seats:spec.seats, revision:0, state:clone(state), settled:false,
+            seatBalances:spec.seats.map(id => id === host ? 120 : id === guest ? 300 : null)};
         }
         return clone(row);
       },
@@ -32,7 +33,11 @@ function table() {
       save(update) {
         if (row.revision === update.revision && !row.settled) {
           row = {...clone(update), revision:row.revision+1, settled:Boolean(update.state.round.result)};
-          if (row.settled) charges++;
+          if (row.settled) {
+            const deltas = settlements(row.state.round.result, row.state.round.bid.suit);
+            row.seatBalances = row.seatBalances.map((balance,i) => balance === null ? null : balance + deltas[i]);
+            charges++;
+          }
         }
         return clone(row);
       }
@@ -55,6 +60,7 @@ test('verified seats consent to one match specification and receive separate pro
   assert.equal(first.game.hand.length,10);
   assert.equal(first.publicGame.seat,-1);
   assert.deepEqual(first.publicGame.hand,[]);
+  assert.deepEqual(first.seatBalances,[120,300,null,null,null]);
   assert.deepEqual((await t.call(host,'start',game)).game.hand,first.game.hand);
   const second = await t.call(guest,'view');
   assert.ok(second.game.hand.every(c => !first.game.hand.includes(c)));
@@ -62,6 +68,7 @@ test('verified seats consent to one match specification and receive separate pro
   const watcher = await t.call(host,'watch');
   assert.deepEqual(watcher.game.hand,[]);
   assert.equal(watcher.game.selfRole,'spectator');
+  assert.deepEqual(watcher.seatBalances,first.seatBalances);
   assert.ok(!JSON.stringify(watcher).includes(host));
   assert.ok(!('state' in watcher) && !('round' in watcher));
   await assert.rejects(t.call(other,'view'),{status:403});
@@ -83,6 +90,7 @@ test('server plays abandoned hands to completion and only its terminal deltas ar
   assert.equal(heartbeat.seat,0);
   const left = await t.call(host,'leave',{seat:1},at+90_001);
   assert.deepEqual(left.bots,[true,false,true,true,true]);
+  assert.deepEqual(left.seatBalances,[null,300,null,null,null]);
   assert.equal(left.seat,-1);
   assert.equal(left.myDelta,undefined);
   assert.deepEqual(left.game.hand,[]);
@@ -94,6 +102,7 @@ test('server plays abandoned hands to completion and only its terminal deltas ar
   assert.equal(actual.settled,true);
   const result=await t.call(null,'watch');
   assert.deepEqual(result.deltas,settlements(actual.state.round.result,actual.state.round.bid.suit));
+  assert.deepEqual(result.seatBalances,[120+result.deltas[0],300+result.deltas[1],null,null,null]);
   assert.equal(result.myDelta,undefined);
   const departed = await t.call(host,'view'), timedOut = await t.call(guest,'view');
   assert.equal(departed.seat,-1);

@@ -68,8 +68,10 @@ function present(row, id) {
   const game = seat >= 0 ? withJokerStatus(getView(round, seat), seenJoker) : publicGame;
   if (game.phase === 'discard' && seat === game.declarer) game.incomingCards = [...round.knownKitty];
   const deltas = round.result ? settlements(round.result, round.bid.suit) : null;
+  const seatBalances = row.seats.map((account, i) =>
+    account && (!state.bots[i] || row.settled) && Number.isSafeInteger(row.seatBalances?.[i]) ? row.seatBalances[i] : null);
   return {handId:row.hand, room:row.room, revision:row.revision, seat, game, bots:state.bots,
-    names:state.names.map((_, i) => nameAt(row, i)), models:state.models, firstSeat:state.firstSeat,
+    names:state.names.map((_, i) => nameAt(row, i)), seatBalances, models:state.models, firstSeat:state.firstSeat,
     dueAt:state.dueAt, deltas, ...(owner >= 0 && deltas ? {myDelta:deltas[owner]} : {}),
     ...(id === row.host ? {publicGame} : {})};
 }

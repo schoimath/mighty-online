@@ -66,8 +66,22 @@ export function consentWindow(ids, handId, timeout = 30000) {
 
 export function followChipHand(request, handId, op, onState, onError, initial) {
   let current = null, closed = false, timer, busy = false, submitting = false, failures = 0;
-  function accept(data) {
-    if (closed || data.handId !== handId || !data.game || (current && data.revision <= current.revision)) return;
+  let requestOrder = 0, acceptedOrder = 0;
+  function accept(data, order) {
+    if (closed || data.handId !== handId || !data.game || (current && data.revision < current.revision)) return;
+    if (current && data.revision === current.revision) {
+      if (order < acceptedOrder) return;
+      acceptedOrder = order;
+      const balances = data.seatBalances;
+      if (!Array.isArray(balances) || balances.length !== 5 ||
+          !balances.every(value => value === null || Number.isSafeInteger(value)) ||
+          balances.every((value, seat) => value === current.seatBalances?.[seat])) return;
+      // A wallet can change between turns. Keep the accepted game and its pending input intact.
+      current = {...current, seatBalances:balances};
+      onState(current, true);
+      return;
+    }
+    acceptedOrder = order;
     current = data;
     onState(data);
   }
@@ -78,8 +92,9 @@ export function followChipHand(request, handId, op, onState, onError, initial) {
   async function read() {
     if (closed || busy || submitting) return;
     busy = true;
+    const order = ++requestOrder;
     try {
-      accept(await request({op, handId}));
+      accept(await request({op, handId}), order);
       failures = 0;
     } catch (error) {
       if (!closed && !failures++) onError(error);
@@ -91,12 +106,13 @@ export function followChipHand(request, handId, op, onState, onError, initial) {
     }
   }
   const result = {handId, get current() { return current; },
-    start() { if (initial) accept(initial); schedule(0); },
+    start() { if (initial) accept(initial, 0); schedule(0); },
     wake() { if (!busy && !submitting) schedule(0); },
     async act(action) {
       if (closed || submitting || !current || current.seat < 0 || current.game.turn !== current.seat) return;
       submitting = true;
-      try { accept(await request({op:'act', handId, revision:current.revision, action})); }
+      const order = ++requestOrder;
+      try { accept(await request({op:'act', handId, revision:current.revision, action}), order); }
       finally { submitting = false; schedule(0); }
     },
     close() { closed = true; clearTimeout(timer); }

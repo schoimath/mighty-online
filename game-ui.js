@@ -14,6 +14,7 @@ const suitInfo = {
 const rankNames = { A: "에이스", K: "킹", Q: "퀸", J: "잭" };
 const labels = { bid: "경매", discard: "카드 교환", friend: "프렌드 지정", play: "트릭 진행", result: "라운드 결과" };
 const roleLabels = { declarer: "주공", friend: "프렌드", opposition: "수비" };
+const chipNumber = new Intl.NumberFormat('ko-KR');
 const cache = new WeakMap();
 const TRICK_HOLD_MS = 810;
 const COLLECT_MS = 390;
@@ -151,9 +152,26 @@ function roleAt(view, seat) {
   if (role === "friend" && view.call?.kind === "card" && view.call.card === mighty(view.bid.suit)) return "마이티 프렌드";
   return roleLabels[role] || "";
 }
+function balanceText(value) {
+  return Number.isSafeInteger(value) ? `${chipNumber.format(value)}칩` : '';
+}
+
+export function updateSeatBalances(container, seatBalances) {
+  const ui = cache.get(container);
+  if (!ui?.options) return;
+  ui.options = {...ui.options, seatBalances};
+  if (ui.resolving && ui.latest.phase === 'result') return;
+  for (const badge of container.querySelectorAll('[data-chip-seat]')) {
+    const text = balanceText(seatBalances?.[Number(badge.dataset.chipSeat)]);
+    if (badge.lastElementChild.textContent !== text) badge.lastElementChild.textContent = text;
+    badge.hidden = !text;
+  }
+}
+
 function seatMarkup(ui, nameAt) {
   const {view, options, resolving} = ui;
   const beforeSettlement = resolving && ui.latest.phase === "result";
+  const balances = beforeSettlement ? resolving.previousBalances : options.seatBalances;
   return Array.from({ length: 5 }, (_, offset) => {
     const seat = (Math.max(0, view.seat) + offset) % 5, name = nameAt(seat);
     const model = options.modelLabels?.[seat];
@@ -166,7 +184,9 @@ function seatMarkup(ui, nameAt) {
     const leader = inAuction && view.bid?.seat === seat;
     const avatar = inAuction ? seat + 1 : Array.from(name.trim().replace(/^AI\s+/i, ""))[0] || "♠";
     const standing = seatStanding(options.scoreboard, seat, beforeSettlement);
-    const header = `<span class="g-avatar g-avatar-${seat}" aria-label="${seat + 1}번 자리">${escapeHtml(avatar)}</span><span class="g-seat-tag"><span class="g-seat-identity"><span class="g-seat-name">${escapeHtml(name)}${seat === view.seat ? '<small>나</small>' : ""}</span>${standing}</span><span class="g-seat-detail">${isTurn ? '<i></i>' : ""}${status}</span></span>`;
+    const balance = balanceText(balances?.[seat]);
+    const chips = `<span class="g-seat-balance" data-chip-seat="${seat}"${balance ? '' : ' hidden'}><span class="visually-hidden">보유 칩 </span><span>${balance}</span></span>`;
+    const header = `<span class="g-avatar g-avatar-${seat}" aria-label="${seat + 1}번 자리">${escapeHtml(avatar)}</span><span class="g-seat-tag"><span class="g-seat-identity"><span class="g-seat-name">${escapeHtml(name)}${seat === view.seat ? '<small>나</small>' : ""}</span>${standing}</span>${chips}<span class="g-seat-detail">${isTurn ? '<i></i>' : ""}${status}</span></span>`;
     return `<div class="g-seat g-seat-${offset} ${isTurn ? "g-seat-active" : ""} ${leader ? "g-seat-bidder" : ""} ${resolving?.winner === seat ? "g-trick-winner" : ""}" data-seat="${seat}" data-seat-role="${visibleRole(view, seat)}" role="group" aria-label="${escapeHtml(name)} 자리${model ? ' · ' + escapeHtml(model) : ''}"${model ? ' title="' + escapeHtml(model) + '"' : ""}><div class="g-seat-head">${header}</div>${seatPile(view, seat)}</div>`;
   }).join("");
 }
@@ -915,6 +935,7 @@ export function renderGame(container, publicView, options = {}) {
   ui.latest = publicView;
   ui.playPending = false;
   ui.claimSubmitting = false;
+  const previousBalances = ui.options?.seatBalances;
   ui.options = options;
   // A failed opening claim may play one trick solely to identify the friend.
   // Its point cards are awarded by the claim, not to that trick's winner.
@@ -944,7 +965,7 @@ export function renderGame(container, publicView, options = {}) {
     const cards = last.cards.length === 5 ? last.cards : last.finalPlay && shown.length === 4
       ? [...shown, last.finalPlay] : null;
     if (!cards) { displayLatest(ui); return; }
-    ui.resolving = last;
+    ui.resolving = {...last, previousBalances};
     ui.view = {...publicView, phase: "play", trickNo: last.number, trick: cards, turn: null};
     updateDefaults(ui, ui.view);
     redraw(ui);

@@ -1,4 +1,4 @@
-import {analyzeSetting} from './table-claim.js?v=1.1.20261126121131';
+import {analyzeSetting} from './table-claim.js?v=1.1.20261126122116';
 
 self.onmessage = ({data}) => {
   // Open tabs from the previous release submit the position directly.
