@@ -1,4 +1,5 @@
-.g-bid-wait { display: none; }
+.g-decision-surface { display: contents; }
+.g-bid-wait, .g-seat-call { display: none; }
 
 @media (max-width: 729px), (pointer: coarse) and (orientation: landscape) and (max-height: 540px) {
   html:has(#game:not([hidden]) .g-screen:not([data-phase="result"])) { overflow: hidden; scrollbar-gutter: auto; }
@@ -102,4 +103,113 @@
   .g-screen .g-seat { padding: 3px; }
   .g-screen .g-avatar { flex-basis: 24px; height: 24px; }
   .g-screen .g-seat:is(.g-seat-1,.g-seat-4) .g-avatar { display: none; }
+}
+
+@media (max-width: 729px) and (orientation: portrait) {
+  html, body { max-inline-size: 100%; overflow-x: clip; overscroll-behavior-x: none; }
+  .main-nav { grid-template-columns: repeat(4, minmax(0,1fr)); }
+  .g-screen .g-main { min-inline-size: 0; overflow-x: hidden; overscroll-behavior-x: none; }
+
+  /* The auction and the declarer's exchange each fill the first screenful.
+     Chat and public-room controls stay in the normal flow immediately below. */
+  .g-screen:is([data-phase="bid"],[data-exchanging]) .g-main {
+    container-type: size; margin: 0; padding: 0 max(12px,env(safe-area-inset-right)) 0 max(12px,env(safe-area-inset-left));
+  }
+  .g-screen[data-phase="bid"][data-seated] .g-main { margin-bottom: 0; }
+  .g-screen:is([data-phase="bid"],[data-exchanging]) .g-heading {
+    height: 42px; margin: 0; flex-wrap: nowrap; gap: 5px;
+  }
+  .g-screen:is([data-phase="bid"],[data-exchanging]) .g-heading h1 { white-space: nowrap; }
+  .g-screen:is([data-phase="bid"],[data-exchanging]) .g-match-progress,
+  .g-screen[data-phase="bid"] .g-round-tags, .g-screen[data-exchanging] .g-friend-tag { display: none; }
+  .g-screen:is([data-phase="bid"],[data-exchanging]) .g-layout { display: block; }
+  .g-screen:is([data-phase="bid"],[data-exchanging]) .g-decision-surface {
+    display: flex; flex-direction: column; min-height: calc(100cqh - 42px);
+    gap: 6px; padding-bottom: max(8px,env(safe-area-inset-bottom));
+  }
+  .g-screen:is([data-phase="bid"],[data-exchanging]) .g-board {
+    display: flex; flex-direction: column; align-items: center; justify-content: center; flex: 1;
+    padding: 0; border: 0; box-shadow: none; background: none; min-width: 0;
+  }
+  .g-screen:is([data-phase="bid"],[data-exchanging]) .g-turn-clock {
+    position: static; align-self: end; font-size: .74rem; background: transparent;
+  }
+  .g-screen[data-phase="bid"] .g-felt {
+    position: relative; display: grid; place-items: center; grid-template: 1fr / 1fr;
+    width: min(100%, 460px); height: clamp(149px, calc(100dvh - 377px), 350px);
+    padding: 0; border: 0; border-radius: 0; box-shadow: none; background: none;
+  }
+  .g-screen[data-phase="bid"] .g-felt-line {
+    inset: 8% 11% 12%; border: 1px solid #496858; border-radius: 50%;
+  }
+  .g-screen[data-phase="bid"] .g-table-center {
+    grid-area: 1 / 1; max-width: 38%; align-self: center; z-index: 1;
+  }
+  .g-screen[data-phase="bid"] .g-leading-bid { border: 0; padding: 0; }
+  .g-screen[data-phase="bid"] .g-leading-bid > small { position: static; clip-path: none; font-size: .7rem; }
+  .g-screen[data-phase="bid"] .g-leading-bid > strong { font-size: clamp(1.5rem, 7vw, 2.1rem); }
+  .g-screen[data-phase="bid"] :is(.g-auction-calls,.g-flight-back,.g-bidder,.g-table-symbol) { display: none; }
+  .g-screen[data-phase="bid"] .g-seat {
+    position: absolute; translate: -50% -50%; align-items: center; justify-content: center;
+    width: 26%; max-width: 116px; min-height: 40px; gap: 1px; padding: 3px 4px;
+    border: 1px solid #476352; border-radius: 10px; box-shadow: none; background: #19372b;
+  }
+  .g-screen[data-phase="bid"] .g-seat-0 { left: 50%; top: 85%; }
+  .g-screen[data-phase="bid"] .g-seat-1 { left: 14%; top: 55%; }
+  .g-screen[data-phase="bid"] .g-seat-2 { left: 29%; top: 14%; }
+  .g-screen[data-phase="bid"] .g-seat-3 { left: 71%; top: 14%; }
+  .g-screen[data-phase="bid"] .g-seat-4 { left: 86%; top: 55%; }
+  .g-screen[data-phase="bid"] .g-seat { grid-area: auto; }
+  .g-screen[data-phase="bid"] .g-seat-active { border-color: #edc77e; outline: 1px solid #edc77e; }
+  .g-screen[data-phase="bid"] .g-seat-bidder .g-seat-call { color: #f7db9d; }
+  .g-screen[data-phase="bid"] .g-seat-head { max-width: 100%; }
+  .g-screen[data-phase="bid"] .g-seat-name { max-width: 100%; font-size: .76rem; }
+  .g-screen[data-phase="bid"] .g-seat :is(.g-avatar,.g-seat-balance,.g-seat-detail,.seat-standing,.g-score-anchor) { display: none; }
+  .g-screen[data-phase="bid"] .g-seat-call { display: block; font-size: .8rem; line-height: 1.25; color: #d2e0d1; }
+  .g-seat-call .g-suit { padding: 0 2px; min-width: 1.15em; }
+  .g-screen[data-phase="bid"] .g-hand {
+    position: static; width: 100%; height: auto; padding: 7px 0 0;
+    border: 0; border-top: 1px solid #476454; border-radius: 0; background: transparent; gap: 5px;
+  }
+  .g-screen[data-phase="bid"] .g-cards { grid-template-columns: repeat(5,minmax(0,1fr)); gap: 4px; }
+  .g-screen[data-phase="bid"] .g-hand-card {
+    max-width: none; height: clamp(44px,8dvh,70px);
+  }
+  .g-screen[data-phase="bid"] .g-hand-card .g-corner {
+    display: flex; flex-direction: row; align-items: baseline; justify-content: center;
+    gap: 2px; width: 100%; top: 20%;
+  }
+  .g-screen[data-phase="bid"] .g-corner b { font-size: 1.12rem; }
+  .g-screen[data-phase="bid"] .g-corner i { font-size: .86rem; }
+  .g-screen[data-phase="bid"] .g-bid-wait { min-height: 116px; }
+  .g-screen[data-exchanging] .g-board { display: contents; }
+  .g-screen[data-exchanging] :is(.g-felt,.g-choice-shortcut,.g-section-heading) { display: none; }
+  .g-screen[data-exchanging] .g-hand {
+    flex: 1; display: grid; grid-template-columns: minmax(0,1fr) minmax(76px,.38fr);
+    grid-template-rows: auto minmax(min-content,1fr) auto auto; gap: 10px 8px;
+    padding: 6px 0 0; border: 0; background: transparent;
+  }
+  .g-screen[data-exchanging] .g-decision { display: contents; }
+  .g-screen[data-exchanging] .g-decision h2 { grid-area: 1 / 1 / 2 / -1; font-size: 1.15rem; }
+  .g-screen[data-exchanging] .g-decision p { position: absolute; clip-path: inset(50%); width: 1px; height: 1px; overflow: hidden; }
+  .g-screen[data-exchanging] .g-cards {
+    grid-area: 2 / 1 / 3 / -1; display: grid; grid-template-columns: repeat(5,minmax(0,1fr));
+    align-content: center; gap: 9px 5px;
+  }
+  .g-screen[data-exchanging] .g-hand-card { width: 100%; height: clamp(54px,min(22vw,14dvh),110px); }
+  .g-screen[data-exchanging] .g-hand-card.g-selected::after {
+    position: absolute; right: 2px; bottom: 2px; content: "✓"; width: 1.2rem; height: 1.2rem;
+    display: grid; place-items: center; border-radius: 50%; background: #f4d48a; color: #243629; font: bold .85rem/1 sans-serif;
+  }
+  .g-screen[data-exchanging] .g-suit-picker { grid-area: 3 / 1; }
+  .g-screen[data-exchanging] .g-field { grid-area: 3 / 2; min-width: 0; }
+  .g-screen[data-exchanging] .g-field select { font-size: 1rem; min-height: 44px; }
+  .g-screen[data-exchanging] .g-suit-options { gap: 3px; }
+  .g-screen[data-exchanging] .g-suit-option .g-suit { min-width: 0; min-height: 44px; }
+  .g-screen[data-exchanging] [data-do="discard"] { grid-area: 4 / 1 / 5 / -1; width: 100%; min-height: 48px; }
+}
+
+@media (max-width: 729px) and (orientation: portrait) and (min-height: 680px) {
+  .g-screen[data-exchanging] .g-cards { grid-template-columns: repeat(4,minmax(0,1fr)); }
+  .g-screen[data-exchanging] .g-hand-card { height: clamp(75px,min(26.5vw,12dvh),130px); }
 }

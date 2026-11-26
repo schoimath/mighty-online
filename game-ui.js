@@ -204,7 +204,13 @@ function seatMarkup(ui, nameAt) {
     const balance = balanceText(balances?.[seat]);
     const chips = `<span class="g-seat-balance" data-chip-seat="${seat}"${balance ? '' : ' hidden'}><span class="visually-hidden">보유 칩 </span><span>${balance}</span></span>`;
     const header = `<span class="g-avatar g-avatar-${seat}" aria-label="${seat + 1}번 자리">${escapeHtml(avatar)}</span><span class="g-seat-tag"><span class="g-seat-identity"><span class="g-seat-name">${escapeHtml(name)}${seat === view.seat ? '<small>나</small>' : ""}</span>${standing}</span>${chips}<span class="g-seat-detail">${isTurn ? '<i></i>' : ""}${status}</span></span>`;
-    return `<div class="g-seat g-seat-${offset} ${isTurn ? "g-seat-active" : ""} ${leader ? "g-seat-bidder" : ""} ${resolving?.winner === seat ? "g-trick-winner" : ""}" data-seat="${seat}" data-seat-role="${visibleRole(view, seat)}" role="group" aria-label="${escapeHtml(name)} 자리${model ? ' · ' + escapeHtml(model) : ''}"${model ? ' title="' + escapeHtml(model) + '"' : ""}><div class="g-seat-head">${header}</div>${seatPile(view, seat)}</div>`;
+    let call = "";
+    if (inAuction) {
+      const last = view.bidHistory.findLast(entry => entry.seat === seat);
+      const value = last ? (last.pass ? "패스" : suitMark(last.suit) + " " + escapeHtml(last.points) + "점") : (isTurn ? "입찰 차례" : "대기");
+      call = `<span class="g-seat-call">${value}</span>`;
+    }
+    return `<div class="g-seat g-seat-${offset} ${isTurn ? "g-seat-active" : ""} ${leader ? "g-seat-bidder" : ""} ${resolving?.winner === seat ? "g-trick-winner" : ""}" data-seat="${seat}" data-seat-role="${visibleRole(view, seat)}" role="group" aria-label="${escapeHtml(name)} 자리${model ? ' · ' + escapeHtml(model) : ''}"${model ? ' title="' + escapeHtml(model) + '"' : ""}><div class="g-seat-head">${header}</div>${call}${seatPile(view, seat)}</div>`;
   }).join("");
 }
 function setFlightOffset(element, prefix, from, to) {
@@ -780,6 +786,7 @@ function mountTable(root) {
             <select data-table-pace><option value="slow">느리게</option><option value="normal">보통</option><option value="fast">빠르게</option></select>
             <strong class="g-pace-value" hidden></strong></label></div></div>
       <div class="g-layout">
+        <div class="g-decision-surface">
         <section class="g-board" aria-label="게임 테이블"><span class="g-turn-clock" role="timer" aria-live="off" hidden></span><div class="g-felt"><div class="g-felt-line"></div>
           <div class="g-table-center"></div><div class="g-auction-calls" hidden></div><div class="g-trick" hidden></div><div class="g-seats"></div>
           <div class="g-friend-call" role="status" aria-atomic="true" hidden><small>프렌드 선언</small><strong></strong></div>
@@ -788,6 +795,7 @@ function mountTable(root) {
           <button type="button" class="g-choice-shortcut" data-do="jump-choice" aria-controls="g-hand-decision" hidden></button></section>
         <p class="g-table-notice" role="status" hidden></p>
         <section class="g-hand"></section>
+        </div>
         <section class="g-round-result g-action" aria-label="판 결과" hidden></section>
         <section class="g-match-final" aria-label="경기 최종 결과" hidden></section>
       </div>
@@ -831,8 +839,16 @@ export function updateGamePace(container, pace, pendingPace = null) {
 
 function redraw(ui, newDeal = false) {
   const { view, options, root } = ui;
-  root.firstElementChild.dataset.phase = view.phase;
-  root.firstElementChild.toggleAttribute("data-seated", view.seat >= 0);
+  const screen = root.firstElementChild;
+  const exchanging = view.phase === "discard" && view.turn === view.seat && view.seat >= 0;
+  const enteringDecision = (view.phase === "bid" && screen.dataset.phase !== "bid") ||
+    (exchanging && !screen.hasAttribute("data-exchanging"));
+  screen.dataset.phase = view.phase;
+  screen.toggleAttribute("data-seated", view.seat >= 0);
+  screen.toggleAttribute("data-exchanging", exchanging);
+  if (enteringDecision && window.matchMedia("(max-width: 729px) and (orientation: portrait)").matches) {
+    root.querySelector(".g-main").scrollTop = 0;
+  }
   updateTurnCountdown(ui);
   root.querySelector(".g-nav-phase").textContent = view.seat < 0 ? "테이블 관전" : "게임 테이블";
   const leaveButton = root.querySelector('[data-do="leave"]');

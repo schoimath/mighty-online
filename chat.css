@@ -55,9 +55,9 @@
     --chat-rows: 1;
   }
   /* Hidden hand and notice create no grid tracks, including for spectators. */
-  .g-layout:has(> :is(.g-hand,.g-table-notice):not([hidden])) { --chat-rows: 2; }
-  .g-layout:has(> .g-hand:not([hidden])):has(> .g-table-notice:not([hidden])) { --chat-rows: 3; }
-  .g-layout > :is(.g-table-notice,.g-round-result,.g-match-final) { grid-column: 1; }
+  .g-layout:has(.g-decision-surface > :is(.g-hand,.g-table-notice):not([hidden])) { --chat-rows: 2; }
+  .g-layout:has(.g-hand:not([hidden])):has(.g-table-notice:not([hidden])) { --chat-rows: 3; }
+  .g-layout .g-table-notice, .g-layout > :is(.g-round-result,.g-match-final) { grid-column: 1; }
   .g-layout > .chat-dock[data-chat-layout="vertical"] { grid-area: 1 / 2 / span var(--chat-rows) / 3; }
   .room-page:has(> .chat-dock[data-chat-layout="vertical"]) {
     grid-template-columns: minmax(0,600px) minmax(250px,315px);
