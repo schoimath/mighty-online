@@ -13,6 +13,8 @@ import {VERSION} from './release.js';
 import {rememberRoom, roomModels, roomPreferences} from './room-preferences.js';
 import {accountClient} from './account-client.js';
 import {setupAccountUI} from './account-ui.js';
+import {setupSupportBoard} from './support-board.js';
+import {setupCommunityBoard} from './community-board.js';
 import {accountIdValid, callChipService, chipManifest, consentWindow, followChipHand, offeredSeat} from './chip-play.js';
 
 const $ = id => document.getElementById(id);
@@ -1321,6 +1323,8 @@ $('create-btn').onclick = () => openForm('create');
 $('join-btn').onclick = () => openForm('join');
 $('practice-btn').onclick = openPracticeSetup;
 accountUI = setupAccountUI(accountClient, {onChange:onAccount});
+setupSupportBoard(accountClient, () => accountUI.open());
+setupCommunityBoard(accountClient, () => accountUI.open());
 $('profile-btn').onclick = () => accountUI.open();
 $('leave-chip-hand').onclick = () => {
   if (resumeHand && mode === 'lobby') confirmPreviousHandLeave(resumeHand);

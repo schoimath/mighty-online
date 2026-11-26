@@ -21,3 +21,8 @@ content_path = "./supabase/templates/recovery.html"
 # the unattended clock receive only the public projection / a tick receipt.
 verify_jwt = false
 entrypoint = "./functions/chip-hand/index.ts"
+
+[functions.member-mail]
+# The scheduler supplies a private token validated by a service-only RPC.
+verify_jwt = false
+entrypoint = "./functions/member-mail/index.ts"
