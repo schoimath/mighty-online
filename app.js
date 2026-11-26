@@ -10,7 +10,7 @@ import {chatText, setupChat} from './chat.js';
 import {createRoomChatStore} from './room-chat-store.js';
 import {createRoomChatRelay} from './room-chat-relay.js';
 import {DEFAULT_RULES} from './engine.js';
-import {modelLabel, modelSettings, modelSummary} from './model-picker.js';
+import {modelLabel, modelSettings, modelSummary, roomModelOption} from './model-picker.js';
 import {VERSION} from './release.js';
 import {rememberRoom, roomPreferences} from './room-preferences.js';
 import {accountClient} from './account-client.js';
@@ -571,18 +571,19 @@ function paceSetting(pace) {
   return '<fieldset class="series-picker pace-picker"><legend>진행 속도</legend><div>' + choices.join('') + '</div></fieldset>';
 }
 
-function roomGameOptions(board, pace, host, canSetLimit) {
+function roomGameOptions(snapshot, host) {
+  const board = snapshot.scoreboard;
   const limit = board?.roundLimit ?? 0;
-  const selectedPace = normalizeGameSpeed(pace);
+  const selectedPace = normalizeGameSpeed(snapshot.pace);
   const picker = (name, title, values, selected) => {
     const options = values.map(([value, label]) =>
       `<option value="${value}"${value === selected ? ' selected' : ''}>${label}</option>`).join('');
     return `<label class="room-game-option"><strong>${title}</strong><select name="${name}">${options}</select></label>`;
   };
-  const series = canSetLimit ? picker('roundLimit', '경기 판수', [[10,'10판'],[20,'20판'],[0,'무제한']], limit) : seriesSummary(board);
+  const series = host && !board?.rounds ? picker('roundLimit', '경기 판수', [[10,'10판'],[20,'20판'],[0,'무제한']], limit) : seriesSummary(board);
   const speed = host ? picker('pace', '진행 속도', Object.entries(paceLabels), selectedPace)
     : `<p class="series-summary"><strong>진행 속도</strong> ${paceLabels[selectedPace]}</p>`;
-  return '<div class="room-game-options">' + series + speed + '</div>';
+  return '<div class="room-game-options">' + series + speed + roomModelOption(snapshot, host) + '</div>';
 }
 
 function seriesSummary(board) {
@@ -882,8 +883,6 @@ function drawRoom() {
   const occupied = snapshot.players.filter(Boolean).length;
   const room = $('room');
   const canWatch = snapshot.publicRoom && !snapshot.spectator;
-  const board = snapshot.scoreboard;
-  const canSetLimit = host && !board?.rounds;
   const focus = room.contains(document.activeElement) ? document.activeElement : null;
   const focusSeat = focus?.closest('[data-room-seat]')?.dataset.roomSeat;
   const canChoose = Number.isInteger(snapshot.hostSeat) && (!snapshot.spectator || snapshot.supportsOpenSeatChoice);
@@ -936,8 +935,7 @@ function drawRoom() {
       ? (occupied < 5 ? '참가하려면 원하는 빈자리를 누르세요.' : '다섯 자리가 모두 찼습니다. 아래에서 다음 자리를 예약할 수 있습니다.')
       : '자리 번호 순으로 진행합니다. 빈자리에 앉거나 다른 참가자에게 교환을 요청하세요.') + '</p>' : '') +
     '<ol class="seat-list ' + (canChoose ? 'seat-map' : 'seat-readonly') + '" aria-label="자리 번호 순서">' + seats + '</ol>' + swapPanel +
-    startSection + roomGameOptions(board, snapshot.pace, host, canSetLimit) +
-    (host ? modelSettings(snapshot.modelChoice) : modelSummary(snapshot)) +
+    startSection + roomGameOptions(snapshot, host) +
     ruleEditor(activeRules(), {room:true, editable:host}) +
     '<section class="public-audience" hidden></section>';
   $('copy-invite').onclick = copyInvite;

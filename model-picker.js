@@ -9,13 +9,22 @@ export function modelLabel(id) {
   return modelsById.get(id)?.label ?? '알 수 없는 모델';
 }
 
-export function modelSettings(current = 'random', editable = true) {
+function modelField(current, editable, rowClass) {
   const choice = choices.find(({id}) => id === current) ?? choices[0];
+  if (!editable) return '<div class="' + rowClass + '"><strong>전체 AI 모델</strong><span>' + escape(choice.label) + '</span></div>';
   const options = choices.map(({id, label, description}) => '<option value="' + escape(id) + '" title="' + escape(description) + '"' +
     (id === choice.id ? ' selected' : '') + '>' + escape(label) + '</option>').join('');
-  return '<fieldset class="model-settings"><legend>AI 플레이어</legend>' +
-    (editable ? '<label class="model-row"><strong>전체 AI 모델</strong><select id="model-all" name="modelChoice" data-ai-all>' + options + '</select></label>' :
-      '<div class="model-row"><strong>전체 AI 모델</strong><span>' + escape(choice.label) + '</span></div>') + '</fieldset>';
+  return '<label class="' + rowClass + '"><strong>전체 AI 모델</strong><select id="model-all" name="modelChoice" data-ai-all>' + options + '</select></label>';
+}
+
+export function modelSettings(current = 'random', editable = true) {
+  return '<fieldset class="model-settings"><legend>AI 플레이어</legend>' + modelField(current, editable, 'model-row') + '</fieldset>';
+}
+
+export function roomModelOption(snapshot, editable) {
+  if (!editable && !snapshot.botModels) return '';
+  const current = snapshot.modelChoice ?? commonModelChoice(snapshot.botModels);
+  return modelField(current, editable, 'room-game-option');
 }
 
 export function modelSummary(snapshot) {

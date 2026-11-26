@@ -86,7 +86,22 @@ svg.icon{width:1.25em;height:1.25em;display:block;fill:none;stroke:currentColor;
 .room-start p { margin: 0; font-size: .88rem; }
 .room-start-actions { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .room-start-actions .round-start-button { flex: 1; padding-inline: clamp(7px, 2vw, 20px); white-space: nowrap; }
-.room-start-actions .plain-button { min-height: 40px; padding: 6px 9px; font-size: .84rem; white-space: nowrap; }
+.room-start-actions .plain-button {
+  min-height: 40px; padding: 6px 9px; font-size: .84rem; white-space: nowrap;
+  box-shadow: 0 2px 0 #a9b6a4;
+  transition: transform 90ms ease-out, box-shadow 90ms ease-out, background-color 90ms ease-out;
+}
+@media (hover: hover) {
+  .room-start-actions .plain-button:enabled:hover {
+    background-color: #edf3e9; box-shadow: 0 1px 0 #95a48f; transform: translateY(1px);
+  }
+}
+.room-start-actions .plain-button:enabled:active {
+  background-color: #dfe9d9; box-shadow: inset 0 1px 2px #29472b40; transform: translateY(2px);
+}
+@media (prefers-reduced-motion: reduce) {
+  .room-start-actions .plain-button:enabled:is(:hover, :active) { transform: none; }
+}
 @media (max-width: 350px) {
   .room-panel { padding-inline: 12px; }
   .room-start-actions .plain-button { padding-inline: 6px; }
@@ -163,20 +178,22 @@ button.seat-place:hover { border-color:#47744d; background:#ecf4e8; }
 .series-picker :focus-visible + span { outline: 2px solid #8b682c; outline-offset: 2px; }
 .series-summary strong { margin-inline-end: 8px; }
 .room-game-options {
-  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 16px;
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.5fr);
+  gap: clamp(4px, 1.25vw, 14px); align-items: start;
   margin: 16px 0; container: game-options / inline-size;
 }
 .room-game-option, .room-game-options .series-summary {
-  display: flex; align-items: center; flex-wrap: wrap; gap: 3px 9px; margin: 0;
+  display: flex; align-items: center; gap: 4px 6px; min-width: 0; margin: 0;
   color: #415c49; font-size: .88rem; line-height: 1.4;
 }
 .room-game-options strong { margin: 0; color: #2c4e39; font-size: .88rem; white-space: nowrap; }
 .room-game-option select {
-  min-height: 32px; max-width: 100%; padding: 4px 7px;
+  min-height: 32px; min-width: 0; max-width: 100%; padding: 4px 3px;
   border: 1px solid #afbfaa; border-radius: 6px; background: #fffefa; color: #264833; font: inherit;
 }
-@container game-options (max-width: 22rem) {
-  .room-game-option, .room-game-options .series-summary { flex-direction: column; align-items: flex-start; }
+@container game-options (max-width: 32rem) {
+  .room-game-option, .room-game-options .series-summary { flex-direction: column; align-items: stretch; }
+  .room-game-option select { width: 100%; padding-inline: 2px; }
 }
 .rule-settings {
   min-width: 0; margin: 20px 0; padding: 0 15px 2px;
