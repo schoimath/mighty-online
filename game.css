@@ -4,6 +4,7 @@
   --g-soft: #a7c1b3;
   --g-night: #122c24;
   min-height: 100svh;
+  overflow-x: clip;
   background: #132d24;
   color: var(--g-cream);
   font-family: "DM Sans", "Malgun Gothic", system-ui, sans-serif;

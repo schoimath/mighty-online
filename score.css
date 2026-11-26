@@ -66,8 +66,6 @@
 .g-equation small { color: #cadacb; font-size: .8rem; }
 .g-equation abbr { text-decoration: none; }
 .g-equation strong { color: #f5d48e; }
-.g-outcome-heading { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 12px; }
-.g-outcome-heading small { color: #c1cebf; white-space: nowrap; }
 .g-outcome-heading[data-won="true"] h2 { color: #b4e4aa; }
 .g-outcome-heading[data-won="false"] h2 { color: #f4b5a9; }
 .g-my-settlement[data-sign="1"] strong { color: #b4e4aa; }

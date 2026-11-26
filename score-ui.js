@@ -34,15 +34,17 @@ export function signedScore(points) {
   return Number.isSafeInteger(points) ? (points > 0 ? '+' : '') + points : '—';
 }
 
-export function handOutcome(result, seat) {
-  if (!Number.isInteger(seat) || seat < 0 || seat > 4) {
-    return {title:result.won ? '여당 승리' : '야당 승리', role:null, won:null};
-  }
-  const declarer = seat === result.declarer;
-  const friend = seat === result.friend;
-  const won = result.won === (declarer || friend);
-  const role = declarer ? '주공' : friend ? '프렌드' : '야당';
-  return {title:won ? '이번 판 승리' : '이번 판 패배', role, won};
+export function handOutcome(result, seat, trump, sweep) {
+  const seated = Number.isInteger(seat) && seat >= 0 && seat < 5;
+  const role = !seated ? null : seat === result.declarer ? '주공' : seat === result.friend ? '프렌드' : '야당';
+  const won = seated ? result.won === (role !== '야당') : null;
+  const verdict = seated ? (won ? '승리' : '패배') : (result.won ? '여당 승리' : '야당 승리');
+  const bonuses = [];
+  if (trump === 'N') bonuses.push('노기');
+  if (result.friend == null) bonuses.push('노프');
+  if (sweep === 'run') bonuses.push('런');
+  if (sweep === 'backrun') bonuses.push('빽런');
+  return {title:bonuses.length ? verdict + ' (' + bonuses.join(' · ') + ')' : verdict, role, won};
 }
 
 // These cards form one opposition pile, with no seat-of-origin information.

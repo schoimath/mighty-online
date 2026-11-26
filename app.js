@@ -1045,8 +1045,7 @@ function draw() {
   });
   if (mode === 'host' || mode === 'guest') {
     const game = $('game');
-    const location = (remote?.game ?? snapshot.game).phase === 'result' ? '.g-match-final' : '.g-hand';
-    chat.attach(game.querySelector('.g-nav-actions'), game.querySelector(location));
+    chat.attach(game.querySelector('.g-nav-actions'), game.querySelector('.g-match-final'));
   }
   accountUI.attach($('game').querySelector('.g-nav-actions'));
   drawAudience();

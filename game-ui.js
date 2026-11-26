@@ -231,9 +231,13 @@ function dealToOtherSeats(root, localSeat) {
   }
 }
 
+function hasHandDeltas(deltas) {
+  return Array.isArray(deltas) && deltas.length === 5 && deltas.every(Number.isSafeInteger);
+}
+
 function roundSweep(view, options) {
   if (view.phase !== "result") return null;
-  if (!options.scoreboard && !options.resumed) {
+  if (!options.scoreboard && !options.resumed && !hasHandDeltas(options.handDeltas)) {
     // The original host awards a backrun for a ten-point contract shortfall.
     const {won, target, points} = view.result;
     if (won && points === 20) return "run";
@@ -250,7 +254,7 @@ function sweepMarkup(kind, points) {
   const run = kind === "run";
   return `<div class="g-sweep g-sweep-${kind}" role="status">
     <i class="g-sweep-crest" aria-hidden="true"></i>
-    <strong class="g-sweep-title">${run ? "런" : "백런"}</strong>
+    <strong class="g-sweep-title">${run ? "런" : "빽런"}</strong>
     <small>${run ? "여당" : "야당"} ${escapeHtml(run ? points : 20 - points)}점</small>
   </div>`;
 }
@@ -670,9 +674,9 @@ function resultControls(view, ui) {
   const board = ui.options.scoreboard;
   const chipDelta = ui.options.chipDelta;
   const seat = ui.options.settlementSeat ?? view.seat;
-  const outcome = handOutcome(result, seat);
+  const outcome = handOutcome(result, seat, view.bid.suit, ui.sweep);
   const handDeltas = ui.options.handDeltas;
-  const hasServerScores = Array.isArray(handDeltas) && handDeltas.length === 5 && handDeltas.every(Number.isSafeInteger);
+  const hasServerScores = hasHandDeltas(handDeltas);
   const currentRules = board?.scoringVersion === TABLE_SCORING_VERSION || ui.options.resumed || hasServerScores;
   let net = chipDelta;
   if (outcome.role && net == null) {
@@ -685,7 +689,7 @@ function resultControls(view, ui) {
   if (currentRules) {
     const {base, bonuses, unit} = settlementDetails(result, view.bid.suit);
     const factors = bonuses.map(name => {
-      const label = name === "노기루다" ? '<abbr title="노기루다">NT</abbr>' : name;
+      const label = name === "노기루다" ? '<abbr title="노기루다">NT</abbr>' : name === "백런" ? "빽런" : name;
       return `<span class="g-factor">×2 <small>(${label})</small></span>`;
     });
     const equation = bonuses.length
@@ -694,9 +698,8 @@ function resultControls(view, ui) {
     breakdown = `<div class="g-settlement-formula"><span>여당 기준점수</span><div class="g-equation">${equation}</div></div>`;
   }
   const role = outcome.role === '주공' ? (result.friend == null ? '주공 ×4' : '주공 ×2') : outcome.role;
-  const roleLabel = role ? `<small>내 역할 · ${role}</small>` : "";
   const payout = Number.isSafeInteger(net) ? `<div class="g-result-score g-my-settlement" data-sign="${Math.sign(net)}">
-    <span>${chipDelta == null ? "내 정산" : "내 칩 증감"}</span><strong>${signedScore(net)}</strong><span>${chipDelta == null ? "점" : "칩"}</span></div>` : "";
+    <span>${chipDelta == null ? "내 정산" : "내 칩 증감"}${role ? ` <small>(${role})</small>` : ""}</span><strong>${signedScore(net)}</strong><span>${chipDelta == null ? "점" : "칩"}</span></div>` : "";
   let next = "";
   if (ui.options.departing) next = '<p role="status">나가기 예약에 따라 잠시 후 로비로 돌아갑니다.</p>';
   else if (!ui.options.resumed) {
@@ -711,7 +714,7 @@ function resultControls(view, ui) {
     standings = {members:deltas.map((lastDelta,seat)=>({seat,name:nameAtSeat(ui,seat),lastDelta}))};
   }
   const table = board?.complete ? "" : scoreTable(standings,seat,{roundResult:true,title:"플레이어 성적"});
-  return `<div class="g-outcome-heading"${outcome.role ? ` data-won="${outcome.won}"` : ""}><h2>${outcome.title}</h2>${roleLabel}</div>
+  return `<div class="g-outcome-heading"${outcome.role ? ` data-won="${outcome.won}"` : ""}><h2>${outcome.title}</h2></div>
     ${next ? `<div class="g-result-actions">${next}</div>` : ""}
     ${payout}<p>공약 ${escapeHtml(result.target)}점 ${result.won ? "달성" : "실패"} · 여당 ${escapeHtml(result.points)}점 · 야당 ${20 - result.points}점</p>
     ${claimResult}${breakdown}${table}`;
@@ -778,7 +781,7 @@ function mountTable(root) {
           <button type="button" class="g-choice-shortcut" data-do="jump-choice" aria-controls="g-hand-decision" hidden></button></section>
         <p class="g-table-notice" role="status" hidden></p>
         <section class="g-hand"></section>
-        <section class="g-round-result g-action" aria-label="이번 판 결과" hidden></section>
+        <section class="g-round-result g-action" aria-label="판 결과" hidden></section>
         <section class="g-match-final" aria-label="경기 최종 결과" hidden></section>
       </div>
       <section class="g-public-audience public-audience" hidden></section>
@@ -857,7 +860,7 @@ function redraw(ui, newDeal = false) {
     const {suit, points} = view.bid;
     tag.innerHTML = `<span class="g-contract-prefix">공약 </span>${suitMark(suit)} ${suitInfo[suit][1]} <strong>${escapeHtml(points)}점</strong>`;
   } else if (finished) {
-    tag.textContent = handOutcome(view.result, options.settlementSeat ?? view.seat).title;
+    tag.textContent = handOutcome(view.result, options.settlementSeat ?? view.seat, view.bid.suit, ui.sweep).title;
   } else {
     tag.textContent = view.phase === "result" ? (view.result.setting ? "세팅 종료" : "10트릭 완료") : "경매 " + view.bidHistory.length + "회";
   }
@@ -1168,8 +1171,8 @@ export function rulesContent(rules = DEFAULT_RULES, scoringVersion = TABLE_SCORI
     ? "여당이 공약에 성공하면 기본점수는 2 × (최종 공약 − 13) + (여당 득점 − 최종 공약)입니다. 실패하면 모자란 점수만큼 잃습니다. 15점 공약에서 17점이면 +6점, 14점이면 −1점입니다."
     : "이 방에서는 최종 공약에서 10을 뺀 값을 한 몫으로 정해 성공하면 더하고 실패하면 뺍니다.";
   const scoring = hasStandings
-    ? contractRule + " 런(여당 20점), 백런(야당 10점 이상), 노기루다, 노프렌드는 각각 2배이며 겹치면 곱합니다. 새 테이블에서는 모두 0점으로 시작하며 개인 점수는 판마다 누적됩니다."
-    : "여당이 성공하면 획득 점수에서 10을 뺀 값, 실패하면 공약에 모자란 값으로 정산합니다. 런(여당 20점), 백런(공약보다 10점 이상 부족), 노기루다, 노프렌드는 각각 2배입니다.";
+    ? contractRule + " 런(여당 20점), 빽런(야당 10점 이상), 노기루다, 노프렌드는 각각 2배이며 겹치면 곱합니다. 새 테이블에서는 모두 0점으로 시작하며 개인 점수는 판마다 누적됩니다."
+    : "여당이 성공하면 획득 점수에서 10을 뺀 값, 실패하면 공약에 모자란 값으로 정산합니다. 런(여당 20점), 빽런(공약보다 10점 이상 부족), 노기루다, 노프렌드는 각각 2배입니다.";
   const jokerTiming = rules.allowLastJoker
     ? "첫 트릭에서는 조커가 가장 약하고, 조커로 시작하면 두 번째 카드가 따를 무늬를 정합니다. 2~10번째 트릭에서는 조커가 기루다를 이기며, 조커로 시작하는 사람이 따를 무늬를 부릅니다."
     : "첫 트릭과 마지막 트릭에서 조커는 가장 약합니다. 이때 조커로 시작하면 두 번째 카드가 따를 무늬를 정합니다. 2~9번째 트릭에서 조커로 시작하면 원하는 무늬를 부릅니다.";

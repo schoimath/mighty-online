@@ -9,12 +9,16 @@ test('each seat sees its own victory or defeat even when everyone settles zero p
   for (const [seat,role] of [[0,'주공'],[1,'프렌드'],[4,'야당']]) {
     for (const result of [round(13,13),round(14,15),round(17,15)]) {
       const won = (seat === result.declarer || seat === result.friend) === result.won;
-      assert.deepEqual(handOutcome(result, seat),{title:won ? '이번 판 승리' : '이번 판 패배',role,won});
+      assert.deepEqual(handOutcome(result, seat, 'H', null),{title:won ? '승리' : '패배',role,won});
     }
   }
-  assert.equal(handOutcome(round(12,14,null),1).title,'이번 판 승리');
-  assert.deepEqual(handOutcome(round(12,14,null),-1),{title:'야당 승리',role:null,won:null});
-  assert.deepEqual(handOutcome(round(15,14,null),-1),{title:'여당 승리',role:null,won:null});
+  assert.equal(handOutcome(round(12,14,null),1,'H',null).title,'승리 (노프)');
+  assert.deepEqual(handOutcome(round(12,14,1),-1,'H',null),{title:'야당 승리',role:null,won:null});
+  assert.deepEqual(handOutcome(round(15,14,null),-1,'H',null),{title:'여당 승리 (노프)',role:null,won:null});
+  assert.equal(handOutcome(round(20,15,null),0,'N','run').title,'승리 (노기 · 노프 · 런)');
+  assert.equal(handOutcome(round(10,15,null),0,'N','backrun').title,'패배 (노기 · 노프 · 빽런)');
+  assert.equal(handOutcome(round(20),3,'H','run').title,'패배 (런)');
+  assert.equal(handOutcome(round(15),0,'N',null).title,'승리 (노기)');
 });
 
 test('the result scoreboard marks the original player when an AI has taken the same seat', () => {
