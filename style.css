@@ -188,7 +188,7 @@ button.seat-place:hover { border-color:#47744d; background:#ecf4e8; }
 }
 .room-rule-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px 2px; }
 .room-rule-cell {
-  position: relative; display: grid; grid-template-rows: 1fr auto; justify-items: center; min-width: 0;
+  position: relative; display: grid; grid-template: 1fr auto / minmax(0, 1fr); justify-items: center; min-width: 0;
 }
 .room-rule-label {
   padding: 3px 1px; border: 0; background: transparent; color: #34543e;
@@ -196,7 +196,7 @@ button.seat-place:hover { border-color:#47744d; background:#ecf4e8; }
   text-decoration: underline dotted #90a18b; text-underline-offset: 3px; cursor: help;
 }
 .room-rule-cell .rule-row { justify-content: center; min-height: 34px; padding: 0; cursor: auto; }
-.room-rule-cell .rule-row select { min-width: 0; padding-block: 4px; cursor: pointer; }
+.room-rule-cell .rule-row select { min-width: 0; padding: 4px 18px 4px 5px; cursor: pointer; }
 .room-rule-value { color: #294d37; font-size: .86rem; }
 .room-rule-tip {
   display: none; position: absolute; bottom: calc(100% + 3px); inset-inline-start: 0; z-index: 3;
