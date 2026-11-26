@@ -1,12 +1,63 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {createGame as rawDeal, getView as rawView, pointsIn} from '../engine.js';
+import {createGame as rawDeal, DECK, getView as rawView, pointsIn} from '../engine.js';
 import {rngFor} from '../lab/game.js';
-import {applyAction, createGame, getView} from '../table-deal.js';
+import {applyAction, createGame, getSpectatorView, getView} from '../table-deal.js';
 
 function pass(game, random) {
   applyAction(game, game.turn, {type: 'pass'}, random);
 }
+
+function winAuction(allowFirstFriend) {
+  const game = createGame({random:rngFor(317), rules:{allowFirstFriend}});
+  applyAction(game, 0, {type:'bid', suit:'H', points:14});
+  for (let seat = 1; seat < 5; seat++) pass(game);
+  return game;
+}
+
+test('preparing the contract, burial and friend matches legacy turns and preserves both private bot observations', () => {
+  const original = winAuction(true), hand = original.hands[0];
+  const cards = hand.slice(0,3), contract = {suit:'D', points:16};
+  const calls = [{kind:'card',card:original.hands[1][0]}, {kind:'card',card:cards[0]},
+    {kind:'card',card:hand[3]}, {kind:'first'}, {kind:'none'}];
+  for (const friend of calls) {
+    const legacy = structuredClone(original), combined = structuredClone(original);
+    const legacyHistory = [], combinedHistory = [];
+    applyAction(legacy, 0, {type:'discard', cards, contract}, undefined, legacyHistory);
+    applyAction(legacy, 0, {type:'friend', ...friend}, undefined, legacyHistory);
+    const action = {type:'prepare', cards, contract, friend};
+    applyAction(combined, 0, action, undefined, combinedHistory);
+    assert.deepEqual(combined, legacy);
+    assert.deepEqual(combinedHistory, legacyHistory);
+    const [burial, call] = combinedHistory;
+    assert.equal(burial.observation.phase, 'discard');
+    assert.deepEqual(burial.action.contract, {seat:0,...contract});
+    assert.equal(call.observation.phase, 'friend');
+    assert.deepEqual(call.observation.hand, hand.slice(3));
+    assert.deepEqual(call.observation.discarded, cards);
+    assert.equal(combined.phase, 'play');
+    assert.equal(combined.turn, 0);
+    assert.throws(() => applyAction(combined, 0, action, undefined, combinedHistory));
+    assert.deepEqual(combinedHistory, legacyHistory);
+    assert.deepEqual(combined, legacy);
+  }
+});
+
+test('discard choices are private and invalid combined preparations leave the original turn and memory intact', () => {
+  const game = winAuction(false), cards = game.hands[0].slice(0,3);
+  const choices = getView(game,0).choices.discardFriends;
+  assert.deepEqual(choices, [...DECK.map(card => ({kind:'card',card})), {kind:'none'}]);
+  assert.equal(getView(game,1).choices.discardFriends, undefined);
+  assert.equal(getSpectatorView(game).choices.discardFriends, undefined);
+  const action = {type:'prepare', cards, friend:{kind:'none'}};
+  const before = structuredClone(game), history = [];
+  for (const [seat, fields] of [[0,{friend:{kind:'first'}}], [0,{friend:{kind:'card',card:'XX'}}],
+    [0,{friend:undefined}], [0,{cards:[cards[0],cards[0],cards[1]]}], [0,{contract:{suit:'D',points:15}}], [1,{}]]) {
+    assert.throws(() => applyAction(game, seat, {...action, ...fields}, undefined, history));
+    assert.deepEqual(game, before);
+    assert.deepEqual(history, []);
+  }
+});
 
 test('all five original ten-card hands must contain a point; joker alone cannot prevent a misdeal', () => {
   const seeds = [99, 575, 192, 84, 66];

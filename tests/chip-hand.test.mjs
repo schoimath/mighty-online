@@ -126,6 +126,38 @@ test('successive room hosts keep public projections, immutable wallets and only 
   assert.equal(t.charges(),0);
 });
 
+test('a chip hand commits burial and friend once and only publishes the finished call', async () => {
+  const t = table(), seats = [host,guest,other,crypto.randomUUID(),crypto.randomUUID()];
+  const spec = {...game, seats, models:seats.map(() => 'recurrent_balanced'), rules:{allowFirstFriend:false}};
+  for (const id of seats) await t.call(id,'ready',spec);
+  await t.call(host,'start',spec);
+  await t.call(host,'act',{revision:0, action:{type:'bid',suit:'H',points:14}});
+  for (const id of seats.slice(1)) await t.call(id,'act',{revision:t.row().revision, action:{type:'pass'}});
+  const declarer = await t.call(host,'view'), revision = declarer.revision;
+  assert.ok(declarer.game.choices.discardFriends.some(f => f.kind === 'none'));
+  assert.equal(declarer.publicGame.choices.discardFriends,undefined);
+  const cards = declarer.game.hand.slice(0,3), contract = {suit:'D',points:16};
+  const before = t.row(), action = {type:'prepare', cards, contract, friend:{kind:'first'}};
+  await assert.rejects(t.call(host,'act',{revision,action}),/프렌드/);
+  assert.deepEqual(t.row(),before);
+  action.friend = {kind:'card',card:before.state.round.hands[1][0]};
+  const result = await t.call(host,'act',{revision,action});
+  assert.equal(result.revision, revision+1);
+  assert.equal(result.game.phase,'play');
+  assert.deepEqual(result.publicGame.call,action.friend);
+  assert.deepEqual(result.publicGame.discarded,[]);
+  assert.equal(result.publicGame.friend,null);
+  assert.deepEqual(result.game.discarded,cards);
+  assert.deepEqual(result.game.bid,{seat:0,...contract});
+  assert.deepEqual(result.seatBalances,declarer.seatBalances);
+  const history = t.row().state.history[0];
+  assert.deepEqual(history.map(entry => entry.observation.phase),['bid','discard','friend']);
+  assert.deepEqual(history.at(-1).observation.hand,result.game.hand);
+  assert.equal((await t.call(host,'act',{revision,action})).revision,result.revision);
+  assert.deepEqual(t.row().state.history[0],history);
+  assert.equal(t.charges(),0);
+});
+
 test('server plays abandoned hands to completion and only its terminal deltas are settled', async () => {
   const t = table();
   for (const id of [host,guest]) await t.call(id,'ready',game);

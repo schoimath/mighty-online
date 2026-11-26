@@ -1,5 +1,6 @@
-import {applyAction as applyEngineAction, createGame as deal, getView as project, pointsIn} from './engine.js';
+import {applyAction as applyEngineAction, botObservation, createGame as deal, getView as project, pointsIn} from './engine.js';
 import {canDeclareSetting, finishSettingFriendTrick} from './table-setting.js';
+import {withJokerStatus} from './table-joker.js';
 
 export {canDeclareSetting, resolveSetting} from './table-setting.js';
 
@@ -31,7 +32,7 @@ export function createGame(options = {}) {
   return checkOpeningHands(deal({...options, random}), random);
 }
 
-export function applyAction(state, seat, action, randomSource) {
+function applySingleAction(state, seat, action, randomSource) {
   if (state.settingAwaitingFriend && state.trick.length === 4) {
     return finishSettingFriendTrick(state, seat, action);
   }
@@ -46,8 +47,36 @@ export function applyAction(state, seat, action, randomSource) {
   return Object.assign(state, next.dealNo !== state.dealNo ? checkOpeningHands(next, random) : next);
 }
 
+export function applyAction(state, seat, action, randomSource, history) {
+  if (action?.type === 'prepare') {
+    if (state.phase !== 'discard') throw new Error('지금은 카드를 묻을 차례가 아닙니다.');
+    // Both choices and both recurrent observations commit together. The second
+    // choice must be validated against the revised contract and the ten-card hand.
+    const next = structuredClone(state);
+    const entries = history && [];
+    applyAction(next, seat, {type:'discard', cards:action.cards, contract:action.contract}, randomSource, entries);
+    applyAction(next, seat, {type:'friend', kind:action.friend?.kind, card:action.friend?.card}, randomSource, entries);
+    if (history) history.push(...entries);
+    return Object.assign(state, next);
+  }
+  const observation = history && withJokerStatus(botObservation(state, seat));
+  const result = applySingleAction(state, seat, action, randomSource);
+  if (observation && state.dealNo === observation.dealNo) {
+    const entry = {observation};
+    if (observation.phase === 'discard') entry.action = {contract:{...state.bid}};
+    history.push(entry);
+  }
+  return result;
+}
+
 export function getView(state, seat) {
-  return withTableRules(state, project(state, seat));
+  const view = project(state, seat);
+  if (view.choices.discard) {
+    // The presence of this private choice list advertises the atomic command
+    // to new clients. Legacy clients continue to submit the two choices separately.
+    view.choices.discardFriends = project({...state, phase:'friend'}, seat).choices.friends;
+  }
+  return withTableRules(state, view);
 }
 
 export function getSpectatorView(state) {

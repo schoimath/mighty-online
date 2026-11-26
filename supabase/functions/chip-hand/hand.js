@@ -105,20 +105,15 @@ function move(row, action, now, memory = null, botTime = now) {
   const s = row.state, r = s.round, seat = r.turn, before = r.dealNo;
   const name = nameAt(row, seat);
   const track = !s.bots[seat] && hasSeatMemory(s.models[seat]);
-  const observation = track ? withJokerStatus(botObservation(r, seat)) : null;
   if (action?.type === 'claim') {
     check(canDeclareSetting(r, seat), '현재 세팅을 선언할 수 없습니다.');
     resolveSetting(r, seat, analyzeSetting(r));
   } else {
-    applyAction(r, seat, action);
+    applyAction(r, seat, action, undefined, track ? s.history[seat] : undefined);
     if (r.dealNo !== before) {
       s.memory.fill(null);
       s.history = Array.from({length:5}, () => []);
-    } else if (track) {
-      const entry = {observation};
-      if (observation.phase === 'discard') entry.action = {contract:{...r.bid}};
-      s.history[seat].push(entry);
-    } else if (memory !== null) s.memory[seat] = memory;
+    } else if (!track && memory !== null) s.memory[seat] = memory;
     if (action.type === 'bid' || action.type === 'pass') {
       const entry = r.bidHistory.at(-1);
       if (entry) entry.name = name;

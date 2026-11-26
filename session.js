@@ -595,22 +595,16 @@ export class HostSession {
     // Keep only the departing player's own decision history for a possible
     // mid-round recurrent substitute. These records never enter a room view.
     const track = (this.publicRoom || seat !== this.hostSeat) && !this.players[seat].bot && hasSeatMemory(this.botModels[seat]);
-    const observation = track ? withJokerStatus(botObservation(this.round, seat)) : null;
     // Older clients still offer a call after everyone has seen the Joker.
     if (action?.type === 'play' && action.jokerCall === true && this.round.phase === 'play' &&
         jokerWasPlayed(this.round) && legalPlays(this.round, this.round.hands[seat]).some(move =>
           move.jokerCall && move.card === action.card && move.suit === action.suit)) {
       action = {...action, jokerCall:false};
     }
-    applyAction(this.round, seat, action);
+    applyAction(this.round, seat, action, undefined, track ? this.#guestDecisions[seat] : undefined);
     this.#skipBotClaim = false;
     if (this.round.dealNo !== dealNo) this.#resetBotMemory();
-    else if (track) {
-      const entry = {observation};
-      if (observation.phase === 'discard') entry.action = {contract:{...this.round.bid}};
-      this.#guestDecisions[seat].push(entry);
-    }
-    else if (memory != null) this.#botMemory[seat] = structuredClone(memory);
+    else if (!track && memory != null) this.#botMemory[seat] = structuredClone(memory);
     this.#recordResult();
     if (action.type === 'bid' || action.type === 'pass') {
       const entry = this.round.bidHistory.at(-1);

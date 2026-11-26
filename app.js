@@ -1118,7 +1118,7 @@ function draw() {
           if (hand === chipReader) toast(error.message);
           return false;
         });
-        if (action.type === 'play') return receipt;
+        if (action.type === 'play' || action.type === 'prepare') return receipt;
         void receipt.then(() => { if (hand === chipReader) draw(); });
         return true;
       }

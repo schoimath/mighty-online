@@ -19,6 +19,7 @@ const cache = new WeakMap();
 const TRICK_HOLD_MS = 810;
 const COLLECT_MS = 390;
 const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+const phoneLayout = window.matchMedia("(max-width: 729px), (pointer: coarse) and (orientation: landscape) and (max-height: 540px)");
 const mightyBadge = '<b class="g-mighty-tag" aria-hidden="true">마이티</b>';
 const jokerCallBadge = '<b class="g-joker-call-tag" aria-hidden="true">조커콜</b>';
 
@@ -129,6 +130,11 @@ function suitPicker(label, field, suits, current) {
 function button(label, name, enabled = true, style = "primary") {
   return `<button type="button" class="g-btn g-${style}" data-do="${name}"${enabled ? "" : " disabled"}>${label}</button>`;
 }
+function preferredFriendCard(trump, ownCards) {
+  const candidates = [mighty(trump), "JK"];
+  if (trump !== "N") candidates.push(trump + "A");
+  return candidates.find(card => !ownCards.has(card));
+}
 function updateDefaults(ui, view) {
   const signature = [view.phase, view.seat, view.turn, view.dealNo, view.trickNo, view.hand.join("."), view.bid?.points, view.bid?.suit].join("|");
   if (ui.signature === signature) return;
@@ -136,6 +142,8 @@ function updateDefaults(ui, view) {
   if (claimDialog?.open) claimDialog.close();
   ui.signature = signature;
   ui.selected = [];
+  ui.prepareFriend = null;
+  ui.preparingMove = false;
   ui.pendingCard = null;
   const bids = view.choices.bids || [];
   ui.bidSuit = longestSuit(view.hand, [...new Set(bids.map(bid => bid.suit))]);
@@ -146,9 +154,7 @@ function updateDefaults(ui, view) {
   if (friends.length) {
     const trump = view.bid.suit;
     const own = new Set([...view.hand, ...view.discarded]);
-    const candidates = [mighty(trump), "JK"];
-    if (trump !== "N") candidates.push(trump + "A");
-    const preferred = candidates.find(card => !own.has(card));
+    const preferred = preferredFriendCard(trump, own);
     ui.friendKind = preferred ? "card" : "none";
     // Keep a valid card ready if the declarer switches back from no-friend.
     const available = friends.filter(f => f.kind === "card" && !own.has(f.card));
@@ -400,12 +406,15 @@ function renderHand(ui, newDeal) {
   else if (markup !== ui.decisionHtml || decision.querySelector(".g-bid-actions")) decision.innerHTML = markup;
   ui.decisionHtml = markup;
   decision.hidden = view.phase !== "bid" && !markup;
+  if (combinedPreparation(view)) {
+    for (const field of decision.querySelectorAll("select")) field.disabled = ui.preparingMove;
+  }
   shortcut.hidden = !markup || ui.decisionInView;
   if (markup) shortcut.textContent = {bid:"공약 선택 ↓", discard:"묻을 패 선택 ↓", friend:"프렌드 선택 ↓"}[view.phase];
   if (newDeal) row.replaceChildren();
   const existing = new Map(Array.from(row.children, el => [el.dataset.card, el]));
   for (const [card, el] of existing) if (!cards.includes(card)) el.remove();
-  const interactive = view.turn === view.seat && !ui.playPending && !ui.claimSubmitting && !view.claimPending &&
+  const interactive = view.turn === view.seat && !ui.preparingMove && !ui.playPending && !ui.claimSubmitting && !view.claimPending &&
     (view.phase === "discard" || view.phase === "play");
   const settings = hand.querySelector(".g-play-settings");
   const settingsHtml = interactive && view.phase === "play" ? specialPlaySettings(view, ui) : "";
@@ -514,14 +523,56 @@ function bidControls(view, ui) {
   }
   return `<h2>공약을 정하세요</h2><p>${hint}</p>${suitPicker("기루다","bidSuit",suits,ui.bidSuit)}${select("공약 점수", "bidPoints", points, ui.bidPoints)}`;
 }
+function combinedPreparation(view) {
+  return phoneLayout.matches && view.phase === "discard" && view.seat >= 0 && view.turn === view.seat &&
+    Boolean(view.choices.discardFriends?.length);
+}
+const callValue = call => call.kind === "card" ? call.card : call.kind;
+function preparationCall(ui, contract) {
+  const options = ui.view.choices.discardFriends;
+  const value = ui.prepareFriend ?? preferredFriendCard(contract.suit, new Set(ui.view.hand)) ?? "none";
+  return options.find(call => callValue(call) === value);
+}
+function preparationFriends(options, trump, current) {
+  function option(value, label) {
+    return `<option value="${escapeHtml(value)}"${value === current ? " selected" : ""}>${escapeHtml(label)}</option>`;
+  }
+  const allowed = new Set(options.map(callValue));
+  const special = [[mighty(trump), "마이티 프렌드"], ["JK", "조커 프렌드"]];
+  if (trump !== "N") special.push([trump + "A", "기루다 A 프렌드"]);
+  special.push(["first", "초구 프렌드"], ["none", "노프렌드"]);
+  let groups = '<optgroup label="프렌드 선택">' + special.filter(([value]) => allowed.delete(value))
+    .map(([value, label]) => option(value, label)).join("") + '</optgroup>';
+  for (const suit of ["S","H","D","C"]) {
+    const cards = DECK.filter(card => card[0] === suit && allowed.has(card)).reverse();
+    if (!cards.length) continue;
+    const [symbol, name] = suitInfo[suit];
+    groups += `<optgroup label="${name}">${cards.map(card => option(card, symbol + " " + name + " " + card.slice(1))).join("")}</optgroup>`;
+  }
+  return '<label class="g-field"><span>프렌드</span><select data-field="prepareFriend">' + groups + '</select></label>';
+}
 function discardControls(view, ui) {
   const contracts = view.choices.contracts || [];
+  const combined = combinedPreparation(view);
+  const current = contracts[ui.contractIndex] ?? view.bid;
   let revise = "";
   if (contracts.length > 1) {
-    const current = contracts[ui.contractIndex];
     const suits = [...new Set(contracts.map(c => c.suit))];
     const points = contracts.flatMap((c,i) => c.suit === current.suit ? [[i,c.points + "점"]] : []);
-    revise = suitPicker("최종 기루다","contractSuit",suits,current.suit) + select("최종 공약 점수","contractIndex",points,ui.contractIndex);
+    const suitField = combined ? select("기루다", "contractSuit", suits.map(s => [s, suitInfo[s].join(" ")]), current.suit)
+      : suitPicker("최종 기루다","contractSuit",suits,current.suit);
+    revise = suitField + select(combined ? "공약 점수" : "최종 공약 점수","contractIndex",points,ui.contractIndex);
+  }
+  if (combined) {
+    const call = preparationCall(ui, current);
+    const ownCard = call?.kind === "card" && view.hand.includes(call.card);
+    const warning = ownCard ? (ui.selected.includes(call.card) ? "묻을 카드라 노프렌드가 됩니다." : "내 손패라 노프렌드가 됩니다.") : "";
+    const ready = ui.selected.length === 3 && Boolean(call) && !ui.preparingMove;
+    const label = ui.preparingMove ? "확정 중…" : `묻기 · 프렌드 확정 (${ui.selected.length}/3)`;
+    return '<h2>묻을 카드 3장 선택</h2>' + (revise ? '<div class="g-combined-contract">' + revise + '</div>' : '') +
+      '<div class="g-combined-friend">' + preparationFriends(view.choices.discardFriends, current.suit, call && callValue(call)) + '</div>' +
+      (warning ? `<p class="g-own-friend-warning">${warning}</p>` : '') +
+      button(label, "discard-friend", ready, "primary g-combined-submit");
   }
   return `<h2>묻을 카드 3장을 고르세요</h2><p>바닥패를 합친 13장 중 3장을 고르세요. 묻은 점수는 주공 팀이 가져갑니다.</p>${revise}${button(`3장 묻기 · ${ui.selected.length}/3`, "discard", ui.selected.length === 3)}`;
 }
@@ -868,7 +919,9 @@ function redraw(ui, newDeal = false) {
   screen.dataset.phase = view.phase;
   screen.toggleAttribute("data-seated", view.seat >= 0);
   screen.toggleAttribute("data-preparing", preparing);
-  if (enteringDecision && window.matchMedia("(max-width: 729px), (pointer: coarse) and (orientation: landscape) and (max-height: 540px)").matches) {
+  const combined = combinedPreparation(view);
+  screen.toggleAttribute("data-combined-prep", combined);
+  if (enteringDecision && phoneLayout.matches) {
     root.querySelector(".g-main").scrollTop = 0;
   }
   updateTurnCountdown(ui);
@@ -881,7 +934,7 @@ function redraw(ui, newDeal = false) {
   const board = options.scoreboard;
   const finished = view.phase === "result" && board?.complete;
   root.querySelector("h1").textContent = finished ? `${board.rounds}판 경기 종료`
-    : view.phase === "play" ? `${view.trickNo}번째 트릭` : labels[view.phase];
+    : view.phase === "play" ? `${view.trickNo}번째 트릭` : combined ? "주공 준비" : labels[view.phase];
   const progress = root.querySelector(".g-match-progress");
   progress.hidden = !board?.roundLimit || finished;
   if (!progress.hidden) {
@@ -904,7 +957,7 @@ function redraw(ui, newDeal = false) {
   const showContract = view.phase !== "bid" && view.phase !== "result";
   tag.classList.toggle("g-contract-tag", showContract);
   if (showContract) {
-    const {suit, points} = view.bid;
+    const {suit, points} = combined ? view.choices.contracts[ui.contractIndex] ?? view.bid : view.bid;
     tag.innerHTML = `<span class="g-contract-prefix">공약 </span>${suitMark(suit)} ${suitInfo[suit][1]} <strong>${escapeHtml(points)}점</strong>`;
   } else if (finished) {
     tag.textContent = handOutcome(view.result, options.settlementSeat ?? view.seat, view.bid.suit, ui.sweep).title;
@@ -948,8 +1001,13 @@ function submit(ui, kind) {
     const bid = view.choices.bids.find(b => b.points === ui.bidPoints && b.suit === ui.bidSuit);
     return bid && { type: "bid", ...bid };
   }
-  if (kind === "discard" && ui.selected.length === 3) {
+  if ((kind === "discard" || kind === "discard-friend") && ui.selected.length === 3 && view.phase === "discard") {
     const contract = view.choices.contracts?.[ui.contractIndex];
+    if (kind === "discard-friend") {
+      if (!combinedPreparation(view) || !contract) return;
+      const friend = preparationCall(ui, contract);
+      return friend && {type:"prepare", cards:[...ui.selected], contract, friend};
+    }
     return { type: "discard", cards: [...ui.selected], ...(contract ? { contract } : {}) };
   }
   if (kind === "friend") {
@@ -958,6 +1016,7 @@ function submit(ui, kind) {
   }
 }
 function bind(ui) {
+  ui.onPhoneLayout = () => { if (ui.view?.phase === "discard") redraw(ui); };
   ui.root.addEventListener("animationend", event => {
     if (event.animationName === "g-send-card-back") event.target.remove();
     if (event.animationName === "g-deal-card") event.target.closest(".g-hand-card")?.classList.remove("g-deal");
@@ -969,7 +1028,7 @@ function bind(ui) {
   ui.root.addEventListener("animationcancel", event => {
     if (event.animationName === "g-play-card") event.target.classList.remove("g-play-enter");
   });
-  ui.root.addEventListener("click", event => {
+  ui.root.addEventListener("click", async event => {
     if (!ui.root.querySelector(".g-screen")) return;
     const el = event.target.closest("button");
     if (!el || el.disabled) return;
@@ -1007,8 +1066,21 @@ function bind(ui) {
     if (kind === "toggle-next-round") return ui.options.onToggleNextRound?.();
     if (kind === "replay-setup") return ui.options.onReplaySetup?.();
     if (kind && ui.view.seat === ui.view.turn) {
+      if (ui.preparingMove) return;
       const action = submit(ui, kind);
-      if (action) ui.options.onAction(action);
+      if (!action) return;
+      if (action.type !== "prepare") return ui.options.onAction(action);
+      const signature = ui.signature;
+      ui.preparingMove = true;
+      redraw(ui);
+      try {
+        await ui.options.onAction(action);
+      } finally {
+        if (ui.signature === signature && ui.preparingMove) {
+          ui.preparingMove = false;
+          redraw(ui);
+        }
+      }
     }
   });
   ui.root.addEventListener("keydown", event => {
@@ -1124,6 +1196,7 @@ export function clearGame(container) {
   clearTimeout(ui.countdownTimer);
   clearTimeout(ui.turnTimer);
   ui.decisionObserver?.disconnect();
+  phoneLayout.removeEventListener("change", ui.onPhoneLayout);
   ui.auctionTimer = null;
   ui.resultWasShown = false;
   ui.view = ui.latest = ui.resolving = ui.signature = ui.playPending = null;
@@ -1150,6 +1223,7 @@ export function renderGame(container, publicView, options = {}) {
   }
   if (!container.firstElementChild) {
     mountTable(container);
+    phoneLayout.addEventListener("change", ui.onPhoneLayout);
     ui.auctionMarkup = ui.centerMarkup = ui.settingsHtml = ui.finalHtml = ui.recordsHtml = ui.resultHtml = null;
   }
   publicView = withRememberedJoker(publicView, ui.latest);
