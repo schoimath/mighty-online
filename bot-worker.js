@@ -1,4 +1,4 @@
-import {decideTableTurn, DEFAULT_MODEL} from './lab/table-agents.js?v=1.1.20261126143510';
+import {decideTableTurn, DEFAULT_MODEL} from './lab/table-agents.js?v=1.1.20261126144304';
 
 self.onmessage = ({data}) => {
   self.postMessage({revision:data.revision, modelId:data.modelId ?? DEFAULT_MODEL, ...decideTableTurn(data)});
