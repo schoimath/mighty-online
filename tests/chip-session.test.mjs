@@ -242,3 +242,75 @@ test('ordinary practice deals remain local with a real hand and working turn con
   practice.runBot({type:'pass'});
   assert.equal(practice.hostView().game.bidHistory.length,2);
 });
+
+test('a revision hint received during a read bypasses the human turn polling delay once', async t => {
+  t.mock.timers.enable({apis:['Date','setTimeout'],now:1000});
+  const handId = crypto.randomUUID();
+  const initial = {handId,seat:-1,revision:1,dueAt:200000,game:{phase:'play'}};
+  let calls = 0, finishRead;
+  const reader = followChipHand(() => {
+    calls++;
+    return calls === 1 ? new Promise(resolve => { finishRead = resolve; }) : {...initial, revision:2};
+  }, handId, 'watch', () => {}, assert.fail, initial);
+  try {
+    reader.start();
+    t.mock.timers.tick(0);
+    reader.wake(2);
+    reader.wake(2);
+    finishRead(initial);
+    await Promise.resolve();
+    t.mock.timers.tick(0);
+    assert.equal(calls,2);
+    await Promise.resolve();
+    reader.wake(2);
+    t.mock.timers.tick(3199);
+    assert.equal(calls,2, 'already delivered revisions should leave the ordinary polling schedule intact');
+    t.mock.timers.tick(1);
+    assert.equal(calls,3);
+  } finally { reader.close(); }
+});
+
+test('a host pace edit and a card submitted together use successive revisions', async () => {
+  const handId = crypto.randomUUID(), calls = [], events = [];
+  const first = {handId,revision:4,pace:'normal',seat:0,game:{phase:'play',turn:0},publicGame:{seat:-1}};
+  const paced = {...first, revision:5, pace:'fast'};
+  const played = {...paced, revision:6, game:{phase:'play',turn:1}};
+  let finishPace;
+  const reader = followChipHand(async req => {
+    calls.push(req);
+    if (req.op === 'pace') return new Promise(resolve => { finishPace = resolve; });
+    assert.equal(req.op,'act');
+    return played;
+  },handId,'view',(data, wallets, paceOnly) => events.push([data.revision,paceOnly]),assert.fail,first);
+  try {
+    reader.start();
+    const changing = reader.changePace('fast');
+    const moving = reader.act({type:'pass'});
+    await Promise.resolve();
+    await Promise.resolve();
+    assert.deepEqual(calls,[{op:'pace',pace:'fast',handId}]);
+    finishPace(paced);
+    await Promise.all([changing,moving]);
+    assert.deepEqual(calls[1],{op:'act',handId,revision:5,action:{type:'pass'}});
+    assert.deepEqual(events,[[4,false],[5,true],[6,false]]);
+  } finally { reader.close(); }
+});
+
+test('a player move retries the host pace revision without repeating a played card', async () => {
+  const handId = crypto.randomUUID(), actionRevisions = [];
+  const initial = {handId,revision:1,pace:'normal',seat:2,game:{phase:'play',turn:2,hand:['H8']}};
+  const paceReply = {...initial,revision:2,pace:'fast'};
+  const actionReply = {...paceReply,revision:3,game:{phase:'play',turn:3,hand:[]}};
+  const reader = followChipHand(async req => {
+    assert.equal(req.op, 'act');
+    actionRevisions.push(req.revision);
+    return actionRevisions.length === 1 ? paceReply : actionReply;
+  },handId,'view',() => {},assert.fail,initial);
+  try {
+    reader.start();
+    await assert.rejects(reader.changePace('slow'), /방장/);
+    await reader.act({type:'play',card:'H8'});
+    assert.deepEqual(actionRevisions,[1,2]);
+    assert.equal(reader.current,actionReply);
+  } finally { reader.close(); }
+});

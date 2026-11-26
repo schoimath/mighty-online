@@ -3,7 +3,7 @@ import {DECK, DEFAULT_RULES, leadSuit, mighty} from "./engine.js";
 import {VERSION} from "./release.js";
 import {jokerWasPlayed, withJokerStatus} from "./table-joker.js";
 import {playTableSound, soundControl, toggleSound} from "./sound.js";
-import {AUCTION_BEAT_MS, FRIEND_ANNOUNCEMENT_MS, paceMultiplier, tableDelay} from "./table-timing.js";
+import {AUCTION_BEAT_MS, FRIEND_ANNOUNCEMENT_MS, normalizeGameSpeed, paceMultiplier, tableDelay} from "./table-timing.js";
 import {settlementDetails, TABLE_SCORING_VERSION} from "./table-scoring.js";
 import {settlements as archivedSettlements} from "./lab/scoring.js";
 
@@ -686,7 +686,10 @@ function mountTable(root) {
     <div class="g-main">
       <div class="g-heading"><div class="g-eyebrow"><i aria-hidden="true">♠</i> 마이티 · 5인전
         <span class="g-match-progress" hidden></span><small class="g-release-note">v${VERSION}</small></div>
-        <div class="g-title-row"><h1></h1><span class="g-round-tag"></span></div></div>
+        <div class="g-title-row"><div class="g-title-context"><h1></h1><span class="g-round-tag"></span></div>
+          <label class="g-pace"><span>진행 속도</span>
+            <select data-table-pace><option value="slow">느리게</option><option value="normal">보통</option><option value="fast">빠르게</option></select>
+            <strong class="g-pace-value" hidden></strong></label></div></div>
       <div class="g-layout">
         <section class="g-board" aria-label="게임 테이블"><div class="g-felt"><div class="g-felt-line"></div>
           <div class="g-table-center"></div><div class="g-auction-calls" hidden></div><div class="g-trick" hidden></div><div class="g-seats"></div>
@@ -707,6 +710,30 @@ function mountTable(root) {
       </div></dialog></div>`;
   soundControl(root.querySelector('[data-do="sound"]'));
 }
+
+function paintPace(ui) {
+  const {pace, pendingPace, onPaceChange} = ui.options;
+  const control = ui.root.querySelector('[data-table-pace]');
+  const value = ui.root.querySelector('.g-pace-value');
+  const editable = typeof onPaceChange === 'function';
+  const waiting = editable && pendingPace != null;
+  const selected = normalizeGameSpeed(waiting ? pendingPace : pace);
+  if (control.value !== selected) control.value = selected;
+  control.hidden = !editable;
+  control.disabled = !editable || waiting;
+  control.setAttribute('aria-busy', String(waiting));
+  value.hidden = editable;
+  if (!editable) value.textContent = control.selectedOptions[0].textContent;
+  ui.root.firstElementChild.style.setProperty('--table-pace', paceMultiplier(pace));
+}
+
+export function updateGamePace(container, pace, pendingPace = null) {
+  const ui = cache.get(container);
+  if (!ui?.options || !container.firstElementChild) return;
+  ui.options = {...ui.options, pace, pendingPace};
+  paintPace(ui);
+}
+
 function redraw(ui, newDeal = false) {
   const { view, options, root } = ui;
   root.querySelector(".g-nav-phase").textContent = view.seat < 0 ? "테이블 관전" : "게임 테이블";
@@ -838,6 +865,10 @@ function bind(ui) {
   });
   ui.root.addEventListener("change", event => {
     const el = event.target;
+    if (el.matches('[data-table-pace]')) {
+      if (!el.disabled && ui.options.onPaceChange) ui.options.onPaceChange(el.value);
+      return;
+    }
     if (!el.matches(".g-field select, .g-call-option input, .g-suit-option input")) return;
     const field = el.dataset.field;
     if (field === "contractSuit") {
@@ -965,7 +996,6 @@ export function renderGame(container, publicView, options = {}) {
     mountTable(container);
     ui.auctionMarkup = ui.centerMarkup = ui.settingsHtml = ui.finalHtml = null;
   }
-  container.firstElementChild.style.setProperty("--table-pace", paceMultiplier(options.pace));
   publicView = withRememberedJoker(publicView, ui.latest);
   if (ui.latest && !hasSettingDeclaration(ui.latest) && hasSettingDeclaration(publicView)) {
     playTableSound("setting");
@@ -975,6 +1005,7 @@ export function renderGame(container, publicView, options = {}) {
   ui.claimSubmitting = false;
   const previousBalances = ui.options?.seatBalances;
   ui.options = options;
+  paintPace(ui);
   // A failed opening claim may play one trick solely to identify the friend.
   // Its point cards are awarded by the claim, not to that trick's winner.
   if (publicView.phase === "result" && publicView.result.setting) {

@@ -1,5 +1,5 @@
-import {clearGame, renderGame, rulesContent, updateSeatBalances} from './game-ui.js';
-import {botTurnDelay, normalizeGameSpeed} from './table-timing.js';
+import {clearGame, renderGame, rulesContent, updateGamePace, updateSeatBalances} from './game-ui.js';
+import {botTurnDelay, normalizeGameSpeed, paceMultiplier} from './table-timing.js';
 import {createNextRoundTimer} from './next-round.js';
 import {hostRoom, joinRoom, normalizeRoomCode} from './network.js';
 import {listPublicRooms, publishPublicRoom, PUBLIC_ROOM_LIMIT} from './public-directory.js';
@@ -48,7 +48,7 @@ let transport = null;
 let snapshot = null;
 let mode = 'lobby';
 let generation = 0;
-let botTimer, toastTimer;
+let botTimer, botDueAt = null, toastTimer;
 let botWorker = null;
 let claimWorker = null;
 let workerUnavailable = false;
@@ -62,6 +62,7 @@ const chat = setupChat(sendChat);
 const roomAccounts = new Map();
 const chipRequest = payload => callChipService(accountClient, payload);
 let chipReader = null, preparing = null, acceptedOffer = null, resumeHand = null;
+let pendingPace = null;
 let lastAccount = null, settledChipHand = null;
 let accountUI;
 const nextRound = createNextRoundTimer({
@@ -130,12 +131,20 @@ function practiceSeatBalances(state) {
   return snapshot.players.map((_, seat) => seat === snapshot.seat && state.user ? state.balance : null);
 }
 
-function trackChipHand(handId, initial = null) {
-  if (chipReader?.handId === handId) { chipReader.wake(); return; }
+function serverOnlySnapshot(data) {
+  const scoreboard = snapshot?.chipHandId === data.handId && (!data.game.result || snapshot.game?.result)
+    ? snapshot.scoreboard : undefined;
+  return {chipHandId:data.handId, seat:data.seat, spectator:data.seat < 0, pace:data.pace, scoreboard,
+    players:data.names.map((name, i) => ({name, bot:data.bots[i], modelId:data.models[i]})),
+    rules:data.game.rules, game:data.game};
+}
+
+function trackChipHand(handId, initial = null, hintRevision) {
+  if (chipReader?.handId === handId) { chipReader.wake(hintRevision); return; }
   chipReader?.close();
   const watch = !accountClient.state.user || (!authority && mode !== 'resume' && snapshot?.spectator);
   let lastSeatBalance;
-  const reader = followChipHand(chipRequest, handId, watch ? 'watch' : 'view', (data, balancesOnly) => {
+  const reader = followChipHand(chipRequest, handId, watch ? 'watch' : 'view', (data, balancesOnly, paceOnly) => {
     if (reader !== chipReader) return;
     const ownBalance = data.seatBalances?.[data.seat];
     if (!data.game.result && Number.isSafeInteger(ownBalance) && ownBalance !== lastSeatBalance) {
@@ -144,8 +153,17 @@ function trackChipHand(handId, initial = null) {
         accountClient.refreshWallet().catch(error => toast(error.message));
       }
     }
-    if (balancesOnly) {
-      if (snapshot?.chipHandId === handId) updateSeatBalances($('game'), data.seatBalances);
+    if (balancesOnly || paceOnly) {
+      if (snapshot?.chipHandId === handId) {
+        updateSeatBalances($('game'), data.seatBalances);
+        if (paceOnly) {
+          if (mode === 'host' && authority.syncChipHand(data)) {
+            broadcastPace(handId, data.pace, data.revision);
+          }
+          snapshot.pace = data.pace;
+          updateGamePace($('game'), data.pace, pendingPace?.reader === reader ? pendingPace.pace : null);
+        }
+      }
       return;
     }
     if (data.game.result && settledChipHand !== handId) {
@@ -153,14 +171,52 @@ function trackChipHand(handId, initial = null) {
       if (accountClient.state.user) accountClient.refreshWallet().catch(error => toast(error.message));
     }
     if (mode === 'resume') {
-      snapshot = {chipHandId:handId, seat:data.seat, spectator:data.seat < 0, players:data.names.map((name,i) =>
-        ({name,bot:data.bots[i],modelId:data.models[i]})), rules:data.game.rules, game:data.game};
+      snapshot = serverOnlySnapshot(data);
     }
     if (mode === 'host' && authority.syncChipHand(data)) publish();
     else draw();
   }, error => toast(error.message), initial);
   chipReader = reader;
   reader.start();
+}
+
+function broadcastPace(handId, pace, revision) {
+  for (const id of authority.connections.keys()) {
+    transport?.send(id, {type:'table-pace', handId, pace, revision});
+  }
+}
+
+async function changeGamePace(value) {
+  const pace = normalizeGameSpeed(value);
+  const reader = chipReader;
+  if (pace !== value || preparing || !snapshot?.game || snapshot.scoreboard?.complete) return;
+  if (mode === 'practice' || (mode === 'host' && authority.round?.result)) {
+    const previous = authority.pace;
+    authority.setPace(pace);
+    snapshot.pace = pace;
+    if (mode === 'practice' && botDueAt !== null) {
+      const remaining = Math.max(0, botDueAt - performance.now());
+      schedulePracticeBot(remaining * paceMultiplier(pace) / paceMultiplier(previous));
+    }
+    if (mode === 'host') broadcastPace(snapshot.chipHandId, pace, snapshot.chipRevision);
+    rememberRoom({pace});
+    updateGamePace($('game'), pace);
+    return;
+  }
+  if (!reader || reader.handId !== snapshot.chipHandId || reader.current?.game.result ||
+      pendingPace?.reader === reader || !(mode === 'host' || (mode === 'resume' && reader.current?.publicGame))) return;
+  const request = {reader, pace};
+  pendingPace = request;
+  updateGamePace($('game'), reader.current?.pace, pace);
+  try {
+    await reader.changePace(pace);
+    if (chipReader === reader && reader.current?.pace === pace) rememberRoom({pace});
+  } catch (error) {
+    if (chipReader === reader) toast(error.message);
+  } finally {
+    if (pendingPace === request) pendingPace = null;
+    if (chipReader === reader) updateGamePace($('game'), (authority?.round?.result ? authority.pace : reader.current?.pace) ?? snapshot?.pace);
+  }
 }
 
 function broadcastChat(seat, text, senderId = null) {
@@ -335,10 +391,12 @@ function stopSession(message) {
   $('room').inert = $('game').inert = false;
   chipReader?.close();
   chipReader = null;
+  pendingPace = null;
   roomAccounts.clear();
   publicListing?.close();
   publicListing = null;
   clearTimeout(botTimer);
+  botDueAt = null;
   botWorker?.terminate();
   botWorker = null;
   claimWorker?.terminate();
@@ -374,8 +432,13 @@ function requestLeave() {
   if (mode === 'lobby' || preparing) return;
   const canWatch = mode === 'host' && snapshot.publicRoom && !snapshot.spectator &&
     snapshot.game && snapshot.game.phase !== 'result';
-  const reason = mode === 'host' ? '방장이 나가면 이 방이 닫히고 모든 참가자의 연결이 끝납니다.' :
-    mode === 'practice' ? '현재 연습 게임이 종료됩니다.' : snapshot?.spectator ? '관전을 끝냅니다. 신청한 자리 예약도 취소됩니다.' : '플레이 중에 나가면 AI가 이 자리를 이어서 진행합니다.';
+  const playing = snapshot?.chipHandId && snapshot.game?.phase !== 'result';
+  let reason = '이 방에서 나갑니다.';
+  if (mode === 'host') {
+    reason = playing ? '대기실과 채팅은 닫히고, 남은 참가자는 이 판을 계속합니다.' : '방을 닫고 로비로 돌아갑니다.';
+  } else if (mode === 'practice') reason = '현재 연습 게임이 종료됩니다.';
+  else if (snapshot?.spectator) reason = '관전을 끝냅니다. 신청한 자리 예약도 취소됩니다.';
+  if (playing && !snapshot.spectator) reason += ' AI가 내 패를 마저 치고, 이 판의 칩은 내 계정에 정산됩니다.';
   const stepAside = canWatch ? '<button class="primary-button" id="host-watch">AI에게 맡기고 관전</button>' : '';
   modal('로비로 나갈까요?', '<p>' + reason + (canWatch ? ' 방을 유지하려면 AI에게 자리를 맡기고 이 탭에서 관전하세요.' : '') +
     '</p><div class="room-actions"><button class="plain-button" id="stay">계속하기</button>' + stepAside +
@@ -596,7 +659,11 @@ function draw() {
   renderGame($('game'),remote?.game ?? snapshot.game,{
     names:remote?.names ?? snapshot.players.map(p => p?.name), isHost: Boolean(authority), scoreboard:snapshot.scoreboard,
     seatBalances:mode === 'practice' ? practiceSeatBalances(accountClient.state) : remote?.seatBalances,
-    chipDelta:remote?.myDelta, resumed:mode === 'resume', pace:remote?.pace ?? snapshot.pace,
+    chipDelta:remote?.myDelta, resumed:mode === 'resume',
+    pace:remote?.game.result && mode !== 'resume' ? snapshot.pace : remote?.pace ?? snapshot.pace,
+    pendingPace:pendingPace && pendingPace.reader === chipReader ? pendingPace.pace : null,
+    onPaceChange:!snapshot.scoreboard?.complete && (mode === 'practice' || (mode === 'host' && remote) ||
+      (mode === 'resume' && remote?.publicGame && !remote.game.result)) ? changeGamePace : undefined,
     modelLabels:remote ? remote.models.map((id,i) => remote.bots[i] ? modelLabel(id) : '') :
       snapshot.players.map(p => p?.bot && p.modelId ? modelLabel(p.modelId) : ''),
     replaySetupLabel: mode === 'practice' ? (snapshot.scoreboard?.complete ? '새 연습 경기 설정' : '규칙·AI 바꿔서 시작') : '대기실로 돌아가기',
@@ -631,7 +698,7 @@ function draw() {
         if (!remote || remote.seat < 0) return false;
         const hand = chipReader;
         hand.act(action).then(() => {
-          if (mode === 'guest' && hand === chipReader) transport?.send({type:'chip-wake',handId:hand.handId});
+          if (mode === 'guest' && hand === chipReader) transport?.send({type:'chip-wake',handId:hand.handId,revision:hand.current?.revision});
         }).catch(error => toast(error.message)).finally(() => { if (hand === chipReader) draw(); });
         return true;
       }
@@ -666,8 +733,15 @@ function expectedChipTable() {
   return {firstSeat, seats:seats.map(p => ({name:p.name, bot:Boolean(p.bot)}))};
 }
 
+function schedulePracticeBot(delay) {
+  clearTimeout(botTimer);
+  botDueAt = performance.now() + delay;
+  botTimer = setTimeout(() => { botDueAt = null; takeBotTurn(); }, delay);
+}
+
 function publish() {
   clearTimeout(botTimer);
+  botDueAt = null;
   if (authority.round?.phase !== 'result') nextRound.sync(null);
   const nextDeal = expectedChipTable();
   for (const id of authority.connections.keys()) {
@@ -676,7 +750,7 @@ function publish() {
   snapshot = authority.hostView();
   draw();
   if (mode === 'practice' && authority.botTurn) {
-    botTimer = setTimeout(takeBotTurn, botTurnDelay(snapshot.game, authority.pace));
+    schedulePracticeBot(botTurnDelay(snapshot.game, authority.pace));
   }
 }
 
@@ -907,7 +981,7 @@ async function connectRoom(kind, name, code, signal, {roundLimit, publicRoom, in
           }
           return;
         }
-        if (packet.type === 'chip-wake') { if (packet.handId === session.chipHandId) chipReader?.wake(); return; }
+        if (packet.type === 'chip-wake') { if (packet.handId === session.chipHandId) chipReader?.wake(packet.revision); return; }
         if (packet.type === 'chat-send') {
           broadcastChat(seat, packet.text, id);
           return;
@@ -970,6 +1044,13 @@ async function connectRoom(kind, name, code, signal, {roundLimit, publicRoom, in
       signal, intent, accountId:accountClient.state.user?.id,
       onMessage(packet) {
         if (!active()) return;
+        if (packet?.type === 'table-pace' && snapshot?.chipHandId === packet.handId &&
+            normalizeGameSpeed(packet.pace) === packet.pace) {
+          snapshot.pace = packet.pace;
+          if (snapshot.game?.result) updateGamePace($('game'), packet.pace);
+          else chipReader?.wake(packet.revision);
+          return;
+        }
         if (packet?.type === 'next-round' && snapshot?.game?.phase === 'result' &&
             packet.nextRound?.key === snapshot.chipHandId) {
           snapshot.nextRound = receivedCountdown(packet.nextRound, snapshot.chipHandId, packet.sentAt);
@@ -997,12 +1078,29 @@ async function connectRoom(kind, name, code, signal, {roundLimit, publicRoom, in
             stopSession('이 방은 이전 버전입니다. 새 버전의 방에서 칩 대국에 참가해 주세요.');
             return;
           }
-          if (snapshot.chipHandId) trackChipHand(snapshot.chipHandId);
+          if (snapshot.chipHandId) trackChipHand(snapshot.chipHandId, null, snapshot.chipRevision);
           else if (chipReader) { chipReader.close(); chipReader = null; }
           if (mode === 'guest') draw();
         }
       },
-      onClose(reason) { if (active()) stopSession(reason); },
+      onClose(reason) {
+        if (!active()) return;
+        if (mode === 'guest' && snapshot?.chipHandId && snapshot.game && chipReader?.handId === snapshot.chipHandId) {
+          // The room channel has closed. The same authenticated reader still owns the live seat.
+          mode = 'resume';
+          transport = null;
+          acceptedOffer = null;
+          chat.reset();
+          snapshot.nextRound = null;
+          snapshot.nextDeal = null;
+          if (chipReader.current) snapshot = serverOnlySnapshot(chipReader.current);
+          chipReader.wake();
+          draw();
+          toast('방장과의 연결이 종료되었습니다. 현재 판은 게임 서버에서 계속 진행됩니다.');
+          return;
+        }
+        stopSession(reason);
+      },
       onError(error) { if (active()) toast(error.message); }
     });
     if (!active()) { link.close(); return; }

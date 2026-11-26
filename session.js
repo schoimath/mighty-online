@@ -293,11 +293,11 @@ export class HostSession {
   }
 
   setPace(pace) {
-    if (this.round) throw new Error('진행 속도는 대기실에서 변경할 수 있습니다.');
     const next = normalizeGameSpeed(pace);
     if (this.pace === next) return;
     this.pace = next;
-    this.revision++;
+    // A local card choice or an AI calculation already in flight stays valid.
+    if (!this.round) this.revision++;
   }
 
   get #complete() {
@@ -353,6 +353,7 @@ export class HostSession {
   syncChipHand(reply) {
     if (reply.handId !== this.chipHandId || reply.revision <= this.#chipRevision || reply.publicGame?.seat !== -1) return false;
     this.#chipRevision = reply.revision;
+    if (!this.round?.result || !reply.publicGame.result) this.pace = normalizeGameSpeed(reply.pace);
     this.round = reply.publicGame;
     for (let seat = 0; seat < 5; seat++) {
       if (reply.bots[seat] && this.players[seat] && !this.players[seat].bot) {

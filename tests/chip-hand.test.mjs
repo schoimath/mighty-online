@@ -16,6 +16,7 @@ const at = 1_800_000_000_000;
 
 function table() {
   let row = null, charges = 0;
+  let beforeNextSave = null;
   const clone = value => structuredClone(value);
   const grants = new Map();
   async function call(id, op, fields = {}, now = at) {
@@ -32,7 +33,12 @@ function table() {
         return clone(row);
       },
       read:() => clone(row),
-      save(update) {
+      async save(update) {
+        if (beforeNextSave) {
+          const pending = beforeNextSave;
+          beforeNextSave = null;
+          await pending();
+        }
         if (row.revision === update.revision && !row.settled) {
           row = {...clone(update), revision:row.revision+1, settled:Boolean(update.state.round.result)};
           if (row.settled) {
@@ -46,7 +52,8 @@ function table() {
     };
     return operateHand({handId, op, ...fields}, id, db, now);
   }
-  return {call, row:() => clone(row), charges:() => charges};
+  return {call, row:() => clone(row), charges:() => charges,
+    beforeNextSave(callback) { beforeNextSave = callback; }};
 }
 
 test('verified seats consent to one match specification and receive separate projections', async () => {
@@ -125,7 +132,54 @@ test('a spectating host starts only with separate host and actual player consent
   const result=await t.call(host,'start',spec);
   assert.equal(result.seat,-1);
   assert.deepEqual(result.game,result.publicGame);
+  const fast = await t.call(host,'pace',{pace:'fast'},at+300);
+  assert.equal(fast.pace,'fast');
+  assert.equal(fast.dueAt,at+300+Math.round((result.dueAt-at-300)*0.65));
+  assert.equal(fast.seat,-1);
+  assert.deepEqual(fast.game.hand,[]);
   await assert.rejects(t.call(host,'ready',{...spec,seats:Array(5).fill(null)}));
+});
+
+test('only the host can change pace mid-hand and repeat requests do not restart an AI delay', async () => {
+  const t=table(), spec={...game,firstSeat:2};
+  for (const id of [host,guest]) await t.call(id,'ready',spec);
+  const first = await t.call(host,'start',spec);
+  for (const id of [guest,other]) await assert.rejects(t.call(id,'pace',{pace:'fast'}),{status:403});
+  await assert.rejects(t.call(null,'pace',{pace:'fast'}),{status:401});
+  for (const pace of [undefined,null,'turbo']) await assert.rejects(t.call(host,'pace',{pace}),{status:400});
+  const fast = await t.call(host,'pace',{pace:'fast'},at+800);
+  assert.equal(fast.revision,first.revision+1);
+  assert.equal(fast.dueAt, at+800+650);
+  const retry = await t.call(host,'pace',{pace:'fast'},at+1100);
+  assert.equal(retry.revision,fast.revision);
+  assert.equal(retry.dueAt,fast.dueAt);
+  const overdue = await t.call(host,'pace',{pace:'slow'},at+1800);
+  assert.equal(overdue.dueAt,fast.dueAt);
+  assert.equal((await t.call(null,'watch',{},at+1800)).pace,'slow');
+});
+
+test('a host changing pace concurrently with a card preserves the move exactly once', async () => {
+  for (const paceWins of [false,true]) {
+    const t = table();
+    for (const id of [host,guest]) await t.call(id,'ready',game);
+    const initial = await t.call(host,'start',game);
+    const action = {revision:initial.revision,action:{type:'bid',points:14,suit:'H'}};
+    const card = () => t.call(host,'act',action,at+10);
+    const setFast = () => t.call(host,'pace',{pace:'fast'},at+10);
+    t.beforeNextSave(paceWins ? setFast : card);
+    const result = await (paceWins ? card() : setFast());
+    assert.equal(result.revision,2);
+    assert.equal(result.pace,'fast');
+    assert.equal(result.game.bidHistory.length,1);
+    assert.equal(result.dueAt,at+10+120_000);
+    await t.call(host,'act',action);
+    assert.equal(t.row().revision,2);
+    // Further settings changes following a real move may not revive the stale input.
+    await t.call(host,'pace',{pace:'slow'});
+    const retry = await t.call(host,'act',action);
+    assert.equal(retry.revision,3);
+    assert.equal(retry.game.bidHistory.length,1);
+  }
 });
 
 test('table pace binds non-default consent and schedules AI turns, keeping the normal legacy manifest', async () => {

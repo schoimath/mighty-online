@@ -31,6 +31,12 @@ test('the selected pace follows the host, seated guests and spectators into the 
   for (const view of [room.hostView(), room.viewFor('guest'), room.viewFor('observer')]) {
     assert.equal(view.pace, 'fast');
   }
+  const revision = room.revision;
+  room.setPace('slow');
+  assert.equal(room.viewFor('observer').pace, 'slow');
+  assert.equal(room.revision, revision, 'a local pace change preserves an in-flight play');
+  room.act(room.round.turn, revision, {type:'bid', points:14, suit:'H'});
+  assert.equal(room.round.bid.suit, 'H');
 });
 
 function finishWithFriend(session, friendSeat) {

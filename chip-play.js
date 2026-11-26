@@ -74,8 +74,15 @@ export function consentWindow(ids, handId, timeout = 30000) {
   };
 }
 
+function onlyPaceChanged(previous, next) {
+  if (!previous || normalizeGameSpeed(previous.pace) === normalizeGameSpeed(next.pace)) return false;
+  return previous.seat === next.seat && ['game','publicGame','names','bots','models'].every(
+    field => JSON.stringify(previous[field]) === JSON.stringify(next[field]));
+}
+
 export function followChipHand(request, handId, op, onState, onError, initial) {
-  let current = null, closed = false, timer, busy = false, submitting = false, failures = 0;
+  let current = null, closed = false, timer, busy = false, writing = null, submitting = false, changingPace = false, failures = 0;
+  let wakeRevision = -1, wakeAfterRead = false;
   let requestOrder = 0, acceptedOrder = 0;
   function accept(data, order) {
     if (closed || data.handId !== handId || !data.game || (current && data.revision < current.revision)) return;
@@ -92,16 +99,28 @@ export function followChipHand(request, handId, op, onState, onError, initial) {
       return;
     }
     acceptedOrder = order;
+    const paceOnly = onlyPaceChanged(current, data);
     current = data;
-    onState(data);
+    onState(data, false, paceOnly);
   }
   function schedule(delay) {
     clearTimeout(timer);
     if (!closed && current?.game.phase !== 'result') timer = setTimeout(read, delay);
   }
+  function scheduleNext() {
+    if (busy || writing || closed) return;
+    const due = current?.dueAt;
+    const minimumWait = tableDelay(450, current?.pace);
+    const delay = Number.isFinite(due) ? Math.min(3200, Math.max(minimumWait, due - Date.now() + 50)) : 2600;
+    if (failures) schedule(Math.min(12000, 2000 * failures));
+    else if (wakeAfterRead || wakeRevision > (current?.revision ?? -1)) schedule(0);
+    else schedule(delay);
+  }
   async function read() {
-    if (closed || busy || submitting) return;
+    if (closed || busy || writing) return;
     busy = true;
+    wakeAfterRead = false;
+    wakeRevision = -1;
     const order = ++requestOrder;
     try {
       accept(await request({op, handId}), order);
@@ -110,21 +129,66 @@ export function followChipHand(request, handId, op, onState, onError, initial) {
       if (!closed && !failures++) onError(error);
     } finally {
       busy = false;
-      const due = current?.dueAt;
-      const minimumWait = tableDelay(450, current?.pace);
-      const delay = Number.isFinite(due) ? Math.min(3200, Math.max(minimumWait, due - Date.now() + 50)) : 2600;
-      schedule(failures ? Math.min(12000, 2000 * failures) : delay);
+      scheduleNext();
     }
+  }
+  // A pace edit and a card play from one browser must use successive server revisions.
+  function write(operation) {
+    const previous = writing;
+    const job = (previous ?? Promise.resolve()).catch(() => {}).then(() => {
+      if (!closed) return operation();
+    });
+    writing = job;
+    return job.finally(() => {
+      if (writing === job) { writing = null; scheduleNext(); }
+    });
+  }
+  async function send(payload) {
+    const order = ++requestOrder;
+    const data = await request({...payload, handId});
+    accept(data, order);
+    return data;
   }
   const result = {handId, get current() { return current; },
     start() { if (initial) accept(initial, 0); schedule(0); },
-    wake() { if (!busy && !submitting) schedule(0); },
+    wake(revision) {
+      if (closed || current?.game.phase === 'result') return;
+      if (Number.isSafeInteger(revision)) {
+        if (revision <= (current?.revision ?? -1)) return;
+        wakeRevision = Math.max(wakeRevision, revision);
+      } else wakeAfterRead = true;
+      if (!busy && !writing) schedule(0);
+    },
     async act(action) {
       if (closed || submitting || !current || current.seat < 0 || current.game.turn !== current.seat) return;
       submitting = true;
-      const order = ++requestOrder;
-      try { accept(await request({op:'act', handId, revision:current.revision, action}), order); }
-      finally { submitting = false; schedule(0); }
+      try {
+        await write(async () => {
+          const before = current;
+          if (before.seat < 0 || before.game.turn !== before.seat || before.game.result) return;
+          const response = await send({op:'act', revision:before.revision, action});
+          // A remote pace update can win the revision check. Replay only when
+          // the server confirms this move did not change the game or its actor.
+          if (!closed && response.handId === handId && response.revision > before.revision &&
+              onlyPaceChanged(before, response) && onlyPaceChanged(before, current)) {
+            await send({op:'act', revision:current.revision, action});
+          }
+        });
+      } finally { submitting = false; }
+    },
+    async changePace(pace) {
+      if (closed || changingPace) return current;
+      if (op !== 'view' || !current?.publicGame || current.game.result || !dealPace(pace) || !pace) {
+        throw new Error('진행 중인 판의 방장만 속도를 변경할 수 있습니다.');
+      }
+      changingPace = true;
+      try {
+        await write(async () => {
+          if (current.game.result || normalizeGameSpeed(current.pace) === pace) return;
+          await send({op:'pace', pace});
+        });
+        return current;
+      } finally { changingPace = false; }
     },
     close() { closed = true; clearTimeout(timer); }
   };

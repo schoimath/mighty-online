@@ -47,7 +47,13 @@
 .g-btn.g-top:hover { background: #274837; border-color: #a2b99e; }
 .g-main { padding-block: 28px 50px; }
 .g-heading { margin-bottom: 22px; }
-.g-title-row { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 10px; margin-top: 4px; }
+.g-title-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 4px; }
+.g-title-context { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; min-width: 0; flex: 1; }
+.g-pace { display: inline-flex; align-items: center; gap: 7px; flex: none; color: #ced7c8; font-size: .82rem; font-weight: 650; }
+.g-pace select, .g-pace-value { border: 1px solid #566f5c; border-radius: 6px; padding: 5px 7px; color: #f4e9c7; background: #1c382b; line-height: 1.3; }
+.g-pace select { min-height: 34px; cursor: pointer; color-scheme: dark; }
+.g-pace select:disabled { cursor: wait; opacity: .7; }
+.g-pace-value { font-weight: 600; }
 .g-heading h1 { margin: 0; color: var(--g-cream); font-size: clamp(1.75rem, 3.4vw, 2.5rem); font-weight: 700; letter-spacing: -.055em; line-height: 1.2; }
 .g-eyebrow { display: flex; align-items: center; gap: 6px; font-size: .8rem; font-weight: 600; color: #b9c8b3; }
 .g-eyebrow i { color: #ddbc76; font: normal 1.1rem Georgia, serif; }
@@ -421,6 +427,9 @@ html:has(.g-screen) { scrollbar-gutter: stable; }
   .g-input-row { grid-template-columns: 1fr 1fr; }
 }
 @media (max-width: 479px) {
+  .g-pace { flex-direction: column; align-items: stretch; gap: 1px; text-align: center; font-size: .75rem; }
+  .g-pace select, .g-pace-value { min-width: 66px; }
+  .g-pace select { min-height: 30px; }
   .g-nav-inner { min-height: 55px; gap: 9px; }
   .g-nav-divider, .g-nav-phase { display: none; }
   .g-brand > span { font-size: 1.15rem; }

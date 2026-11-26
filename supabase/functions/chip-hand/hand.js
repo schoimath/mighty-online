@@ -5,7 +5,7 @@ import {shouldDeclareSetting} from '../../../bot-setting.js';
 import {settlements} from '../../../table-scoring.js';
 import {jokerWasPlayed, withJokerStatus} from '../../../table-joker.js';
 import {decideTableTurn, hasSeatMemory, isModelId, memoryForReplacement} from '../../../lab/table-agents.js';
-import {botTurnDelay, normalizeGameSpeed} from '../../../table-timing.js';
+import {botTurnDelay, normalizeGameSpeed, paceMultiplier} from '../../../table-timing.js';
 
 const RECONNECT_MS = 120_000;
 const SUBSTITUTE_NAMES = ['AI 솔', 'AI 달', 'AI 별', 'AI 구름', 'AI 바다'];
@@ -130,12 +130,38 @@ function advanceDue(row, now, catchup) {
   return true;
 }
 
+// A settings change has its own persistence revision but leaves card choices untouched.
+// A move, substitution or presence write ends the contiguous window of settings-only revisions.
+function firstPlayableRevision(row) {
+  const change = row.state.lastPaceChange;
+  return change?.revision === row.revision ? change.from : row.revision;
+}
+
+async function changePace(row, id, pace, db, now) {
+  check(row.host === id, '방장만 진행 속도를 변경할 수 있습니다.', 403);
+  check(pace === normalizeGameSpeed(pace), '테이블 진행 속도를 확인해 주세요.');
+  for (let retry = 0; ; retry++) {
+    const state = row.state;
+    check(!state.round.result, '이 판은 이미 끝났습니다.', 409);
+    const previous = normalizeGameSpeed(state.pace);
+    if (previous === pace) return row;
+    check(retry < 4, '차례가 바뀌었습니다. 진행 속도를 다시 선택해 주세요.', 409);
+    if (state.bots[state.round.turn] && state.dueAt > now) {
+      const remaining = state.dueAt - now;
+      state.dueAt = now + Math.round(remaining * paceMultiplier(pace) / paceMultiplier(previous));
+    }
+    state.pace = pace;
+    state.lastPaceChange = {from:firstPlayableRevision(row), revision:row.revision + 1};
+    row = await db.save(row);
+  }
+}
+
 // All persistence goes through trusted, transactional RPCs. The original
 // account roster is immutable even after a seat's bot flag changes.
 export async function operateHand(input, accountId, db, now = Date.now()) {
   check(input && typeof input === 'object' && !Array.isArray(input), '요청을 확인해 주세요.');
   const {op} = input;
-  check(['ready','start','active','view','act','leave','watch','tick'].includes(op), '지원하지 않는 요청입니다.');
+  check(['ready','start','active','view','act','leave','pace','watch','tick'].includes(op), '지원하지 않는 요청입니다.');
   const publicRead = op === 'watch' || op === 'tick';
   const id = accountId?.toLowerCase() ?? null;
   if (!publicRead) check(uuid(id), '이메일 인증 후 로그인해 주세요.', 401);
@@ -161,6 +187,7 @@ export async function operateHand(input, accountId, db, now = Date.now()) {
   check(row, '해당 판을 찾을 수 없습니다.', 404);
   const seat = id ? row.seats.indexOf(id) : -1;
   if (!publicRead) check(seat >= 0 || row.host === id, '이 판의 참가 계정을 확인해 주세요.', 403);
+  if (op === 'pace') return present(await changePace(row, id, input.pace, db, now), id);
   const state = row.state;
   let changed = false;
   if (op === 'leave') {
@@ -176,10 +203,12 @@ export async function operateHand(input, accountId, db, now = Date.now()) {
   } else if (op === 'act') {
     check(seat >= 0 && !state.bots[seat], '현재 이 자리에서 카드를 낼 수 없습니다.', 403);
     check(Number.isSafeInteger(input.revision), '판의 버전을 확인해 주세요.');
-    if (input.revision === row.revision && !state.round.result) {
-      check(state.round.turn === seat, '지금은 내 차례가 아닙니다.');
+    for (let retry = 0; !row.state.round.result &&
+         input.revision >= firstPlayableRevision(row) && input.revision <= row.revision; retry++) {
+      check(retry < 4, '설정이 변경되고 있습니다. 잠시 후 카드를 다시 내 주세요.', 409);
+      check(!row.state.bots[seat] && row.state.round.turn === seat, '지금은 내 차례가 아닙니다.');
       move(row, input.action, now);
-      changed = true;
+      row = await db.save(row);
     }
   } else if (op === 'view' && !state.round.result && state.round.turn === seat &&
              !state.bots[seat] && state.dueAt - now <= 45_000) {
