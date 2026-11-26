@@ -618,6 +618,19 @@ function updateNextCountdown(ui) {
   }
 }
 
+function updateTurnCountdown(ui) {
+  clearTimeout(ui.turnTimer);
+  const clock = ui.root.querySelector(".g-turn-clock");
+  const deadline = ui.options.turnDeadline;
+  clock.hidden = !Number.isFinite(deadline) || ui.view.turn == null || ui.view.phase === "result";
+  if (clock.hidden) return;
+  const remaining = Math.max(0, deadline - Date.now());
+  const seconds = Math.ceil(remaining / 1000);
+  clock.textContent = seconds ? `AI 선택까지 ${seconds}초` : "AI 선택 중";
+  clock.classList.toggle("g-turn-ending", seconds <= 3);
+  if (seconds) ui.turnTimer = setTimeout(() => updateTurnCountdown(ui), remaining - (seconds - 1) * 1000);
+}
+
 function resultControls(view, ui) {
   const result = view.result;
   const setting = result.setting;
@@ -722,7 +735,7 @@ function mountTable(root) {
             <select data-table-pace><option value="slow">느리게</option><option value="normal">보통</option><option value="fast">빠르게</option></select>
             <strong class="g-pace-value" hidden></strong></label></div></div>
       <div class="g-layout">
-        <section class="g-board" aria-label="게임 테이블"><div class="g-felt"><div class="g-felt-line"></div>
+        <section class="g-board" aria-label="게임 테이블"><span class="g-turn-clock" role="timer" aria-live="off" hidden></span><div class="g-felt"><div class="g-felt-line"></div>
           <div class="g-table-center"></div><div class="g-auction-calls" hidden></div><div class="g-trick" hidden></div><div class="g-seats"></div>
           <div class="g-friend-call" role="status" aria-atomic="true" hidden><small>프렌드 선언</small><strong></strong></div>
           <span class="g-call-announcement" role="status" aria-atomic="true"></span>
@@ -767,6 +780,7 @@ export function updateGamePace(container, pace, pendingPace = null) {
 
 function redraw(ui, newDeal = false) {
   const { view, options, root } = ui;
+  updateTurnCountdown(ui);
   root.querySelector(".g-nav-phase").textContent = view.seat < 0 ? "테이블 관전" : "게임 테이블";
   const nameAt = seat => nameAtSeat(ui, seat);
   const focused = root.contains(document.activeElement) ? document.activeElement : null;
@@ -999,6 +1013,7 @@ export function clearGame(container) {
   clearTimeout(ui.auctionTimer);
   clearTimeout(ui.friendTimer);
   clearTimeout(ui.countdownTimer);
+  clearTimeout(ui.turnTimer);
   ui.auctionTimer = null;
   ui.resultWasShown = false;
   ui.view = ui.latest = ui.resolving = ui.signature = ui.playPending = null;

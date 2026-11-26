@@ -192,9 +192,15 @@ function trackChipHand(handId, initial = null, hintRevision) {
   if (chipReader?.handId === handId) { chipReader.wake(hintRevision); return; }
   chipReader?.close();
   const watch = !accountClient.state.user || (!authority && mode !== 'resume' && snapshot?.spectator);
-  let lastSeatBalance;
+  let lastSeatBalance, lastSeenRevision;
   const reader = followChipHand(chipRequest, handId, watch ? 'watch' : 'view', (data, balancesOnly, paceOnly) => {
     if (reader !== chipReader) return;
+    const timed = data.lastTimedAction;
+    if (lastSeenRevision !== undefined && !data.game.result && data.seat >= 0 &&
+        timed?.seat === data.seat && timed.revision > lastSeenRevision) {
+      toast('시간이 지나 AI가 이번 차례를 대신했습니다.', 2500);
+    }
+    lastSeenRevision = data.revision;
     if (!data.game.result && data.seat >= 0 && resumeHand !== handId) {
       activeRead = settlingHand = null;
       setActiveHand(handId);
@@ -291,11 +297,11 @@ function sendChat(text) {
   return mode === 'guest' && Boolean(transport?.send({type:'chat-send', text}));
 }
 
-function toast(message) {
+function toast(message, duration = 4500) {
   clearTimeout(toastTimer);
   $('notice').textContent = message;
   $('notice').hidden = false;
-  toastTimer = setTimeout(() => { $('notice').hidden = true; }, 4500);
+  toastTimer = setTimeout(() => { $('notice').hidden = true; }, duration);
 }
 
 function showScreen(screen) {
@@ -795,6 +801,7 @@ function draw() {
     names:remote?.names ?? snapshot.players.map(p => p?.name), isHost: Boolean(authority), scoreboard:snapshot.scoreboard,
     seatBalances:mode === 'practice' ? practiceSeatBalances(accountClient.state) : remote?.seatBalances,
     chipDelta:remote?.myDelta, resumed:mode === 'resume',
+    turnDeadline:remote ? chipReader.localTurnDeadline : null,
     pace:remote?.game.result && mode !== 'resume' ? snapshot.pace : remote?.pace ?? snapshot.pace,
     pendingPace:pendingPace && pendingPace.reader === chipReader ? pendingPace.pace : null,
     onPaceChange:!snapshot.scoreboard?.complete && (mode === 'practice' || (mode === 'host' && remote) ||

@@ -32,7 +32,7 @@
   right: 16px;
   bottom: 16px;
   width: min(334px, 32vw);
-  height: clamp(190px, 44dvh, 316px);
+  height: clamp(168px, 25dvh, 218px);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -94,10 +94,12 @@
 .chat-compose button { padding: 9px 11px; border: none; border-radius: 6px; color: white; background: #2c593e; font-size: .88rem; font-weight: 700; }
 .chat-compose button:disabled { opacity: .55; cursor: default; }
 .chat-feedback { margin: 0 10px 8px; color: #8e4032; font-size: .84rem; }
+body:has(.chat-panel[data-bottom]:not([hidden])) .g-main,
+body:has(.chat-panel[data-bottom]:not([hidden])) .room-page { padding-bottom: calc(var(--chat-height, 218px) + 24px); }
 @media (max-width:729px) {
-  .chat-panel { right: 8px; bottom: 8px; width: min(314px, calc(100vw - 24px)); height: clamp(180px, 36dvh, 260px); }
-  body:has(.chat-panel[data-bottom]:not([hidden])) .g-main,
-  body:has(.chat-panel[data-bottom]:not([hidden])) .room-panel { padding-bottom: calc(var(--chat-height, 260px) + 20px); }
+  .chat-panel { right: 8px; bottom: 8px; width: min(314px, calc(100vw - 24px)); height: clamp(160px, 21dvh, 195px); }
+  .chat-scroll { padding: 8px 12px; }
+  .chat-empty { margin: 4px 0; }
 }
 @media (max-width:479px) {
   .g-nav-actions .chat-toggle { padding: 6px 8px; font-size: .82rem; }

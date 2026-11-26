@@ -100,10 +100,16 @@ export function followChipHand(request, handId, op, onState, onError, initial) {
   let current = null, closed = false, timer, busy = false, writing = null, submitting = false, changingPace = false, failures = 0;
   let wakeRevision = -1, wakeAfterRead = false;
   let requestOrder = 0, acceptedOrder = 0;
+  let clockOffset = null;
   function accept(data, order) {
     if (closed || data.handId !== handId || !data.game || (current && data.revision < current.revision)) return;
+    if (current && data.revision === current.revision && order < acceptedOrder) return;
+    if (Number.isFinite(data.serverNow)) {
+      // A delayed response should never give a player extra time on the clock.
+      const offset = Date.now() - data.serverNow;
+      clockOffset = Math.min(clockOffset ?? offset, offset);
+    }
     if (current && data.revision === current.revision) {
-      if (order < acceptedOrder) return;
       acceptedOrder = order;
       const balances = data.seatBalances;
       if (!Array.isArray(balances) || balances.length !== 5 ||
@@ -126,8 +132,9 @@ export function followChipHand(request, handId, op, onState, onError, initial) {
   function scheduleNext() {
     if (busy || writing || closed) return;
     const due = current?.dueAt;
-    const minimumWait = tableDelay(450, current?.pace);
-    const delay = Number.isFinite(due) ? Math.min(3200, Math.max(minimumWait, due - Date.now() + 50)) : 2600;
+    const remaining = due + (clockOffset ?? 0) - Date.now();
+    const minimumWait = current?.turnDeadline === due && remaining > 0 ? 0 : tableDelay(450, current?.pace);
+    const delay = Number.isFinite(due) ? Math.min(3200, Math.max(minimumWait, remaining + 50)) : 2600;
     if (failures) schedule(Math.min(12000, 2000 * failures));
     else if (wakeAfterRead || wakeRevision > (current?.revision ?? -1)) schedule(0);
     else schedule(delay);
@@ -175,6 +182,9 @@ export function followChipHand(request, handId, op, onState, onError, initial) {
     if (action.type === 'play' && !response.game) throw new Error('게임 서버 응답을 확인하지 못했습니다.');
   }
   const result = {handId, get current() { return current; },
+    get localTurnDeadline() {
+      return Number.isFinite(current?.turnDeadline) ? current.turnDeadline + (clockOffset ?? 0) : null;
+    },
     start() { if (initial) accept(initial, 0); schedule(0); },
     wake(revision) {
       if (closed || current?.game.phase === 'result') return;
@@ -196,6 +206,9 @@ export function followChipHand(request, handId, op, onState, onError, initial) {
         const confirmed = await write(async () => {
           const before = current;
           if (before.seat < 0 || before.game.turn !== before.seat || before.game.result) return;
+          // A timeout can bring this seat to another decision while a write is
+          // queued. Only a pace-only change preserves the original choice.
+          if (selected.revision !== before.revision && !onlyPaceChanged(selected, before)) return;
           if (!play) return sendAction(before, action);
           if (!sameDealAndSeat(selected, before) || before.game.phase !== 'play' ||
               selected.game.trickNo !== before.game.trickNo || !before.game.hand?.includes(action.card)) return false;

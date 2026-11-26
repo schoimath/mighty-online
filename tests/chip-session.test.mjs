@@ -183,6 +183,29 @@ test('a fast table can read the next AI card before the normal polling interval'
   }
 });
 
+test('a human turn uses the server clock and wakes on its deadline, even at slow pace', async t => {
+  t.mock.timers.enable({apis:['Date','setTimeout'],now:1000});
+  const handId = crypto.randomUUID(), calls = [];
+  const initial = {handId,revision:1,seat:-1,pace:'slow',game:{phase:'bid',turn:0},
+    serverNow:501000,turnDeadline:501200,dueAt:501200};
+  const reader = followChipHand(async () => {
+    calls.push(Date.now());
+    return calls.length === 1 ? initial : {...initial, revision:2, turnDeadline:null, dueAt:null, game:{phase:'result'}};
+  },handId,'watch',() => {},assert.fail,initial);
+  try {
+    reader.start();
+    assert.equal(reader.localTurnDeadline,1200);
+    t.mock.timers.tick(0);
+    await Promise.resolve();
+    t.mock.timers.tick(249);
+    assert.deepEqual(calls,[1000]);
+    t.mock.timers.tick(1);
+    await Promise.resolve();
+    assert.deepEqual(calls,[1000,1250]);
+    assert.equal(reader.localTurnDeadline,null);
+  } finally { reader.close(); }
+});
+
 test('a spectator receives wallet changes between turns without replacing the game frame', {timeout:3000}, async () => {
   const handId = crypto.randomUUID();
   const initial = {handId, revision:5, seat:-1, game:{phase:'play',turn:4}, seatBalances:[40,80,null,null,null]};
@@ -376,6 +399,22 @@ test('a card selected during a pace edit cannot be submitted in another trick', 
     const receipt = reader.act({type:'play',card:'H8'});
     await update;
     assert.equal(await receipt,false);
+    assert.deepEqual(calls,['pace']);
+  } finally { reader.close(); }
+});
+
+test('a queued bid cannot pass for the player again after the server played the original turn', async () => {
+  const handId = crypto.randomUUID();
+  const initial = {handId,seat:0,revision:1,pace:'normal',publicGame:{},game:{phase:'bid',turn:0,bidHistory:[]}};
+  const next = {...initial,revision:6,pace:'fast',game:{...initial.game,
+    bidHistory:[{seat:0,points:14,suit:'H'},{seat:1,points:15,suit:'S'}]}};
+  const calls = [];
+  const reader = followChipHand(async req => { calls.push(req.op); return next; },handId,'view',() => {},assert.fail,initial);
+  try {
+    reader.start();
+    const update = reader.changePace('fast');
+    const pending = reader.act({type:'pass'});
+    await Promise.all([update,pending]);
     assert.deepEqual(calls,['pace']);
   } finally { reader.close(); }
 });

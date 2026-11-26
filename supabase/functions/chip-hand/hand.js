@@ -8,6 +8,7 @@ import {decideTableTurn, hasSeatMemory, isModelId, memoryForReplacement} from '.
 import {botTurnDelay, normalizeGameSpeed, paceMultiplier} from '../../../table-timing.js';
 
 const RECONNECT_MS = 120_000;
+const HUMAN_TURN_MS = 10_000;
 const CATCHUP_BUDGET_MS = 120;
 const MAX_UNATTENDED_MOVES = 64;
 const SUBSTITUTE_NAMES = ['AI 솔', 'AI 달', 'AI 별', 'AI 구름', 'AI 바다'];
@@ -42,18 +43,29 @@ async function hashManifest(spec) {
   return Array.from(new Uint8Array(hash), n => n.toString(16).padStart(2,'0')).join('');
 }
 
-function nextDue(state, now) {
+function usesTurnClock(state) {
+  return !state.round.result && !state.bots[state.round.turn] && state.bots.filter(bot => !bot).length >= 2;
+}
+
+function turnDeadline(state) {
+  if (!usesTurnClock(state)) return null;
+  // Older hands stored the start of this human turn plus its two-minute grace.
+  return state.turnDeadline ?? state.dueAt - RECONNECT_MS + HUMAN_TURN_MS;
+}
+
+function scheduleTurn(state, now, botTime = now) {
   const g = state.round;
-  if (g.result) return null;
-  if (!state.bots[g.turn]) return now + RECONNECT_MS;
-  return now + botTurnDelay(g, state.pace, {showRedeal:false});
+  state.turnDeadline = usesTurnClock(state) ? now + HUMAN_TURN_MS : null;
+  if (g.result) state.dueAt = null;
+  else if (!state.bots[g.turn]) state.dueAt = state.turnDeadline ?? now + RECONNECT_MS;
+  else state.dueAt = botTime + botTurnDelay(g, state.pace, {showRedeal:false});
 }
 
 function createState(spec, manifest, now) {
   const state = {manifest, names:spec.names, models:spec.models, firstSeat:spec.firstSeat, pace:normalizeGameSpeed(spec.pace),
     round:createGame({firstSeat:spec.firstSeat, rules:spec.rules}), bots:spec.seats.map(id => id === null),
     history:Array.from({length:5}, () => []), memory:Array(5).fill(null), dueAt:null};
-  state.dueAt = nextDue(state, now);
+  scheduleTurn(state, now);
   return state;
 }
 
@@ -62,7 +74,7 @@ function nameAt(row, seat) {
     ? SUBSTITUTE_NAMES[seat] : row.state.names[seat];
 }
 
-function present(row, id) {
+function present(row, id, now) {
   const {state} = row, round = state.round;
   const owner = id ? row.seats.indexOf(id) : -1;
   const seat = owner >= 0 && !state.bots[owner] ? owner : -1;
@@ -71,11 +83,13 @@ function present(row, id) {
   const game = seat >= 0 ? withJokerStatus(getView(round, seat), seenJoker) : publicGame;
   if (game.phase === 'discard' && seat === game.declarer) game.incomingCards = [...round.knownKitty];
   const deltas = round.result ? settlements(round.result, round.bid.suit) : null;
+  const deadline = turnDeadline(state);
   const seatBalances = row.seats.map((account, i) =>
     account && (!state.bots[i] || row.settled) && Number.isSafeInteger(row.seatBalances?.[i]) ? row.seatBalances[i] : null);
   return {handId:row.hand, room:row.room, revision:row.revision, seat, game, bots:state.bots,
     names:state.names.map((_, i) => nameAt(row, i)), seatBalances, models:state.models, firstSeat:state.firstSeat, pace:normalizeGameSpeed(state.pace),
-    dueAt:state.dueAt, deltas, ...(owner >= 0 && deltas ? {myDelta:deltas[owner]} : {}),
+    dueAt:deadline ?? state.dueAt, turnDeadline:deadline, serverNow:now, lastTimedAction:state.lastTimedAction ?? null,
+    deltas, ...(owner >= 0 && deltas ? {myDelta:deltas[owner]} : {}),
     ...(id === row.host ? {publicGame} : {})};
 }
 
@@ -87,7 +101,7 @@ function replaceSeat(state, seat) {
   state.bots[seat] = true;
 }
 
-function move(row, action, now, memory = null) {
+function move(row, action, now, memory = null, botTime = now) {
   const s = row.state, r = s.round, seat = r.turn, before = r.dealNo;
   const name = nameAt(row, seat);
   const track = !s.bots[seat] && hasSeatMemory(s.models[seat]);
@@ -110,7 +124,7 @@ function move(row, action, now, memory = null) {
       if (entry) entry.name = name;
     }
   }
-  s.dueAt = nextDue(s, now);
+  scheduleTurn(s, now, botTime);
   if (r.result) { s.memory.fill(null); s.history = []; }
 }
 
@@ -118,21 +132,26 @@ function advanceDue(row, now, catchup) {
   const s = row.state;
   const allBots = s.bots.every(Boolean);
   const finishing = s.finishUnattended === true && allBots;
-  if (s.round.result || s.dueAt > now) return false;
+  let due = turnDeadline(s) ?? s.dueAt;
+  if (s.round.result || due > now) return false;
   // The clock only replays elapsed turns. An account explicitly closing an
   // all-AI hand also waives the pauses between moves. Persist a bounded batch
   // so expensive bot decisions or repeated redeals can resume on another call.
   const limit = finishing || (catchup && allBots) ? MAX_UNATTENDED_MOVES : catchup ? 5 : 1;
   const deadline = performance.now() + CATCHUP_BUDGET_MS;
-  for (let i = 0; i < limit && !s.round.result && s.dueAt <= now; i++) {
+  for (let i = 0; i < limit && !s.round.result && due <= now; i++) {
     const seat = s.round.turn;
-    if (!s.bots[seat]) replaceSeat(s, seat);
+    const assisted = usesTurnClock(s);
+    if (!assisted && !s.bots[seat]) replaceSeat(s, seat);
     const view = withJokerStatus(botObservation(s.round, seat));
-    const next = canDeclareSetting(s.round, seat) && shouldDeclareSetting(view)
+    const memory = assisted ? memoryForReplacement(s.models[seat], s.history[seat]) : s.memory[seat];
+    const next = !assisted && canDeclareSetting(s.round, seat) && shouldDeclareSetting(view)
       ? {action:{type:'claim'}}
-      : decideTableTurn({modelId:s.models[seat], view, memory:s.memory[seat]});
-    move(row, next.action, catchup && !finishing ? s.dueAt : now, next.memory);
+      : decideTableTurn({modelId:s.models[seat], view, memory});
+    move(row, next.action, now, next.memory, catchup && !finishing && !assisted ? due : now);
+    if (assisted) s.lastTimedAction = {seat, revision:row.revision + 1};
     if (finishing && !s.round.result) s.dueAt = now;
+    due = s.dueAt;
     if (performance.now() >= deadline) break;
   }
   return true;
@@ -188,14 +207,14 @@ export async function operateHand(input, accountId, db, now = Date.now()) {
     check(id === spec.host, '방장만 판을 시작할 수 있습니다.', 403);
     const row = await db.start(hand, spec, createState(spec, hash, now));
     check(row.host === id && row.state.manifest === hash, '이미 다른 조건으로 시작된 판입니다.', 409);
-    return present(row, id);
+    return present(row, id, now);
   }
 
   let row = await db.read(hand);
   check(row, '해당 판을 찾을 수 없습니다.', 404);
   const seat = id ? row.seats.indexOf(id) : -1;
   if (!publicRead) check(seat >= 0 || row.host === id, '이 판의 참가 계정을 확인해 주세요.', 403);
-  if (op === 'pace') return present(await changePace(row, id, input.pace, db, now), id);
+  if (op === 'pace') return present(await changePace(row, id, input.pace, db, now), id, now);
   const state = row.state;
   let changed = false;
   if (op === 'leave') {
@@ -209,8 +228,9 @@ export async function operateHand(input, accountId, db, now = Date.now()) {
       if (s.bots[seat] && !finish) break;
       check(retry < 4, '차례가 바뀌었습니다. 다시 시도해 주세요.', 409);
       if (!s.bots[seat]) {
+        const wasTimed = usesTurnClock(s);
         replaceSeat(s, seat);
-        if (s.round.turn === seat) s.dueAt = nextDue(s, now);
+        if (s.round.turn === seat || (wasTimed && !usesTurnClock(s))) scheduleTurn(s, now);
       }
       if (finish) {
         s.finishUnattended = true;
@@ -226,16 +246,18 @@ export async function operateHand(input, accountId, db, now = Date.now()) {
          input.revision >= firstPlayableRevision(row) && input.revision <= row.revision; retry++) {
       check(retry < 4, '설정이 변경되고 있습니다. 잠시 후 카드를 다시 내 주세요.', 409);
       check(!row.state.bots[seat] && row.state.round.turn === seat, '지금은 내 차례가 아닙니다.');
-      move(row, input.action, now);
+      const deadline = turnDeadline(row.state);
+      if (deadline !== null && now >= deadline) advanceDue(row, now, false);
+      else move(row, input.action, now);
       row = await db.save(row);
     }
   } else if (op === 'view' && !state.round.result && state.round.turn === seat &&
-             !state.bots[seat] && state.dueAt - now <= 45_000) {
+             !state.bots[seat] && !usesTurnClock(state) && state.dueAt - now <= 45_000) {
     // An authenticated read renews the active seat's presence while thinking.
     state.dueAt = now + RECONNECT_MS;
     changed = true;
   } else changed = advanceDue(row, now, op === 'tick');
   if (changed) row = await db.save(row);
   if (op === 'tick') return {handId:hand, revision:row.revision, settled:row.settled};
-  return present(row, publicRead ? null : id);
+  return present(row, publicRead ? null : id, now);
 }

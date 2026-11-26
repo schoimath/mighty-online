@@ -40,6 +40,15 @@ function positionChat(panel, handle, grip) {
   let x = 1, y = 1, drag = null, dragged = false;
   let left, top, travelX, travelY;
   try {
+    const position = JSON.parse(localStorage.getItem('mighty-chat-position'));
+    if ([position?.x, position?.y].every(n => Number.isFinite(n) && n >= 0 && n <= 1)) {
+      x = position.x;
+      y = position.y;
+      panel.toggleAttribute('data-grip-right', x < .5);
+      panel.toggleAttribute('data-grip-bottom', y < .5);
+    }
+  } catch {}
+  try {
     const saved = JSON.parse(localStorage.getItem(sizeKey));
     if (Number.isFinite(saved?.width) && saved.width >= 220 &&
         Number.isFinite(saved.height) && saved.height >= 160) size = saved;
@@ -69,6 +78,9 @@ function positionChat(panel, handle, grip) {
     place();
     document.documentElement.style.setProperty('--chat-height', panel.offsetHeight + 'px');
   }
+  function savePosition() {
+    try { localStorage.setItem('mighty-chat-position', JSON.stringify({x, y})); } catch {}
+  }
   // Keep a relative position so rotation and the on-screen keyboard don't lose the panel.
   function moveTo(px, py, moveGrip = true) {
     if (travelX) x = Math.max(0, Math.min(1, (px - left) / travelX));
@@ -92,6 +104,7 @@ function positionChat(panel, handle, grip) {
     moveTo(drag.left + dx, drag.top + dy);
   });
   heading.addEventListener('lostpointercapture', () => {
+    if (drag && dragged) savePosition();
     drag = null;
     heading.classList.remove('chat-dragging');
   });
@@ -100,6 +113,7 @@ function positionChat(panel, handle, grip) {
     const current = corners.findIndex(([cx, cy]) => cx === Math.round(x) && cy === Math.round(y));
     [x, y] = corners[(current + 1) % corners.length];
     place(true);
+    savePosition();
   };
   handle.onkeydown = event => {
     if (event.key === 'Home') {
@@ -109,6 +123,7 @@ function positionChat(panel, handle, grip) {
       const [dx, dy] = arrows[event.key], step = event.shiftKey ? 64 : 16;
       moveTo(left + x * travelX + dx * step, top + y * travelY + dy * step);
     } else return;
+    savePosition();
     event.preventDefault();
   };
 
@@ -136,6 +151,7 @@ function positionChat(panel, handle, grip) {
       if (size) localStorage.setItem(sizeKey, JSON.stringify(size));
       else localStorage.removeItem(sizeKey);
     } catch {}
+    savePosition();
   }
   function resetSize() {
     size = null;
@@ -186,6 +202,8 @@ export function setupChat(send) {
   const log = new ChatLog();
   const handle = el('chat-move');
   const layout = positionChat(panel, handle, el('chat-resize'));
+  let preferOpen = true;
+  try { preferOpen = localStorage.getItem('mighty-chat-open') !== 'false'; } catch {}
   let unread = 0;
 
   function showCount(count) {
@@ -194,24 +212,30 @@ export function setupChat(send) {
     badge.hidden = !unread;
     toggle.setAttribute('aria-label', unread ? '방 채팅, 새 메시지 ' + unread + '개' : '방 채팅');
   }
-  function showPanel(open) {
+  function showPanel(open, fromUser = false) {
     panel.hidden = !open;
     toggle.setAttribute('aria-expanded', String(open));
+    if (fromUser) {
+      preferOpen = open;
+      try { localStorage.setItem('mighty-chat-open', String(open)); } catch {}
+    }
     if (open) {
       showCount(0);
       layout();
-      const focusTarget = window.matchMedia('(pointer: coarse)').matches ? handle : input;
-      focusTarget.focus({preventScroll:true});
+      if (fromUser) {
+        const focusTarget = window.matchMedia('(pointer: coarse)').matches ? handle : input;
+        focusTarget.focus({preventScroll:true});
+      }
       scroll.scrollTop = scroll.scrollHeight;
-    } else if (toggle.isConnected && !toggle.hidden) {
+    } else if (fromUser && toggle.isConnected && !toggle.hidden) {
       toggle.focus({preventScroll:true});
     }
   }
-  toggle.onclick = () => showPanel(panel.hidden);
-  el('chat-close').onclick = () => showPanel(false);
+  toggle.onclick = () => showPanel(panel.hidden, true);
+  el('chat-close').onclick = () => showPanel(false, true);
   document.addEventListener('keydown', event => {
     if (event.key === 'Escape' && !panel.hidden && !document.querySelector('dialog[open]')) {
-      showPanel(false);
+      showPanel(false, true);
     }
   });
   input.addEventListener('input', () => {
@@ -270,7 +294,10 @@ export function setupChat(send) {
     },
     attach(parent) {
       if (toggle.parentNode !== parent) parent.prepend(toggle);
-      toggle.hidden = false;
+      if (toggle.hidden) {
+        toggle.hidden = false;
+        showPanel(preferOpen);
+      }
     },
     reset() {
       toggle.remove();

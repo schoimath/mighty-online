@@ -74,6 +74,13 @@ html:has(.g-screen) { scrollbar-gutter: stable; }
   border: 1px solid #385d4b; border-radius: 15px;
   background: repeating-linear-gradient(125deg, #1c372b 0 1px, #1b362a 1px 5px);
 }
+.g-turn-clock {
+  position: absolute; z-index: 1; top: 5px; left: 10px;
+  padding: 2px 6px; border-radius: 5px; background: #1b362a; color: #d7e7d9;
+  font-size: .75rem; line-height: 1.25; font-weight: 650; font-variant-numeric: tabular-nums;
+  white-space: nowrap; pointer-events: none;
+}
+.g-turn-clock.g-turn-ending { color: #ffcc84; }
 .g-felt {
   --table-card: clamp(38px, 4.6vw, 54px);
   --center-height: clamp(204px, 25vw, 276px);
