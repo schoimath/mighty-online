@@ -9,6 +9,21 @@ const authSession = user => ({user,access_token:user.id+'-token'});
 const ok = data => ({data,error:null});
 const mockWallet = balance => ({ok:true,json:async () => ({balance,recoveryDate:null})});
 
+function recoveryServer(calls, {wallet = () => mockWallet(30), onUpdate} = {}) {
+  return async (url, options) => {
+    if (url === config.url + '/rest/v1/rpc/chip_wallet') return wallet();
+    assert.equal(url, config.url + '/auth/v1/user');
+    assert.equal(options.method, 'PUT');
+    assert.equal(options.headers.Authorization, 'Bearer player-token');
+    assert.equal(options.headers.apikey, config.publishableKey);
+    const input = JSON.parse(options.body);
+    calls.push(['update', input]);
+    if (onUpdate) await onUpdate(input);
+    if (input.password === 'used-password') return {ok:false,status:422,json:async () => ({code:'same_password'})};
+    return {ok:true,status:200,json:async () => person()};
+  };
+}
+
 function authStub(initialUser,callbackType) {
   let session = initialUser && authSession(initialUser), handler;
   const calls = [];
@@ -35,7 +50,7 @@ function authStub(initialUser,callbackType) {
       handler('SIGNED_IN',session);
       return ok({session});
     },
-    async updateUser(input) { calls.push(['update',input]); return ok({user:session.user}); },
+    switchAccount(user) { session = authSession(user); handler('SIGNED_IN',session); },
     async signOut(options) { calls.push(['signout',options]); session = null; handler('SIGNED_OUT',null); return ok({}); },
     async resetPasswordForEmail(...args) { calls.push(['reset',...args]); return ok({}); },
     async resend(input) { calls.push(['resend',input]); return ok({}); }
@@ -161,7 +176,7 @@ test('verification codes are scrubbed before exchange and recovery opens the pas
   const auth = authStub(null,'recovery');
   const client = new AccountClient(config,{location:new URL('https://club.example/mighty/?code=ONEUSE&room=ABC234'),
     history:{state:null,replaceState:(_state,_title,url)=>{clean=url;}},
-    makeAuth:async () => auth,fetcher:async () => mockWallet(30)});
+    makeAuth:async () => auth,fetcher:recoveryServer(auth.calls)});
   assert.equal(clean,'https://club.example/mighty/?room=ABC234');
   await client.ready;
   assert.equal(client.state.authLink,true);
@@ -170,6 +185,35 @@ test('verification codes are scrubbed before exchange and recovery opens the pas
   assert.equal(client.state.recovering,false);
   assert.deepEqual(auth.calls, [['exchange','ONEUSE'], ['update',{password:'new-password'}]]);
 });
+
+for (const query of ['?code=ONEUSE', '?type=recovery&token_hash=ONEUSE', '#type=recovery&token_hash=ONEUSE']) {
+  test('a recovery link allows setting the password while the wallet is stalled: ' + query, async () => {
+    const auth = authStub(person('previous-player'), 'recovery');
+    let finishWallet;
+    const stalledWallet = new Promise(resolve => { finishWallet = resolve; });
+    const client = new AccountClient(config, {
+      location:new URL('https://club.example/mighty/' + query),
+      history:{state:null, replaceState() {}},
+      makeAuth:async () => auth,
+      fetcher:recoveryServer(auth.calls, {wallet:() => stalledWallet})
+    });
+    try {
+      await new Promise(resolve => setImmediate(resolve));
+      assert.equal(client.state.recovering, true);
+      assert.equal(client.state.ready, true, 'the password dialog must not wait for chip data');
+      if (query.includes('token_hash')) {
+        assert.deepEqual(auth.calls, [], 'opening a link preview must not consume the one-time recovery link');
+      }
+      await client.updatePassword('new-game-password');
+      assert.equal(client.state.user?.id, 'player');
+      assert.equal(client.state.recovering, false);
+      const verify = query.includes('token_hash') ? ['verify', {type:'recovery', token_hash:'ONEUSE'}] : ['exchange', 'ONEUSE'];
+      assert.deepEqual(auth.calls, [verify, ['update', {password:'new-game-password'}]]);
+    } finally {
+      finishWallet(mockWallet(30));
+    }
+  });
+}
 
 test('usage is safe without configured account service and strips legacy fragment credentials', async () => {
   const client = new AccountClient({});
@@ -182,4 +226,71 @@ test('usage is safe without configured account service and strips legacy fragmen
     {state:null,replaceState:(_,__,url)=>{clean=url;}});
   assert.equal(clean,'https://club.example/');
   assert.equal(link.error,'unsupported_callback');
+});
+
+test('an expired recovery link cannot change the password of a previously signed-in account', async () => {
+  const auth = authStub(person('previous-player'));
+  auth.verifyOtp = async input => {
+    auth.calls.push(['verify',input]);
+    return {data:null,error:{code:'otp_expired'}};
+  };
+  const client = new AccountClient(config, {
+    location:new URL('https://club.example/mighty/#type=recovery&token_hash=EXPIRED'),
+    history:{state:null, replaceState() {}},
+    makeAuth:async () => auth, fetcher:recoveryServer(auth.calls)
+  });
+  await client.ready;
+  await assert.rejects(client.updatePassword('new-game-password'));
+  assert.deepEqual(auth.calls, [['verify', {type:'recovery', token_hash:'EXPIRED'}]]);
+  assert.equal(client.state.user?.id, 'previous-player');
+});
+
+test('a recovery code opened outside the original browser offers a new email, even with an existing login', async () => {
+  const auth = authStub(person('previous-player'));
+  auth.exchangeCodeForSession = async () => ({data:null, error:{code:'bad_code_verifier'}});
+  const client = new AccountClient(config, {
+    location:new URL('https://club.example/mighty/?code=DIFFERENT_BROWSER'),
+    history:{state:null, replaceState() {}},
+    makeAuth:async () => auth, fetcher:recoveryServer(auth.calls)
+  });
+  await client.ready;
+  assert.match(client.state.linkError, /메일.*요청/);
+  assert.equal(client.state.recovering, false);
+  await assert.rejects(client.updatePassword('new-game-password'));
+  assert.deepEqual(auth.calls, []);
+});
+
+test('a rejected password can be corrected without spending the recovery token twice', async () => {
+  const auth = authStub();
+  const client = new AccountClient(config, {
+    location:new URL('https://club.example/mighty/#type=recovery&token_hash=ONEUSE'),
+    history:{state:null, replaceState() {}},
+    makeAuth:async () => auth, fetcher:recoveryServer(auth.calls)
+  });
+  await client.ready;
+  await assert.rejects(client.updatePassword('used-password'), /기존 비밀번호/);
+  assert.equal(client.state.recovering, true);
+  await client.updatePassword('new-game-password');
+  assert.equal(client.state.recovering, false);
+  assert.deepEqual(auth.calls, [
+    ['verify', {type:'recovery', token_hash:'ONEUSE'}],
+    ['update', {password:'used-password'}],
+    ['update', {password:'new-game-password'}]
+  ]);
+});
+
+test('a sign-in in a second tab during password saving cannot retarget the authenticated update', async () => {
+  const auth = authStub();
+  const client = new AccountClient(config, {
+    location:new URL('https://club.example/mighty/#type=recovery&token_hash=ONEUSE'),
+    history:{state:null, replaceState() {}},
+    makeAuth:async () => auth,
+    fetcher:recoveryServer(auth.calls, {onUpdate:() => auth.switchAccount(person('other-player'))})
+  });
+  await client.ready;
+  await client.updatePassword('new-game-password');
+  assert.equal(client.state.user?.id, 'other-player');
+  assert.deepEqual(auth.calls, [['verify', {type:'recovery', token_hash:'ONEUSE'}], ['update', {password:'new-game-password'}]]);
+  await assert.rejects(client.updatePassword('another-game-password'));
+  assert.equal(auth.calls.length,2);
 });

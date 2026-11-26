@@ -1,5 +1,6 @@
 const titles = {signin:'로그인', signup:'회원가입', sent:'인증 메일 확인', forgot:'비밀번호 재설정',
-  resend:'인증 메일 다시 받기', password:'새 비밀번호 설정', account:'내 계정'};
+  resend:'인증 메일 다시 받기', password:'새 비밀번호 설정', checking:'메일 링크 확인 중',
+  linkError:'메일 링크 확인', account:'내 계정'};
 const format = new Intl.NumberFormat('ko-KR');
 const field = (name, label, type, attrs = '') =>
   `<label class="field">${label}<input name="${name}" type="${type}" required ${attrs}></label>`;
@@ -52,7 +53,12 @@ export function setupAccountUI(client, {onChange} = {}) {
       updateWalletDetails();
       return;
     }
-    if (page === 'signup') {
+    if (page === 'checking') {
+      body.replaceChildren();
+    } else if (page === 'linkError') {
+      body.innerHTML = actions(link('forgot','재설정 메일 다시 받기'),link('sent','가입 인증 코드 입력'),link('signin','로그인'));
+      $('account-error').textContent = state.linkError;
+    } else if (page === 'signup') {
       body.innerHTML = form(field('nickname','테이블 닉네임','text','autocomplete="nickname" maxlength="16"') +
         emailField + passField('비밀번호 (8자 이상)',true), '인증 메일 받기') +
         '<p>이메일 인증을 마치면 처음 한 번 1,000칩을 받습니다.</p>' + actions(link('signin','로그인'));
@@ -65,7 +71,8 @@ export function setupAccountUI(client, {onChange} = {}) {
       body.innerHTML = form(emailField, page === 'forgot' ? '재설정 메일 받기' : '인증 메일 보내기') +
         (page === 'resend' ? resendHelp + actions(link('signup','회원가입'),link('signin','로그인')) : actions(link('signin','로그인')));
     } else if (page === 'password') {
-      body.innerHTML = form(passField('새 비밀번호 (8자 이상)',true),'새 비밀번호 저장');
+      body.innerHTML = form(passField('새 비밀번호 (8자 이상)',true),'새 비밀번호 저장') +
+        actions(link('forgot','재설정 메일 다시 받기'));
     } else {
       body.innerHTML = form(emailField + passField('비밀번호',false),'로그인') +
         actions(link('signup','회원가입'),link('sent','인증 코드 입력'),link('forgot','비밀번호 재설정'),link('resend','인증 메일 다시 받기'));
@@ -91,7 +98,8 @@ export function setupAccountUI(client, {onChange} = {}) {
   }
   function open(message = '') {
     if (!dialog.open) dialog.showModal();
-    show(client.state.recovering ? 'password' : client.state.user ? 'account' : 'signin',message);
+    const state = client.state;
+    show(state.recovering ? 'password' : state.user ? 'account' : 'signin',message);
   }
   $('account-close').onclick = () => dialog.close();
   dialog.addEventListener('click', e => { if (e.target === dialog) dialog.close(); });
@@ -107,7 +115,11 @@ export function setupAccountUI(client, {onChange} = {}) {
       const next = await operation();
       if (dialog.open && active === revision && next) show(...next);
     } catch (error) {
-      if (dialog.open && active === revision) $('account-error').textContent = error.message;
+      if (dialog.open && active === revision) {
+        note();
+        if (page === 'password' && client.state.linkError) show('linkError');
+        else $('account-error').textContent = error.message;
+      }
     } finally {
       if (active === revision) {
         busy = false;
@@ -141,11 +153,12 @@ export function setupAccountUI(client, {onChange} = {}) {
           return ['account','이메일 인증을 확인했습니다.'];
         case 'forgot':
           await client.resetPassword(email);
-          return ['signin','가입한 주소라면 재설정 메일을 받습니다. 메일을 요청한 브라우저에서 링크를 열어 주세요.'];
+          return ['signin','가입한 주소라면 재설정 메일을 받습니다. 가장 최근 메일의 링크를 열어 주세요.'];
         case 'resend':
           await client.resend(email);
           return ['sent','인증 메일을 다시 요청했습니다.'];
         case 'password':
+          note('새 비밀번호를 저장하고 있습니다…');
           await client.updatePassword(password);
           return ['account','새 비밀번호를 저장했습니다.'];
       }
@@ -155,11 +168,24 @@ export function setupAccountUI(client, {onChange} = {}) {
   client.subscribe(state => {
     onChange?.(state);
     paintHeader(state);
-    if (state.ready && state.authLink && !handledLink) {
-      handledLink = true;
-      open(state.error || (state.recovering ? '새 비밀번호를 입력해 주세요.' : state.user ? '이메일 인증을 확인했습니다.' : ''));
+    if (state.authLink && !handledLink) {
+      if (!dialog.open) dialog.showModal();
+      if (state.linkError) {
+        handledLink = true;
+        show('linkError');
+      } else if (state.recovering) {
+        handledLink = true;
+        show('password','새 비밀번호를 입력해 주세요.');
+      } else if (state.ready) {
+        handledLink = true;
+        open(state.user ? '이메일 인증을 확인했습니다.' : '');
+      } else if (page !== 'checking') {
+        show('checking','메일 링크를 확인하고 있습니다…',false);
+      }
     } else if (dialog.open && !busy) {
-      if (previousId && !state.user && page === 'account') show('signin');
+      if (page === 'password' && state.linkError) show('linkError');
+      else if (previousId && !state.user && page === 'account') show('signin');
+      else if (page === 'password' && !state.recovering) show('forgot','재설정할 계정이 바뀌었습니다. 메일을 다시 요청해 주세요.');
       else if (state.user && ['signin','sent','signup','resend'].includes(page)) show(state.recovering ? 'password' : 'account');
       else if (page === 'account') updateWalletDetails();
     }

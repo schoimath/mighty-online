@@ -40,10 +40,11 @@ export function takeAccountLink(location, history) {
   const hash = new URLSearchParams(url.hash.slice(1));
   const legacyTokens = hash.has('access_token') || hash.has('refresh_token');
   const error = params.get('error_code') || hash.get('error_code') || params.get('error') || hash.get('error');
-  const link = {error, code:params.get('code'), flowId:params.get('sb_flow_id'), hash:params.get('token_hash'), type:params.get('type')};
-  if (!link.code && !link.hash && !error && !legacyTokens) return null;
+  const tokenParams = hash.has('token_hash') || hash.get('type') === 'recovery' ? hash : params;
+  const link = {error, code:params.get('code'), flowId:params.get('sb_flow_id'), hash:tokenParams.get('token_hash'), type:tokenParams.get('type')};
+  if (!link.code && !link.hash && !error && !legacyTokens && link.type !== 'recovery') return null;
   for (const key of ['code','sb_flow_id','token_hash','type','error','error_code','error_description']) params.delete(key);
-  if (hash.has('error') || hash.has('error_code') || legacyTokens) url.hash = '';
+  if (tokenParams === hash || hash.has('error') || hash.has('error_code') || legacyTokens) url.hash = '';
   if (legacyTokens) link.error = 'unsupported_callback';
   history.replaceState(history.state, '', url.href);
   return link;
@@ -64,6 +65,8 @@ export class AccountClient {
   #pendingWallet = null;
   #identityVersion = 0;
   #recoveryTimer;
+  #pendingRecoveryHash = null;
+  #recoveryUserId = null;
   #fetch;
   #redirect;
   #state;
@@ -75,7 +78,7 @@ export class AccountClient {
     this.#fetch = fetcher.bind(globalThis);
     this.#redirect = location ? new URL('.', location.href).href : undefined;
     this.#state = {configured:Boolean(this.url && this.publishableKey), ready:false,
-      user:null, balance:null, recoveryDate:null, recovering:false, authLink:false, error:''};
+      user:null, balance:null, recoveryDate:null, recovering:false, authLink:false, linkError:'', error:''};
     this.ready = this.#init(makeAuth,takeAccountLink(location,history));
   }
 
@@ -91,7 +94,10 @@ export class AccountClient {
   }
   async #init(makeAuth, link) {
     try {
-      if (link) this.#set({authLink:true});
+      if (link) {
+        if (link.type === 'recovery' && !link.error) this.#pendingRecoveryHash = link.hash;
+        this.#set({authLink:true,recovering:Boolean(this.#pendingRecoveryHash)});
+      }
       if (!this.state.configured) return;
       this.#auth = await makeAuth(this.url, this.publishableKey);
       const early = unwrap(await this.#auth.getSession());
@@ -99,26 +105,32 @@ export class AccountClient {
       this.#auth.onAuthStateChange((event, session) => {
         if (event === 'INITIAL_SESSION') return;
         const changed = this.#session(session);
-        if (event === 'PASSWORD_RECOVERY') this.#set({recovering:true});
         // Auth callbacks run inside the SDK. Start new authenticated requests
         // after it releases its session lock.
         if (changed && this.state.user) setTimeout(() => this.refreshWallet(), 0);
       });
       if (link?.error) throw new Error(errorMessages[link.error] || '인증 링크를 확인할 수 없습니다. 메일을 다시 요청해 주세요.');
-      if (link?.hash && ['email','signup','recovery'].includes(link.type)) {
+      if (this.#pendingRecoveryHash) {
+        // Verify only when the recipient submits a password. A mail preview can open this page.
+        return;
+      } else if (link?.hash && ['email','signup'].includes(link.type)) {
         const data = unwrap(await this.#auth.verifyOtp({token_hash:link.hash, type:link.type}));
         this.#session(data.session);
-        if (link.type === 'recovery') this.#set({recovering:true});
       } else if (link?.code) {
         const {data,error} = await this.#auth.exchangeCodeForSession(link.code,link.flowId ? {flowId:link.flowId} : undefined);
-        if (error) throw new Error(errorMessages[error.code] || '메일을 요청한 브라우저에서 링크를 열어 주세요. 가입 인증을 마쳤다면 로그인할 수 있습니다.');
-        this.#session(data.session);
-        if (data.redirectType === 'recovery') this.#set({recovering:true});
+        if (error) throw new Error(errorMessages[error.code] || '메일을 요청한 브라우저에서 링크를 열어 주세요. 다른 브라우저라면 새 메일을 요청해 주세요.');
+        if (data.redirectType === 'recovery') this.#acceptRecovery(data.session);
+        else this.#session(data.session);
+      } else if (link) {
+        throw new Error('메일 링크를 확인할 수 없습니다. 메일을 다시 요청해 주세요.');
       }
-      if (this.state.user) await this.refreshWallet();
+      if (this.state.user && !link) await this.refreshWallet();
     } catch (error) {
-      this.#set({error:error.message});
-    } finally { this.#set({ready:true}); }
+      this.#set(link ? {linkError:error.message, recovering:false} : {error:error.message});
+    } finally {
+      this.#set({ready:true});
+      if (link && this.state.user) void this.refreshWallet();
+    }
   }
   #session(session) {
     const raw = session?.user;
@@ -128,9 +140,10 @@ export class AccountClient {
     const changed = this.state.user?.id !== user?.id;
     if (changed) {
       this.#identityVersion++;
+      this.#recoveryUserId = null;
       clearTimeout(this.#recoveryTimer);
       this.#pendingWallet = null;
-      this.#set({user, balance:null, recoveryDate:null, recovering:false, error:''});
+      this.#set({user, balance:null, recoveryDate:null, recovering:Boolean(this.#pendingRecoveryHash), error:''});
     } else if (user && (this.state.user.email !== user.email || this.state.user.nickname !== user.nickname)) {
       this.#set({user});
     }
@@ -224,10 +237,52 @@ export class AccountClient {
     const auth = await this.#service();
     unwrap(await auth.resetPasswordForEmail(email.trim(), {redirectTo:this.#redirect}), 'recovery');
   }
+  #acceptRecovery(session) {
+    if (!session?.user?.id || !session.user.email_confirmed_at || !session.user.email) {
+      throw new Error('비밀번호를 재설정할 계정을 확인하지 못했습니다. 새 메일을 요청해 주세요.');
+    }
+    this.#session(session);
+    this.#recoveryUserId = session.user.id;
+    this.#set({recovering:true});
+  }
   async updatePassword(password) {
+    if (typeof password !== 'string' || password.length < 8) throw new Error('새 비밀번호를 8자 이상 입력해 주세요.');
     const auth = await this.#service();
-    unwrap(await auth.updateUser({password}));
+    if (this.#pendingRecoveryHash) {
+      const response = await auth.verifyOtp({type:'recovery',token_hash:this.#pendingRecoveryHash});
+      if (response.error?.code === 'otp_expired') {
+        this.#pendingRecoveryHash = null;
+        this.#set({linkError:errorMessages.otp_expired,recovering:false});
+      }
+      const {session} = unwrap(response);
+      this.#acceptRecovery(session);
+      this.#pendingRecoveryHash = null;
+    }
+    const {session} = unwrap(await auth.getSession());
+    if (!this.#recoveryUserId || !session?.access_token || session.user?.id !== this.#recoveryUserId || this.state.user?.id !== this.#recoveryUserId) {
+      throw new Error('비밀번호 재설정 세션이 끝났습니다. 새 메일을 요청해 주세요.');
+    }
+    // The SDK's updateUser reads the shared session again. Pin this write to the
+    // verified user's bearer token even if another tab signs into a different account.
+    let response;
+    try {
+      response = await this.#fetch(this.url + '/auth/v1/user', {
+        method:'PUT', cache:'no-store', headers:{apikey:this.publishableKey,
+          Authorization:'Bearer ' + session.access_token, 'Content-Type':'application/json',
+          'X-Supabase-Api-Version':'2024-01-01'}, body:JSON.stringify({password})
+      });
+    } catch {
+      throw new Error('비밀번호 저장 결과를 확인하지 못했습니다. 연결 상태를 확인한 뒤 다시 시도해 주세요.');
+    }
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(errorMessages[error?.code || error?.error_code] || (response.status === 401 || response.status === 403
+        ? '비밀번호 재설정 세션이 끝났습니다. 새 메일을 요청해 주세요.'
+        : '새 비밀번호를 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.'));
+    }
+    this.#recoveryUserId = null;
     this.#set({recovering:false, error:''});
+    if (this.state.user && this.state.balance === null) void this.refreshWallet();
   }
   async signOut() {
     const auth = await this.#service();

@@ -8,40 +8,40 @@
   <meta name="description" content="친구와 방 코드를 나누고 즐기는 5인 마이티 카드 게임. AI와 함께 연습할 수도 있어요.">
   <title>Mighty Club · 마이티 온라인</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 60 60'%3E%3Crect width='60' height='60' rx='12' fill='%23174639'/%3E%3Ctext x='30' y='48' text-anchor='middle' font-size='50' fill='%23f8f3de'%3E♠%3C/text%3E%3C/svg%3E">
-  <link rel="stylesheet" href="./style.css?v=1.1.20261126115112">
-  <link rel="stylesheet" href="./game.css?v=1.1.20261126115112">
-  <link rel="stylesheet" href="./score.css?v=1.1.20261126115112">
+  <link rel="stylesheet" href="./style.css?v=1.1.20261126121131">
+  <link rel="stylesheet" href="./game.css?v=1.1.20261126121131">
+  <link rel="stylesheet" href="./score.css?v=1.1.20261126121131">
   <link rel="stylesheet" href="./auction.css">
   <link rel="stylesheet" href="./chat.css">
-  <link rel="stylesheet" href="./public-room.css?v=1.1.20261126115112">
-  <link rel="stylesheet" href="./account.css?v=1.1.20261126115112">
+  <link rel="stylesheet" href="./public-room.css?v=1.1.20261126121131">
+  <link rel="stylesheet" href="./account.css?v=1.1.20261126121131">
   <script type="importmap">
     {
       "imports": {
-        "./account-config.js": "./account-config.js?v=1.1.20261126115112",
-        "./account-client.js": "./account-client.js?v=1.1.20261126115112",
-        "./account-ui.js": "./account-ui.js?v=1.1.20261126115112",
-        "./chip-play.js": "./chip-play.js?v=1.1.20261126115112",
-        "./chat.js": "./chat.js?v=1.1.20261126115112",
-        "./network.js": "./network.js?v=1.1.20261126115112",
-        "./public-directory.js": "./public-directory.js?v=1.1.20261126115112",
-        "./public-room-ui.js": "./public-room-ui.js?v=1.1.20261126115112",
-        "./lab/table-agents.js": "./lab/table-agents.js?v=1.1.20261126115112",
-        "./model-picker.js": "./model-picker.js?v=1.1.20261126115112",
-        "./room-preferences.js": "./room-preferences.js?v=1.1.20261126115112",
-        "./game-ui.js": "./game-ui.js?v=1.1.20261126115112",
-        "./sound.js": "./sound.js?v=1.1.20261126115112",
-        "./release.js": "./release.js?v=1.1.20261126115112",
-        "./session.js": "./session.js?v=1.1.20261126115112",
-        "./bot-setting.js": "./bot-setting.js?v=1.1.20261126115112",
-        "./table-claim.js": "./table-claim.js?v=1.1.20261126115112",
-        "./table-setting.js": "./table-setting.js?v=1.1.20261126115112",
-        "./table-deal.js": "./table-deal.js?v=1.1.20261126115112",
-        "./score-ui.js": "./score-ui.js?v=1.1.20261126115112"
+        "./account-config.js": "./account-config.js?v=1.1.20261126121131",
+        "./account-client.js": "./account-client.js?v=1.1.20261126121131",
+        "./account-ui.js": "./account-ui.js?v=1.1.20261126121131",
+        "./chip-play.js": "./chip-play.js?v=1.1.20261126121131",
+        "./chat.js": "./chat.js?v=1.1.20261126121131",
+        "./network.js": "./network.js?v=1.1.20261126121131",
+        "./public-directory.js": "./public-directory.js?v=1.1.20261126121131",
+        "./public-room-ui.js": "./public-room-ui.js?v=1.1.20261126121131",
+        "./lab/table-agents.js": "./lab/table-agents.js?v=1.1.20261126121131",
+        "./model-picker.js": "./model-picker.js?v=1.1.20261126121131",
+        "./room-preferences.js": "./room-preferences.js?v=1.1.20261126121131",
+        "./game-ui.js": "./game-ui.js?v=1.1.20261126121131",
+        "./sound.js": "./sound.js?v=1.1.20261126121131",
+        "./release.js": "./release.js?v=1.1.20261126121131",
+        "./session.js": "./session.js?v=1.1.20261126121131",
+        "./bot-setting.js": "./bot-setting.js?v=1.1.20261126121131",
+        "./table-claim.js": "./table-claim.js?v=1.1.20261126121131",
+        "./table-setting.js": "./table-setting.js?v=1.1.20261126121131",
+        "./table-deal.js": "./table-deal.js?v=1.1.20261126121131",
+        "./score-ui.js": "./score-ui.js?v=1.1.20261126121131"
       }
     }
   </script>
-  <script type="module" src="./app.js?v=1.1.20261126115112"></script>
+  <script type="module" src="./app.js?v=1.1.20261126121131"></script>
 </head>
 <body>
   <header class="site-header" id="site-header">
@@ -114,7 +114,13 @@
     </button>
     <span id="chat-resize-help" hidden>모서리를 끌어 크기를 조절하세요. 누르면 크게 열거나 기본 크기로 돌아갑니다. 오른쪽·아래 방향키로 넓이·높이를 늘리고 왼쪽·위 방향키로 줄입니다. Home 키로 기본 크기를 복원합니다.</span>
   </section>
-  <footer class="site-footer" id="site-footer"><div><span class="footer-name">♠ &nbsp; Mighty Club</span><small class="footer-release" id="release-version"></small></div></footer>
+  <footer class="site-footer" id="site-footer"><div>
+    <div class="footer-identity">
+      <span class="footer-name">♠ &nbsp; Mighty Club</span>
+      <a class="footer-contact" id="developer-contact" href="mailto:schoi.math@gmail.com?subject=%EB%A7%88%EC%9D%B4%ED%8B%B0%20%EC%98%A8%EB%9D%BC%EC%9D%B8%20%EB%AC%B8%EC%9D%98">개발자에게 문의</a>
+    </div>
+    <small class="footer-release" id="release-version"></small>
+  </div></footer>
   <dialog class="modal" id="modal" aria-labelledby="modal-title"><div class="modal-inner"><button class="close-icon" id="close-modal" aria-label="닫기">×</button><div id="modal-content"></div></div></dialog>
   <dialog class="modal" id="account-dialog" aria-labelledby="account-title"><div class="modal-inner">
     <button type="button" class="close-icon" id="account-close" aria-label="닫기">×</button>

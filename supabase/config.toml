@@ -12,6 +12,10 @@ enable_confirmations = true
 subject = "마이티 온라인 가입 인증 코드"
 content_path = "./supabase/templates/confirmation.html"
 
+[auth.email.template.recovery]
+subject = "마이티 온라인 비밀번호 재설정"
+content_path = "./supabase/templates/recovery.html"
+
 [functions.chip-hand]
 # Login-bearing operations check the access token against Auth. Watchers and
 # the unattended clock receive only the public projection / a tick receipt.
