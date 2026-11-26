@@ -144,6 +144,7 @@ function lookupActiveHand() {
     if (waiting && waiting.handId !== handId) {
       settlingHand = null;
       accountClient.refreshWallet().catch(error => toast(error.message));
+      if (mode === 'lobby') refreshDirectory();
       toast('이전 판의 칩 정산이 끝났습니다.');
     } else if (waiting) waiting.delay = waiting.allBots ? 1200 : 12000;
     return handId;
@@ -209,7 +210,7 @@ function serverOnlySnapshot(data) {
 function trackChipHand(handId, initial = null, hintRevision) {
   if (chipReader?.handId === handId) { chipReader.wake(hintRevision); return; }
   chipReader?.close();
-  const watch = !accountClient.state.user || (mode !== 'resume' &&
+  const watch = mode === 'spectate' || !accountClient.state.user || (mode !== 'resume' &&
     (authority ? authority.hostSeat < 0 && inheritedHand === handId : snapshot?.spectator));
   let lastSeatBalance, lastSeenRevision;
   const reader = followChipHand(chipRequest, handId, watch ? 'watch' : 'view', (data, balancesOnly, paceOnly) => {
@@ -252,7 +253,7 @@ function trackChipHand(handId, initial = null, hintRevision) {
       settledChipHand = handId;
       if (accountClient.state.user) accountClient.refreshWallet().catch(error => toast(error.message));
     }
-    if (mode === 'resume') {
+    if (mode === 'resume' || mode === 'spectate') {
       snapshot = serverOnlySnapshot(data);
     }
     if (mode === 'host' && authority.syncChipHand(data)) publish();
@@ -391,6 +392,7 @@ async function refreshDirectory() {
     const rooms = await listPublicRooms({signal:controller.signal});
     if (controller.signal.aborted) return;
     listedRooms = rooms;
+    if (rooms.some(room => room.phase === 'settling')) nextScan = 8000;
     renderPublicTables(rooms);
   } catch (error) {
     if (!controller.signal.aborted) {
@@ -408,6 +410,7 @@ async function refreshDirectory() {
 
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) { clearTimeout(activeTimer); pauseDirectory(); return; }
+  if (mode === 'spectate') { chipReader?.wake(); return; }
   if (mode === 'lobby' || settlingHand) refreshActiveHand();
   refreshDirectory();
 });
@@ -757,11 +760,12 @@ function requestLeave() {
   const canReserve = handKey && !snapshot.spectator && snapshot.game?.phase !== 'result' &&
     !chipReader?.current?.game.result;
   const playing = handId && snapshot.game?.phase !== 'result';
-  const leavingOwnHand = playing && (!snapshot.spectator || resumeHand === snapshot.chipHandId);
+  const leavingOwnHand = mode !== 'spectate' && playing && (!snapshot.spectator || resumeHand === snapshot.chipHandId);
   let reason = '이 방에서 나갑니다.';
   if (mode === 'host') {
     reason = backups?.size ? '남아 있는 참가자가 방장을 이어받습니다.' : '테이블에서 나와 로비로 돌아갑니다.';
   } else if (mode === 'practice') reason = '현재 연습 게임이 종료됩니다.';
+  else if (mode === 'spectate') reason = '관전을 끝내고 로비로 돌아갑니다.';
   else if (snapshot?.spectator) reason = '관전을 끝냅니다. 신청한 자리 예약도 취소됩니다.';
   if (playing && !snapshot.spectator) reason += ' AI가 내 패를 마저 치고, 이 판의 칩은 내 계정에 정산됩니다.';
   const stepAside = canWatch ? '<button class="primary-button" id="host-watch">AI에게 맡기고 관전</button>' : '';
@@ -1001,7 +1005,7 @@ function drawRoom() {
 function drawAudience() {
   if (!snapshot) return;
   const node = $(snapshot.game ? 'game' : 'room').querySelector('.public-audience');
-  if (mode === 'resume') { if (node) node.hidden = true; return; }
+  if (mode === 'resume' || mode === 'spectate') { if (node) node.hidden = true; return; }
   if (node) renderPublicAudience(node, snapshot, {
     onReserve:() => changeReservation(true), onCancel:() => changeReservation(false)
   });
@@ -1048,12 +1052,13 @@ function draw() {
   if (!snapshot.game) { clearGame($('game')); showScreen('room'); drawRoom(); return; }
   showScreen('game');
   const remote = chipReader?.handId === snapshot.chipHandId ? chipReader?.current : null;
+  const serverOnly = mode === 'resume' || mode === 'spectate';
   renderGame($('game'),remote?.game ?? snapshot.game,{
     names:remote?.names ?? snapshot.players.map(p => p?.name), isHost: Boolean(authority), scoreboard:snapshot.scoreboard,
     seatBalances:mode === 'practice' ? practiceSeatBalances(accountClient.state) : remote?.seatBalances,
-    chipDelta:remote?.myDelta, handDeltas:remote?.deltas, settlementSeat:remote?.mySettlementSeat, resumed:mode === 'resume',
+    chipDelta:remote?.myDelta, handDeltas:remote?.deltas, settlementSeat:remote?.mySettlementSeat, resumed:serverOnly,
     turnDeadline:remote ? chipReader.localTurnDeadline : null,
-    pace:remote?.game.result && mode !== 'resume' ? snapshot.pace : remote?.pace ?? snapshot.pace,
+    pace:remote?.game.result && !serverOnly ? snapshot.pace : remote?.pace ?? snapshot.pace,
     pendingPace:pendingPace && pendingPace.reader === chipReader ? pendingPace.pace : null,
     onPaceChange:!snapshot.scoreboard?.complete && (mode === 'practice' || (mode === 'host' && remote) ||
       (mode === 'resume' && remote?.publicGame && !remote.game.result)) ? changeGamePace : undefined,
@@ -1733,7 +1738,27 @@ async function enterPublicTable(name, code, signal, options, showStatus) {
     renderPublicTables(rooms);
     const room = rooms.find(entry => entry.slot === options.slot && entry.code === code);
     if (!room) throw new Error('공개 테이블 목록을 다시 확인해 주세요.');
-    if (room.phase === 'settling') throw new Error('이 테이블은 이전 판을 정산 중입니다. 다른 테이블을 선택할 수 있습니다.');
+    if (room.phase === 'settling' || options.watchHandId) {
+      // The hand on the tile may have finished while the entry form was open.
+      // Follow that deal through its result even if the permanent slot is already free.
+      const handId = options.watchHandId ?? room.watchHandId;
+      if (!accountIdValid(handId)) throw new Error('관전할 판을 확인하지 못했습니다. 테이블 목록을 새로고침해 주세요.');
+      showStatus('진행 중인 판에 관전으로 연결 중…');
+      const data = await chipRequest({op:'watch',handId});
+      signal.throwIfAborted();
+      if (data.handId !== handId || data.room !== code || data.seat !== -1 || data.game?.seat !== -1) {
+        throw new Error('테이블의 관전 정보를 확인하지 못했습니다. 다시 입장해 주세요.');
+      }
+      ++generation;
+      activeRead = null;
+      mode = 'spectate';
+      roomCode = code;
+      if (pendingConnect?.signal === signal) pendingConnect = null;
+      if ($('modal').open) closeModal();
+      trackChipHand(handId,data);
+      window.scrollTo(0,0);
+      return;
+    }
     const empty = room.phase === 'empty';
     await (accountClient.identityReady ?? accountClient.ready);
     signal.throwIfAborted();
@@ -1783,16 +1808,18 @@ async function openForm(kind, code = '', publicIntent = null, slot = null, fromP
     slot = publicSlotFromCode(code);
     if (slot) publicIntent = 'enter';
   }
+  const clickedRoom = fromPublicList ? listedRooms.find(room => room.slot === slot && room.code === code) : null;
+  const watchHandId = clickedRoom?.phase === 'settling' ? clickedRoom.watchHandId : null;
   const opening = ++dialogRevision;
   if (kind === 'create' && !publicIntent && !await mayPlay()) return;
   if (dialogRevision !== opening || mode !== 'lobby') return;
   const profile = kind === 'profile';
   const joining = kind === 'join';
   const title = profile ? '닉네임 변경' : publicIntent ? '테이블 입장' : joining ? '방 참가하기' : '비공개 방 만들기';
-  const intro = profile ? '' : '<p>' + (publicIntent ? publicTableName(slot) +
+  const intro = profile ? '' : '<p>' + (watchHandId ? publicTableName(slot) + '에서 진행 중인 판을 관전합니다.' : publicIntent ? publicTableName(slot) +
     '에 입장할 닉네임을 확인하세요.' :
     joining ? '친구에게 받은 6자리 방 코드를 입력하세요.' : '방 코드로 친구를 초대하세요. 비공개 방은 동시에 6개까지 열 수 있습니다.') + '</p>';
-  modal(title, intro + '<form id="setup-form"><label class="field">닉네임<input id="name-field" name="nickname" maxlength="16" required autocomplete="nickname"></label>' +
+  modal(title, intro + '<form id="setup-form"><label class="field"' + (watchHandId ? ' hidden' : '') + '>닉네임<input id="name-field" name="nickname" maxlength="16" required autocomplete="nickname"></label>' +
     (publicIntent ? '<input type="hidden" id="code-field">' : joining ? '<label class="field">방 코드<input class="code-field" id="code-field" name="code" maxlength="12" placeholder="6자리 코드" required autocomplete="off" spellcheck="false"></label>' : '') +
     (kind === 'create' && !publicIntent ? seriesPicker(roomPreferences().roundLimit) : '') +
     '<div class="form-error" role="alert" id="form-error"></div><button class="primary-button form-submit" id="submit-form">' + (profile ? '저장' : title) + '</button>' +
@@ -1823,7 +1850,7 @@ async function openForm(kind, code = '', publicIntent = null, slot = null, fromP
       if (!selectedSlot && joining && !await mayPlay()) return;
       controller.signal.throwIfAborted();
       const options = {roundLimit:selectedSlot ? roomPreferences().roundLimit : selectedLimit(form),
-        publicRoom:Boolean(selectedSlot), slot:selectedSlot, intent:selectedSlot ? 'watch' : 'play'};
+        publicRoom:Boolean(selectedSlot), slot:selectedSlot, intent:selectedSlot ? 'watch' : 'play', watchHandId};
       if (selectedSlot) {
         await connectPublicWithDeadline(controller,() => enterPublicTable(name,code,controller.signal,options,
           message => { if (!controller.signal.aborted) submit.textContent=message; }));
@@ -1846,6 +1873,7 @@ async function openForm(kind, code = '', publicIntent = null, slot = null, fromP
   };
   if (publicIntent) {
     const form = $('setup-form');
+    if (watchHandId) { form.requestSubmit(); return; }
     await (accountClient.identityReady ?? accountClient.ready);
     if (mode !== 'lobby' || pendingConnect || !form.isConnected || !$('modal').open || !accountClient.state.user) return;
     $('name-field').value = accountClient.state.user.nickname || nickname;

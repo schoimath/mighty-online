@@ -3,6 +3,7 @@ do $test$
 declare
   founder uuid:=gen_random_uuid(); replacement uuid:=gen_random_uuid(); room uuid:=gen_random_uuid(); lost uuid:=gen_random_uuid();
   private_room uuid; first_private uuid; fresh uuid:=gen_random_uuid(); hand uuid:=gen_random_uuid();
+  other_hand uuid:=gen_random_uuid();
   key1 text:=repeat('a',64); key2 text:=repeat('b',64);
   expected jsonb; rows jsonb; receipt jsonb; i integer;
 begin
@@ -64,10 +65,21 @@ begin
   perform public.mighty_directory_refresh(room,key2,2,expected||'{"hostName":"후임"}'::jsonb);
   assert public.mighty_directory_list()->0->>'hostName'='후임';
   perform public.mighty_room_chat_link_hand(room,key2,2,hand);
+  perform public.mighty_room_chat_link_hand(room,key2,2,other_hand);
   reset role;
   insert into mighty_private.hands(id,room,host_id,seats,manifest,state) values
-    (hand,'PUB001',replacement,array[replacement,null,null,null,null],repeat('a',64),'{}');
+    (hand,'PUB001',replacement,array[replacement,null,null,null,null],repeat('a',64),'{}'),
+    (other_hand,'PRIV01',replacement,array[replacement,null,null,null,null],repeat('b',64),'{}');
+  update mighty_private.directory_slots set summary=summary||jsonb_build_object('watchHandId',other_hand) where room_id=room;
+  set local role anon;
+  assert not (public.mighty_directory_list()->0 ? 'watchHandId');
+  reset role;
   update mighty_private.directory_slots set expires_at=clock_timestamp()-interval '1 second' where room_id=room;
+  set local role anon;
+  rows:=public.mighty_directory_list();
+  assert rows->0=jsonb_build_object('phase','settling','watchHandId',hand,'slot',1,'code','PUB001','name','스페이드 테이블');
+  assert position(other_hand::text in rows::text)=0;
+  reset role;
   set local role authenticated;
   assert public.mighty_directory_list()->0->>'phase'='settling';
   begin perform public.mighty_directory_open(lost,key2,'PUB001',1,'제목','대기');
@@ -77,8 +89,9 @@ begin
   reset role;
   update mighty_private.hands set settled=true where id=hand;
   set local role authenticated;
-  assert public.mighty_directory_list()->0->>'phase'='empty';
+  assert public.mighty_directory_list()->0='{"phase":"empty","slot":1,"code":"PUB001","name":"스페이드 테이블"}'::jsonb;
   assert public.mighty_directory_open(lost,key2,'PUB001',1,'제목','대기')->>'claimed'='true';
+  assert not (public.mighty_directory_list()->0 ? 'watchHandId');
   begin perform public.mighty_directory_refresh(room,key2,2,expected);
     raise exception 'former host revived expired slot'; exception when no_data_found then null;
   end;

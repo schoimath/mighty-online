@@ -40,6 +40,19 @@ test('an incomplete or malformed directory cannot replace the last valid lobby l
   await assert.rejects(listPublicRooms({client}),/목록/);
 });
 
+test('a spectator hand is only advertised for a public table that is settling',async t=>{
+  const watchHandId='68471528-23d9-432c-8629-c8221d8f7a1a';
+  let row={...slots[3],phase:'settling',watchHandId};
+  transport(t,()=>[...slots.slice(0,3),row]);
+  assert.deepEqual((await listPublicRooms({client}))[3],row);
+  row={...row,phase:'waiting'};
+  await assert.rejects(listPublicRooms({client}),/목록/);
+  row={...row,phase:'settling',watchHandId:'bad-id'};
+  await assert.rejects(listPublicRooms({client}),/목록/);
+  delete row.watchHandId;
+  assert.deepEqual((await listPublicRooms({client}))[3],row);
+});
+
 test('a public reservation loser gets the same code; private creation uses an unnamed slot and the explicit title',async t=>{
   const responses=[{claimed:false,slot:2,code:'PUB002'},{claimed:true,slot:5,code:'INVITE'},
     new Response(JSON.stringify({code:'P0001',message:'비공개 방 6개가 모두 열려 있습니다.'}),{status:400})];

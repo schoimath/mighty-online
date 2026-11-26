@@ -14,9 +14,10 @@ export function publicTableName(slot) {
 function tableTile(suit, slot, room, loading) {
   const code = 'PUB00' + slot, name = publicTableName(slot);
   const phase = room?.phase;
-  const state = {empty:'빈 테이블', waiting:'대기 중', playing:'게임 중', finished:'판 종료', settling:'정산 중'}[phase]
+  const watchable = phase === 'settling' && Boolean(room.watchHandId);
+  const state = {empty:'빈 테이블', waiting:'대기 중', playing:'게임 중', finished:'판 종료', settling:watchable ? '마무리 중 · 관전 가능' : '정산 중'}[phase]
     || (loading ? '확인 중' : '확인 불가');
-  const canEnter = ['empty','waiting','playing','finished'].includes(phase);
+  const canEnter = watchable || ['empty','waiting','playing','finished'].includes(phase);
   const seats = Array.isArray(room?.seats) && room.seats.length === 5 ? room.seats : [];
   const chairs = Array.from({length:5}, (_, seat) => {
     const nickname = typeof seats[seat] === 'string' ? seats[seat].trim() : '';
@@ -24,13 +25,13 @@ function tableTile(suit, slot, room, loading) {
       ${nickname ? '<span class="public-seat-name"><span class="public-sr-only">' + (seat + 1) + '번 자리 </span><bdi>' + escape(nickname) + '</bdi></span>' : ''}</div>`;
   }).join('');
   const action = canEnter ? `<button type="button" class="public-table-enter" data-table-surface data-public-code="${code}"
-    data-public-slot="${slot}" data-public-intent="enter"${phase === 'empty' ? ' data-public-empty' : ''} aria-label="${name} 입장하기">입장하기</button>` : '';
+    data-public-slot="${slot}" data-public-intent="enter"${phase === 'empty' ? ' data-public-empty' : ''} aria-label="${name} 입장하기" aria-describedby="public-phase-${slot}">입장하기</button>` : '';
   return `<li class="public-table-tile" data-suit="${slot}" aria-labelledby="public-table-title-${slot}">
     <h3 class="public-sr-only" id="public-table-title-${slot}">${name}</h3>
     <div class="public-table-scene">${chairs}
       <div class="public-table-rail"><div class="public-table-felt">
         <div class="public-table-caption"><span class="public-table-mark${suit.red ? ' red' : ''}" aria-hidden="true">${suit.mark}</span>
-          <span class="public-phase">${state}</span></div>
+          <span class="public-phase" id="public-phase-${slot}">${state}</span></div>
         ${action}
       </div></div>
     </div></li>`;

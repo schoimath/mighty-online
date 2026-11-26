@@ -1,3 +1,5 @@
+import {accountIdValid} from './chip-play.js';
+
 export const PUBLIC_ROOM_LIMIT = 4;
 export const PRIVATE_ROOM_LIMIT = 6;
 const HEARTBEAT_MS = 20000;
@@ -41,6 +43,7 @@ export async function listPublicRooms({signal,client} = {}) {
   if (!Array.isArray(rooms) || rooms.length !== PUBLIC_ROOM_LIMIT ||
       !rooms.every((room, i) => room.slot === i + 1 && room.code === 'PUB00' + (i + 1) &&
         ['empty','waiting','playing','finished','settling'].includes(room.phase) &&
+        (room.watchHandId == null || (room.phase === 'settling' && accountIdValid(room.watchHandId))) &&
         (room.signalRoute == null || validSignalRoute(room.signalRoute)))) {
     throw new Error('공개 테이블 목록을 불러오지 못했습니다. 다시 시도해 주세요.');
   }
