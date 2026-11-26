@@ -375,14 +375,14 @@ function renderHand(ui, newDeal) {
   if (!row) {
     ui.decisionHtml = null;
     hand.setAttribute("aria-label", "내 손패");
-    hand.innerHTML = '<div class="g-section-heading"><h2>내 손패 <span></span></h2><div class="g-hand-actions"><span class="g-role"></span><button type="button" class="g-btn g-claim-open" data-do="claim" aria-haspopup="dialog" hidden>세팅 선언</button></div></div><div class="g-cards"></div><section id="g-hand-decision" class="g-decision g-action" aria-label="내 차례 선택" hidden></section><p class="g-bid-wait" role="status" hidden></p><div class="g-play-settings" hidden></div>';
+    hand.innerHTML = '<div class="g-section-heading"><h2>내 손패 <span></span></h2><div class="g-hand-actions"><span class="g-role"></span><button type="button" class="g-btn g-claim-open" data-do="claim" aria-haspopup="dialog" hidden>세팅 선언</button></div></div><div class="g-cards"></div><section id="g-hand-decision" class="g-decision g-action" aria-label="내 차례 선택" hidden></section><div class="g-play-settings" hidden></div>';
     row = hand.querySelector(".g-cards");
     ui.decisionObserver?.disconnect();
     ui.decisionInView = false;
     ui.decisionObserver = new IntersectionObserver(([entry]) => {
       if (!entry.target.isConnected) return;
       ui.decisionInView = entry.intersectionRatio >= .99;
-      shortcut.hidden = hand.hidden || entry.target.hidden || ui.decisionInView;
+      shortcut.hidden = hand.hidden || entry.target.hidden || ui.view.turn !== ui.view.seat || ui.decisionInView;
     }, {threshold:[0, .99]});
     ui.decisionObserver.observe(hand.querySelector(".g-decision"));
   }
@@ -396,15 +396,10 @@ function renderHand(ui, newDeal) {
   const decision = hand.querySelector(".g-decision");
   const choices = {bid:bidControls, discard:discardControls, friend:friendControls};
   const markup = view.turn === view.seat && choices[view.phase] ? choices[view.phase](view, ui) : "";
-  if (markup !== ui.decisionHtml) decision.innerHTML = markup;
+  if (view.phase === "bid") renderBidDecision(ui, decision, markup);
+  else if (markup !== ui.decisionHtml || decision.querySelector(".g-bid-actions")) decision.innerHTML = markup;
   ui.decisionHtml = markup;
-  decision.hidden = !markup;
-  const wait = hand.querySelector(".g-bid-wait");
-  wait.hidden = view.phase !== "bid" || Boolean(markup);
-  if (!wait.hidden) {
-    const message = view.turn == null ? "경매가 끝났습니다." : nameAtSeat(ui, view.turn) + " 입찰 차례";
-    if (wait.textContent !== message) wait.textContent = message;
-  }
+  decision.hidden = view.phase !== "bid" && !markup;
   shortcut.hidden = !markup || ui.decisionInView;
   if (markup) shortcut.textContent = {bid:"공약 선택 ↓", discard:"묻을 패 선택 ↓", friend:"프렌드 선택 ↓"}[view.phase];
   if (newDeal) row.replaceChildren();
@@ -481,20 +476,43 @@ function renderHand(ui, newDeal) {
     });
   }
 }
+function renderBidDecision(ui, decision, markup) {
+  const {view} = ui;
+  let fields = decision.querySelector(".g-bid-options");
+  if (!fields) {
+    decision.innerHTML = '<div class="g-bid-options"></div><p class="g-bid-wait" role="status" hidden></p>' +
+      '<div class="g-bid-actions">' + button("입찰", "bid", false) + button("패스", "pass", false, "secondary") + '</div>';
+    fields = decision.firstElementChild;
+    ui.decisionHtml = null;
+  }
+  if (markup !== ui.decisionHtml) fields.innerHTML = markup;
+  fields.hidden = !markup;
+  const wait = decision.querySelector(".g-bid-wait");
+  wait.hidden = Boolean(markup);
+  if (!wait.hidden) {
+    const message = view.turn == null ? "경매가 끝났습니다." : nameAtSeat(ui, view.turn) + " 입찰 차례";
+    if (wait.textContent !== message) wait.textContent = message;
+  }
+  const ownTurn = view.turn === view.seat;
+  const bid = decision.querySelector('[data-do="bid"]');
+  bid.disabled = !ownTurn || !view.choices.bids.length;
+  const label = bid.disabled ? "입찰" : suitMark(ui.bidSuit) + " " + escapeHtml(ui.bidPoints) + "점 입찰";
+  if (bid.innerHTML !== label) bid.innerHTML = label;
+  decision.querySelector('[data-do="pass"]').disabled = !ownTurn || !view.choices.canPass;
+}
+
 function bidControls(view, ui) {
   const bids = view.choices.bids;
   const suits = [...new Set(bids.map(b => b.suit))];
   const points = bids.filter(b => b.suit === ui.bidSuit).map(b => [b.points, b.points + "점"]);
-  const pass = button("패스", "pass", view.choices.canPass, "secondary");
-  if (!bids.length) return `<h2>패스할 차례예요</h2><p>20점 노기루다가 최고 공약입니다.</p><div class="g-bid-actions">${pass}</div>`;
+  if (!bids.length) return '<h2>패스할 차례예요</h2><p>20점 노기루다가 최고 공약입니다.</p>';
   let hint = "손패에서 가장 많은 무늬가 먼저 선택돼요.";
   if (view.bid) {
     hint = ui.bidSuit === "N" && view.bid.suit !== "N"
       ? `노기루다는 현재 공약과 같은 ${escapeHtml(view.bid.points)}점부터 부를 수 있어요.`
       : `${suitInfo[ui.bidSuit][1]}는 ${escapeHtml(points[0][0])}점부터 부를 수 있어요.`;
   }
-  return `<h2>공약을 정하세요</h2><p>${hint}</p>${suitPicker("기루다","bidSuit",suits,ui.bidSuit)}${select("공약 점수", "bidPoints", points, ui.bidPoints)}
-    <div class="g-bid-actions">${button(suitMark(ui.bidSuit) + " " + escapeHtml(ui.bidPoints) + "점 입찰", "bid")}${pass}</div>`;
+  return `<h2>공약을 정하세요</h2><p>${hint}</p>${suitPicker("기루다","bidSuit",suits,ui.bidSuit)}${select("공약 점수", "bidPoints", points, ui.bidPoints)}`;
 }
 function discardControls(view, ui) {
   const contracts = view.choices.contracts || [];
@@ -527,8 +545,12 @@ function friendControls(view, ui) {
   const hint = ui.friendKind === "none" ? "주공 혼자 공약에 도전해요." : options.some(choice => choice.kind === "first")
     ? "카드를 부르거나 첫 트릭의 승자를 프렌드로 정할 수 있어요."
     : "함께할 사람이 가진 카드를 부르세요.";
-  const solo = ui.friendKind === "card" && (view.hand.includes(ui.friendCard) || view.discarded.includes(ui.friendCard));
-  return `<h2>프렌드를 정하세요</h2><p>${solo ? "내 손에 있거나 묻은 카드를 부르면 노프렌드로 진행해요." : hint}</p>${select("지정 방식", "friendKind", kinds, ui.friendKind)}${cardControls}${button("프렌드 확정", "friend")}`;
+  let warning = "";
+  if (ui.friendKind === "card") {
+    if (view.hand.includes(ui.friendCard)) warning = "내 손패라 노프렌드가 됩니다.";
+    else if (view.discarded.includes(ui.friendCard)) warning = "묻은 카드라 노프렌드가 됩니다.";
+  }
+  return `<h2>프렌드를 정하세요</h2><p${warning ? ' class="g-own-friend-warning"' : ''}>${warning || hint}</p>${select("지정 방식", "friendKind", kinds, ui.friendKind)}${cardControls}${button("프렌드 확정", "friend")}`;
 }
 function specialPlaySettings(view, ui) {
   if (!ui.pendingCard) return "";
@@ -840,13 +862,13 @@ export function updateGamePace(container, pace, pendingPace = null) {
 function redraw(ui, newDeal = false) {
   const { view, options, root } = ui;
   const screen = root.firstElementChild;
-  const exchanging = view.phase === "discard" && view.turn === view.seat && view.seat >= 0;
+  const preparing = (view.phase === "discard" || view.phase === "friend") && view.seat >= 0 && view.turn === view.seat;
   const enteringDecision = (view.phase === "bid" && screen.dataset.phase !== "bid") ||
-    (exchanging && !screen.hasAttribute("data-exchanging"));
+    (preparing && !screen.hasAttribute("data-preparing"));
   screen.dataset.phase = view.phase;
   screen.toggleAttribute("data-seated", view.seat >= 0);
-  screen.toggleAttribute("data-exchanging", exchanging);
-  if (enteringDecision && window.matchMedia("(max-width: 729px) and (orientation: portrait)").matches) {
+  screen.toggleAttribute("data-preparing", preparing);
+  if (enteringDecision && window.matchMedia("(max-width: 729px), (pointer: coarse) and (orientation: landscape) and (max-height: 540px)").matches) {
     root.querySelector(".g-main").scrollTop = 0;
   }
   updateTurnCountdown(ui);
