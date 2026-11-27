@@ -1,4 +1,10 @@
 begin;
+-- Exercise the legacy directory before its public slots switch to server control.
+do $$ begin
+  if to_regclass('mighty_private.public_lobbies') is not null then
+    delete from mighty_private.public_lobbies;
+  end if;
+end $$;
 do $test$
 declare
   who uuid:=gen_random_uuid(); public_id uuid:=gen_random_uuid(); private_id uuid:=gen_random_uuid();

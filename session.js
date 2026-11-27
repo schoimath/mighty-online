@@ -105,9 +105,9 @@ export class HostSession {
 
   isDeparting(id) { return this.#departingGuests.has(id); }
 
-  static takeOver(checkpoint, connectionId, committedDeal = null) {
+  static restore(checkpoint) {
     const state = structuredClone(checkpoint);
-    if (state?.version !== 1 || connectionId == null || state.players?.length !== BOT_NAMES.length ||
+    if (state?.version !== 1 || state.players?.length !== BOT_NAMES.length ||
         (state.round && (!state.chipHandId || state.round.seat !== -1 || state.round.selfRole !== 'spectator' ||
           state.round.hand?.length !== 0 || state.round.discarded?.length !== 0))) {
       throw new Error('이어받을 방 정보를 확인해 주세요.');
@@ -138,6 +138,13 @@ export class HostSession {
     session.#chipRevision = state.chipRevision;
     session.round = state.round;
     session.revision = state.revision;
+    return session;
+  }
+
+  static takeOver(checkpoint, connectionId, committedDeal = null) {
+    if (connectionId == null) throw new Error('이어받을 방 정보를 확인해 주세요.');
+    const session = HostSession.restore(checkpoint);
+    const peers = session.connections, observers = session.#observers;
     // A deal can commit between the last checkpoint and the founder leaving.
     // Seat reservations and record the original roster before transferring control.
     if (committedDeal) session.startChipHand(committedDeal);
@@ -276,7 +283,7 @@ export class HostSession {
 
   setGuestDeparture(id, handId, wanted) {
     if (!handId || handId !== this.chipHandId || !this.round ||
-        this.seatFor(id) < 0 || typeof wanted !== 'boolean') return false;
+        (id === null ? this.hostSeat : this.seatFor(id)) < 0 || typeof wanted !== 'boolean') return false;
     // A guest can still be playing the last trick on screen after the host has
     // received its receipt. Honor the request before building the next table.
     if (this.round.result) return wanted && this.sitOut(id);

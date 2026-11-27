@@ -7,7 +7,7 @@ const headers = {'content-type':'application/json; charset=utf-8', 'cache-contro
 const json = (value, status = 200) => new Response(JSON.stringify(value), {status, headers});
 const fail = (message, status, code) => Object.assign(new Error(message), {status, code});
 
-function repository(url, publicKey, serviceKey, bearer, send) {
+export function repository(url, publicKey, serviceKey, bearer, send, lobbyEffectId = null) {
   async function rpc(name, args, privateCall) {
     const apiKey = privateCall ? serviceKey : publicKey;
     const auth = privateCall ? (serviceKey.startsWith('sb_secret_') ? null : 'Bearer ' + serviceKey) : bearer;
@@ -30,8 +30,8 @@ function repository(url, publicKey, serviceKey, bearer, send) {
     start:(hand, spec, state) => rpc('chips_start_hand',
       {p_hand:hand, p_room:spec.room, p_host:spec.host, p_seats:spec.seats, p_state:state}, true),
     read:hand => rpc('chips_read_hand', {p_hand:hand}, true),
-    control:(hand, proof, row) => rpc('mighty_chip_room_control', {p_hand:hand, p_actor:proof.id,
-      p_term:proof.term, p_credential:proof.credential, p_legacy:proof.legacy,
+    control:(hand, proof, row) => rpc(lobbyEffectId ? 'mighty_lobby_hand_control' : 'mighty_chip_room_control', {p_hand:hand, p_actor:proof.id,
+      p_term:proof.term, p_credential:proof.credential, ...(lobbyEffectId ? {p_effect:lobbyEffectId} : {p_legacy:proof.legacy}),
       p_revision:row?.revision ?? null, p_state:row?.state ?? null}, true),
     save:row => {
       const round = row.state.round;

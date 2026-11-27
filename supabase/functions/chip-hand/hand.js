@@ -45,6 +45,25 @@ async function hashManifest(spec) {
   return Array.from(new Uint8Array(hash), n => n.toString(16).padStart(2,'0')).join('');
 }
 
+export function chipManifestDigest(input) {
+  return hashManifest(manifestOf(input));
+}
+
+// The database serializes deal creation and validates every signed consent,
+// including idempotent retries after a lost response.
+async function startHand(db, hand, spec, hash, now) {
+  const row = await db.start(hand, spec, createState(spec, hash, now));
+  check(row.host === spec.host && row.state.manifest === hash, '이미 다른 조건으로 시작된 판입니다.', 409);
+  return row;
+}
+
+export async function startPublicLobbyHand(input, db, now = Date.now()) {
+  check(uuid(input.handId), '판 번호가 올바르지 않습니다.');
+  const spec = manifestOf(input);
+  const row = await startHand(db, input.handId.toLowerCase(), spec, await hashManifest(spec), now);
+  return publicHandReceipt(row, now);
+}
+
 function usesTurnClock(state) {
   return state.autoPlay !== false && !state.round.result && !state.bots[state.round.turn] && state.bots.filter(bot => !bot).length >= 2;
 }
@@ -113,6 +132,11 @@ function present(row, id, now) {
     thinkingDeadline, timeBankMs:state.thinkingTime ? THINKING_TIME_MS : 0,
     deltas, ...(owner >= 0 && deltas ? {myDelta:deltas[owner], mySettlementSeat:owner} : {}),
     ...(id === row.host ? {publicGame} : {})};
+}
+
+export function publicHandReceipt(row, now = Date.now()) {
+  const receipt = present(row, null, now);
+  return {...receipt, publicGame:receipt.game};
 }
 
 function replaceSeat(state, seat) {
@@ -264,9 +288,7 @@ export async function operateHand(input, accountId, db, now = Date.now()) {
       return {ready:true, seat};
     }
     check(id === spec.host, '방장만 판을 시작할 수 있습니다.', 403);
-    const row = await db.start(hand, spec, createState(spec, hash, now));
-    check(row.host === id && row.state.manifest === hash, '이미 다른 조건으로 시작된 판입니다.', 409);
-    return present(row, id, now);
+    return present(await startHand(db, hand, spec, hash, now), id, now);
   }
 
   let row = await db.read(hand);

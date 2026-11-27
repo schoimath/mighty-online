@@ -26,3 +26,9 @@ entrypoint = "./functions/chip-hand/index.ts"
 # The scheduler supplies a private token validated by a service-only RPC.
 verify_jwt = false
 entrypoint = "./functions/member-mail/index.ts"
+
+[functions.public-lobby]
+# Spectators can join without an account. The handler verifies signed-in users
+# with Auth and checks room membership and host authority on the server.
+verify_jwt = false
+entrypoint = "./functions/public-lobby/index.ts"
