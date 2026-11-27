@@ -1,4 +1,4 @@
-import {clearGame, renderGame, rulesContent, updateGameAutoPlay, updateGamePace, updateSeatBalances} from './game-ui.js';
+import {clearGame, renderGame, rulesContent, THINKING_TIME_HELP, updateGameAutoPlay, updateGamePace, updateSeatBalances} from './game-ui.js';
 import {botTurnDelay, normalizeGameSpeed, paceMultiplier} from './table-timing.js';
 import {createNextRoundTimer} from './next-round.js';
 import {hostRoom, joinRoom, normalizeRoomCode} from './network.js';
@@ -281,7 +281,8 @@ function pendingSetting(key, reader) {
 function paintTableSettings(reader, settings) {
   updateGamePace($('game'), settings.pace, pendingSetting('pace', reader));
   if (mode !== 'practice') {
-    updateGameAutoPlay($('game'), settings.autoPlay, pendingSetting('autoPlay', reader), reader?.localTurnDeadline ?? null);
+    updateGameAutoPlay($('game'), settings.autoPlay, pendingSetting('autoPlay', reader),
+      reader?.localTurnDeadline ?? null, reader?.localThinkingDeadline ?? null);
   }
 }
 
@@ -614,17 +615,17 @@ function roomGameOptions(snapshot, host) {
   const board = snapshot.scoreboard;
   const limit = board?.roundLimit ?? 0;
   const selectedPace = normalizeGameSpeed(snapshot.pace);
-  const picker = (name, title, values, selected) => {
+  const picker = (name, title, values, selected, hint) => {
     const options = values.map(([value, label]) =>
       `<option value="${value}"${value === selected ? ' selected' : ''}>${label}</option>`).join('');
-    return `<label class="room-game-option"><strong>${title}</strong><select name="${name}">${options}</select></label>`;
+    return `<label class="room-game-option"${hint ? ` title="${escape(hint)}"` : ''}><strong>${title}</strong><select name="${name}">${options}</select></label>`;
   };
   const series = host && !board?.rounds ? picker('roundLimit', '경기 판수', [[10,'10판'],[20,'20판'],[0,'무제한']], limit) : seriesSummary(board);
   const speed = host ? picker('pace', '진행 속도', Object.entries(paceLabels), selectedPace)
     : `<p class="series-summary"><strong>진행 속도</strong> ${paceLabels[selectedPace]}</p>`;
   const timed = snapshot.autoPlay !== false;
-  const clock = host ? picker('autoPlay', '10초 자동진행', [['on','켜짐'],['off','꺼짐']], timed ? 'on' : 'off')
-    : `<p class="series-summary"><strong>10초 자동진행</strong> ${timed ? '켜짐' : '꺼짐'}</p>`;
+  const clock = host ? picker('autoPlay', '10초 자동진행', [['on','켜짐'],['off','꺼짐']], timed ? 'on' : 'off', THINKING_TIME_HELP)
+    : `<p class="series-summary" title="${escape(THINKING_TIME_HELP)}"><strong>10초 자동진행</strong> ${timed ? '켜짐' : '꺼짐'}</p>`;
   return '<div class="room-game-options">' + series + speed + clock + roomModelOption(snapshot, host) + '</div>';
 }
 
@@ -639,7 +640,8 @@ function showRules() {
   const rules = activeRules();
   const board = snapshot?.scoreboard;
   const scoringVersion = snapshot ? board?.scoringVersion ?? (board ? 'contract-flat-v1' : 'ten-base-v1') : undefined;
-  modal('게임 규칙', '<div class="rules-wrap">' + rulesSummary(rules) + modelSummary(snapshot) + rulesContent(rules, scoringVersion) + '</div>');
+  const hasThinkingTime = !chipReader?.current || chipReader.current.timeBankMs > 0;
+  modal('게임 규칙', '<div class="rules-wrap">' + rulesSummary(rules) + modelSummary(snapshot) + rulesContent(rules, scoringVersion, hasThinkingTime) + '</div>');
 }
 $('nav-rules').onclick = showRules;
 
@@ -1107,6 +1109,8 @@ function draw() {
     seatBalances:mode === 'practice' ? practiceSeatBalances(accountClient.state) : remote?.seatBalances,
     chipDelta:remote?.myDelta, handDeltas:remote?.deltas, settlementSeat:remote?.mySettlementSeat, resumed:serverOnly,
     turnDeadline:remote ? chipReader.localTurnDeadline : null,
+    thinkingDeadline:remote ? chipReader.localThinkingDeadline : null,
+    timeBankMs:remote?.timeBankMs,
     pace:useRoomSettings ? snapshot.pace : remote?.pace ?? snapshot.pace,
     pendingPace:pendingSetting('pace', chipReader),
     onPaceChange:mayChange ? value => changeTableSetting('pace', value) : undefined,

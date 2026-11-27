@@ -403,6 +403,7 @@ test('a human turn uses the server clock and wakes on its deadline, even at slow
   try {
     reader.start();
     assert.equal(reader.localTurnDeadline,1200);
+    assert.equal(reader.localThinkingDeadline,null);
     t.mock.timers.tick(0);
     await Promise.resolve();
     t.mock.timers.tick(249);
@@ -411,6 +412,19 @@ test('a human turn uses the server clock and wakes on its deadline, even at slow
     await Promise.resolve();
     assert.deepEqual(calls,[1000,1250]);
     assert.equal(reader.localTurnDeadline,null);
+  } finally { reader.close(); }
+});
+
+test('the thinking clock and final ten seconds share the same server time offset', t => {
+  t.mock.timers.enable({apis:['Date','setTimeout'],now:1000});
+  const handId = crypto.randomUUID();
+  const initial = {handId, revision:1, seat:0, serverNow:501000, thinkingDeadline:681000,
+    turnDeadline:691000, dueAt:691000, game:{phase:'bid',turn:0}};
+  const reader = followChipHand(async () => initial, handId, 'view', () => {}, assert.fail, initial);
+  try {
+    reader.start();
+    assert.equal(reader.localThinkingDeadline,181000);
+    assert.equal(reader.localTurnDeadline - reader.localThinkingDeadline,10000);
   } finally { reader.close(); }
 });
 

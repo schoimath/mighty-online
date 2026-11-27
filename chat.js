@@ -164,6 +164,7 @@ export function setupChat(send) {
   const log = new ChatLog();
   const mine = new Set();
   let device = null, ownSend = null, failed = null, earlierPage = null, hasMore = false;
+  let firstLiveId = null;
   function notice(text) { feedback.textContent=text; feedback.hidden=!text; }
   const preference = readChatSetting('mighty-chat-layout');
   let lastOpen = visibleLayouts.includes(preference?.lastOpen) ? preference.lastOpen : 'horizontal';
@@ -288,6 +289,16 @@ export function setupChat(send) {
     item.append(meta, body);
     return item;
   }
+  function renderHistory() {
+    const rows = log.messages.map(line);
+    // Restored history precedes the local entry notice, even when a live
+    // message arrives before the device finishes loading its first page.
+    if (device && (firstLiveId === null || log.messages[0]?.id <= firstLiveId)) {
+      const firstLiveIndex = log.messages.findIndex(message => firstLiveId !== null && message.id >= firstLiveId);
+      rows.splice(firstLiveIndex < 0 ? rows.length : firstLiveIndex, 0, disclosure);
+    }
+    list.replaceChildren(...rows);
+  }
   function receive(message, own = false) {
     if (!validMessage(message)) return false;
     const dropped = log.messages.length >= log.limit && log.messages[0];
@@ -304,10 +315,15 @@ export function setupChat(send) {
       if (device === local) notice('이 브라우저에 채팅 기록을 저장하지 못했습니다.');
     });
     const atBottom = scroll.scrollHeight - scroll.clientHeight - scroll.scrollTop < 30;
-    if (appended) list.append(line(row));
-    else list.replaceChildren(...log.messages.map(line));
+    if (appended) {
+      if (firstLiveId === null) firstLiveId = id;
+      list.append(line(row));
+    } else renderHistory();
     if (dropped && (appended || dropped.id !== log.messages[0]?.id || id < dropped.id)) {
-      if (appended) list.firstElementChild.remove();
+      if (appended) {
+        if (list.firstElementChild === disclosure) disclosure.remove();
+        list.firstElementChild.remove();
+      }
       if (dropped.id !== log.messages[0]?.id) mine.delete(dropped.id);
       if (device) { hasMore=true; earlier.hidden=false; }
     }
@@ -329,8 +345,7 @@ export function setupChat(send) {
       const oldFirst=log.messages[0]?.id;
       for (const message of page.messages) if (message.own) mine.add(message.id);
       log.restore(page.messages,before !== null);
-      list.replaceChildren(...log.messages.map(line));
-      empty.hidden=Boolean(log.messages.length);
+      renderHistory();
       hasMore=page.hasMore || (before === null && (hasMore || (page.messages[0]?.id ?? oldFirst) < log.messages[0]?.id));
       earlier.hidden=!hasMore;
       if (before !== null) scroll.scrollTop += scroll.scrollHeight-oldHeight;
@@ -344,6 +359,7 @@ export function setupChat(send) {
   earlier.onclick = () => loadPage(hasMore ? log.messages[0]?.id : null);
   function clearRoom() {
     device=null; ownSend=failed=earlierPage=null; hasMore=false;
+    firstLiveId=null;
     mine.clear(); log.clear(); list.replaceChildren(); showCount(0);
     earlier.hidden=true; earlier.disabled=false; disclosure.hidden=true; empty.hidden=false;
     input.value=''; submit.textContent='보내기'; submit.disabled=true; notice('');
@@ -355,7 +371,7 @@ export function setupChat(send) {
       if (device?.room === roomId && device.account === (userId || 'anonymous')) return;
       clearRoom();
       device = deviceChat(roomId,userId);
-      disclosure.hidden=false;
+      empty.hidden=true; disclosure.hidden=false; list.append(disclosure);
       void loadPage();
     },
     attach(actions, dockAfter) {

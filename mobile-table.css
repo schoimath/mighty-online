@@ -8,9 +8,12 @@
   .g-screen:not([data-phase="result"]) {
     display: flex; flex-direction: column; height: 100vh; height: 100dvh; min-height: 0; overflow: hidden;
   }
+  .g-screen .g-main {
+    padding-inline: max(6px, env(safe-area-inset-left)) max(6px, env(safe-area-inset-right));
+  }
   .g-screen:not([data-phase="result"]) .g-main {
     flex: 1; min-height: 0; overflow: auto; overscroll-behavior-y: contain;
-    padding: 5px max(6px, env(safe-area-inset-right)) max(6px, env(safe-area-inset-bottom)) max(6px, env(safe-area-inset-left));
+    padding-block: 5px max(6px, env(safe-area-inset-bottom));
   }
   .g-nav { flex: none; }
   .g-nav .g-nav-inner {
@@ -137,11 +140,11 @@
   /* The auction and both steps of the declarer's preparation fill the first screenful.
      Chat and public-room controls stay in the normal flow immediately below. */
   .g-screen:is([data-phase="bid"],[data-preparing]) .g-main {
-    container-type: size; margin: 0; padding: 0 max(12px,env(safe-area-inset-right)) 0 max(12px,env(safe-area-inset-left));
+    container-type: size; margin: 0; padding-block: 0;
   }
   .g-screen[data-phase="bid"][data-seated] .g-main { margin-bottom: 0; }
   .g-screen:is([data-phase="bid"],[data-preparing]) .g-heading {
-    height: 42px; margin: 0; flex-wrap: nowrap; gap: 5px;
+    height: 42px; margin: 0 6px; flex-wrap: nowrap; gap: 5px;
   }
   .g-screen:is([data-phase="bid"],[data-preparing]) .g-heading h1 { white-space: nowrap; }
   .g-screen:is([data-phase="bid"],[data-preparing]) .g-match-progress,
@@ -149,7 +152,7 @@
   .g-screen:is([data-phase="bid"],[data-preparing]) .g-layout { display: block; }
   .g-screen:is([data-phase="bid"],[data-preparing]) .g-decision-surface {
     display: flex; flex-direction: column; min-height: calc(100cqh - 42px);
-    gap: 6px; padding-bottom: max(8px,env(safe-area-inset-bottom));
+    gap: 6px; margin-inline: 6px; padding-bottom: max(8px,env(safe-area-inset-bottom));
   }
   .g-screen[data-phase="bid"][data-seated] .g-decision-surface {
     height: calc(100cqh - 42px);

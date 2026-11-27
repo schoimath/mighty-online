@@ -9,6 +9,7 @@ import {botTurnDelay, normalizeGameSpeed, paceMultiplier} from '../../../table-t
 
 const RECONNECT_MS = 120_000;
 const HUMAN_TURN_MS = 10_000;
+const THINKING_TIME_MS = 180_000;
 const CATCHUP_BUDGET_MS = 120;
 const MAX_UNATTENDED_MOVES = 64;
 const SUBSTITUTE_NAMES = ['AI 솔', 'AI 달', 'AI 별', 'AI 구름', 'AI 바다'];
@@ -54,9 +55,26 @@ function turnDeadline(state) {
   return state.turnDeadline ?? state.dueAt - RECONNECT_MS + HUMAN_TURN_MS;
 }
 
-function scheduleTurn(state, now, botTime = now) {
+function scheduleTurn(state, now, botTime = now, previousSeat) {
   const g = state.round;
-  state.turnDeadline = usesTurnClock(state) ? now + HUMAN_TURN_MS : null;
+  // The deadline includes ten seconds of overtime. Save only the reserve
+  // still unused by the previous actor; reads never consume or extend it.
+  const banks = state.thinkingTime;
+  const timed = usesTurnClock(state);
+  let overtime = HUMAN_TURN_MS;
+  if (banks && previousSeat === undefined) {
+    // A toggle during overtime pauses and resumes the same decision.
+    overtime = Number.isFinite(state.turnDeadline)
+      ? Math.max(0, Math.min(HUMAN_TURN_MS, state.turnDeadline - now))
+      : state.pausedOvertimeMs ?? HUMAN_TURN_MS;
+  }
+  if (banks && Number.isFinite(state.turnDeadline)) {
+    const remaining = state.turnDeadline - HUMAN_TURN_MS - now;
+    const seat = previousSeat ?? g.turn;
+    banks[seat] = Math.max(0, Math.min(banks[seat], remaining));
+  }
+  if (banks) state.pausedOvertimeMs = !timed && overtime < HUMAN_TURN_MS ? overtime : null;
+  state.turnDeadline = timed ? now + (banks?.[g.turn] ?? 0) + overtime : null;
   if (g.result) state.dueAt = null;
   else if (!state.bots[g.turn]) state.dueAt = state.turnDeadline ?? now + RECONNECT_MS;
   else state.dueAt = botTime + botTurnDelay(g, state.pace, {showRedeal:false});
@@ -65,6 +83,7 @@ function scheduleTurn(state, now, botTime = now) {
 function createState(spec, manifest, now) {
   const state = {manifest, names:spec.names, models:spec.models, firstSeat:spec.firstSeat, pace:normalizeGameSpeed(spec.pace), autoPlay:spec.autoPlay !== false,
     round:createGame({firstSeat:spec.firstSeat, rules:spec.rules}), bots:spec.seats.map(id => id === null),
+    thinkingTime:spec.seats.map(id => id ? THINKING_TIME_MS : 0),
     history:Array.from({length:5}, () => []), memory:Array(5).fill(null), dueAt:null};
   scheduleTurn(state, now);
   return state;
@@ -85,11 +104,13 @@ function present(row, id, now) {
   if (game.phase === 'discard' && seat === game.declarer) game.incomingCards = [...round.knownKitty];
   const deltas = round.result ? settlements(round.result, round.bid.suit) : null;
   const deadline = turnDeadline(state);
+  const thinkingDeadline = deadline !== null && state.thinkingTime?.[round.turn] > 0 ? deadline - HUMAN_TURN_MS : null;
   const seatBalances = row.seats.map((account, i) =>
     account && (!state.bots[i] || row.settled) && Number.isSafeInteger(row.seatBalances?.[i]) ? row.seatBalances[i] : null);
   return {handId:row.hand, room:row.room, revision:row.revision, seat, game, bots:state.bots,
     names:state.names.map((_, i) => nameAt(row, i)), seatBalances, models:state.models, firstSeat:state.firstSeat, pace:normalizeGameSpeed(state.pace),
     autoPlay:state.autoPlay !== false, dueAt:deadline ?? state.dueAt, turnDeadline:deadline, serverNow:now, lastTimedAction:state.lastTimedAction ?? null,
+    thinkingDeadline, timeBankMs:state.thinkingTime ? THINKING_TIME_MS : 0,
     deltas, ...(owner >= 0 && deltas ? {myDelta:deltas[owner], mySettlementSeat:owner} : {}),
     ...(id === row.host ? {publicGame} : {})};
 }
@@ -120,7 +141,7 @@ function move(row, action, now, memory = null, botTime = now) {
       if (entry) entry.name = name;
     }
   }
-  scheduleTurn(s, now, botTime);
+  scheduleTurn(s, now, botTime, seat);
   if (r.result) { s.memory.fill(null); s.history = []; }
 }
 

@@ -199,6 +199,9 @@ export function followChipHand(request, handId, op, onState, onError, initial) {
     get localTurnDeadline() {
       return Number.isFinite(current?.turnDeadline) ? current.turnDeadline + (clockOffset ?? 0) : null;
     },
+    get localThinkingDeadline() {
+      return Number.isFinite(current?.thinkingDeadline) ? current.thinkingDeadline + (clockOffset ?? 0) : null;
+    },
     start() { if (initial) accept(initial, 0); schedule(0); },
     refresh() { return write(() => send({op})); },
     wake(revision) {

@@ -12,6 +12,8 @@ const suitInfo = {
   C: ["♣", "클로버"], N: ["NT", "노기루다"],
 };
 const rankNames = { A: "에이스", K: "킹", Q: "퀸", J: "잭" };
+export const THINKING_TIME_HELP = "사람이 둘 이상인 대국에서는 각자 한 판에 3분을 자기 차례에 나눠 씁니다. 다 쓰면 그때부터 매 차례 10초 뒤에 AI가 대신 선택합니다.";
+const legacyClockHelp = "사람이 둘 이상인 대국에서 10초 동안 선택하지 않으면 AI가 이번 차례를 대신합니다.";
 const labels = { bid: "경매", discard: "카드 교환", friend: "프렌드 지정", play: "트릭 진행", result: "라운드 결과" };
 const roleLabels = { declarer: "주공", friend: "프렌드", opposition: "수비" };
 const chipNumber = new Intl.NumberFormat('ko-KR');
@@ -742,10 +744,13 @@ function updateTurnCountdown(ui) {
   const deadline = ui.options.turnDeadline;
   clock.hidden = ui.options.autoPlay === false || !Number.isFinite(deadline) || ui.view.turn == null || ui.view.phase === "result";
   if (clock.hidden) return;
-  const remaining = Math.max(0, deadline - Date.now());
+  const now = Date.now();
+  const thinking = ui.options.thinkingDeadline > now;
+  const remaining = Math.max(0, (thinking ? ui.options.thinkingDeadline : deadline) - now);
   const seconds = Math.ceil(remaining / 1000);
-  clock.textContent = seconds ? `AI 선택까지 ${seconds}초` : "AI 선택 중";
-  clock.classList.toggle("g-turn-ending", seconds <= 3);
+  clock.textContent = thinking ? `생각 시간 ${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`
+    : seconds ? `AI 선택까지 ${seconds}초` : "AI 선택 중";
+  clock.classList.toggle("g-turn-ending", !thinking && seconds <= 3);
   if (seconds) ui.turnTimer = setTimeout(() => updateTurnCountdown(ui), remaining - (seconds - 1) * 1000);
 }
 
@@ -859,7 +864,7 @@ function mountTable(root) {
             <select data-table-pace><option value="slow">느리게</option><option value="normal">보통</option><option value="fast">빠르게</option></select>
             <strong class="g-pace-value" hidden></strong></label>
           <button type="button" class="g-auto-play" data-table-auto-play role="switch" aria-label="10초 자동진행"
-            aria-checked="true" title="사람이 10초 동안 선택하지 않으면 AI가 대신 진행합니다." hidden>
+            aria-checked="true" hidden>
             <span>10초 자동진행</span><strong aria-hidden="true">켜짐</strong></button></div></div>
       <div class="g-layout">
         <div class="g-decision-surface">
@@ -918,6 +923,7 @@ function paintAutoPlay(ui) {
   const control = ui.root.querySelector('[data-table-auto-play]');
   control.hidden = typeof autoPlay !== "boolean";
   if (control.hidden) return;
+  control.title = ui.options.timeBankMs > 0 ? THINKING_TIME_HELP : legacyClockHelp;
   const pending = typeof pendingAutoPlay === "boolean";
   const enabled = pending ? pendingAutoPlay : autoPlay;
   control.disabled = pending || typeof onAutoPlayChange !== "function";
@@ -926,11 +932,12 @@ function paintAutoPlay(ui) {
   control.querySelector("strong").textContent = enabled ? "켜짐" : "꺼짐";
 }
 
-export function updateGameAutoPlay(container, autoPlay, pendingAutoPlay = null, turnDeadline) {
+export function updateGameAutoPlay(container, autoPlay, pendingAutoPlay = null, turnDeadline, thinkingDeadline) {
   const ui = cache.get(container);
   if (!ui?.options || !container.firstElementChild) return;
   ui.options = {...ui.options, autoPlay, pendingAutoPlay};
   if (turnDeadline !== undefined) ui.options.turnDeadline = turnDeadline;
+  if (thinkingDeadline !== undefined) ui.options.thinkingDeadline = thinkingDeadline;
   paintAutoPlay(ui);
   if (ui.view) updateTurnCountdown(ui);
 }
@@ -1309,7 +1316,7 @@ export function renderGame(container, publicView, options = {}) {
   displayLatest(ui);
 }
 
-export function rulesContent(rules = DEFAULT_RULES, scoringVersion = TABLE_SCORING_VERSION) {
+export function rulesContent(rules = DEFAULT_RULES, scoringVersion = TABLE_SCORING_VERSION, hasThinkingTime = true) {
   const bidRange = rules.minBid === 20 ? "20점을 걸고" : `${escapeHtml(rules.minBid)}~20점 사이에서`;
   const firstFriend = rules.allowFirstFriend ? " 첫 트릭의 승자를 초구 프렌드로 지정할 수도 있습니다." : "";
   const jokerCallFrom = rules.allowFirstJokerCall ? "첫 트릭부터" : "두 번째 트릭부터";
@@ -1336,5 +1343,6 @@ export function rulesContent(rules = DEFAULT_RULES, scoringVersion = TABLE_SCORI
     <p>${jokerCallFrom} 선이 클로버 3으로 조커콜을 선언할 수 있습니다. 조커를 가진 사람은 조커 또는 마이티를 내야 하며, 조커는 그 트릭에서 가장 약합니다. 클로버가 기루다일 때의 조커콜 카드는 스페이드 3입니다. 조커가 한 번 나오면 손패의 조커콜 표식이 사라지고 그 카드는 일반 3으로 냅니다.</p>
     <h3>점수 카드와 승패</h3><p>10, J, Q, K, A는 각각 1점으로, 한 판에는 총 20점이 있습니다. 가져간 점수 카드는 보드의 각자 자리 옆에 모읍니다. 주공은 처음부터 카드를 덮고, 프렌드는 정체가 밝혀지는 즉시 앞서 가져간 카드까지 모두 덮습니다. 열 번째 트릭이 끝났을 때 주공 팀의 점수가 공약 이상이면 주공 팀이 승리합니다.</p>
     <p>${scoring} 배율을 모두 곱한 값이 여당 기준점수입니다. 프렌드는 그 점수 그대로, 주공은 2배, 야당은 각각 부호를 바꿔 정산합니다. 노프렌드 주공은 4배입니다.</p>
+    <h3>온라인 대국의 생각 시간</h3><p>방장이 10초 자동진행을 켜면 다음 시간 규칙을 적용합니다. ${hasThinkingTime ? THINKING_TIME_HELP : legacyClockHelp} 끄면 접속 중인 플레이어의 선택을 기다립니다.</p>
   </div>`;
 }
