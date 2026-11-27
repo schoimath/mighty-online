@@ -306,10 +306,14 @@ html:has(.g-screen) { scrollbar-gutter: stable; }
 .g-on-table .g-corner b { font-size: .94rem; }
 .g-hand, .g-round-result { min-width: 0; border: 1px solid #3c5846; border-radius: 13px; background: #1b392c; }
 .g-hand { grid-column: 1; padding: 16px; }
-.g-section-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 15px; }
-.g-section-heading h2 { margin: 0; color: var(--g-cream); font-size: 1rem; font-weight: 650; }
-.g-section-heading h2 > span { margin-left: 4px; color: #bdd1bb; font-size: .85rem; font-weight: 400; }
-.g-hand-actions { display: flex; align-items: center; gap: 8px; }
+.g-section-heading { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin-bottom: 15px; }
+.g-section-heading h2 {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 6px; margin: 0;
+  color: var(--g-cream); font-size: 1rem; font-weight: 650; white-space: nowrap;
+}
+.g-hand-count { color: #bdd1bb; font-size: .85rem; font-weight: 400; }
+.g-section-heading .g-hand-clock { padding-inline-start: 5px; border-inline-start: 1px solid #51735c; font-size: .8rem; }
+.g-hand-actions { display: flex; align-items: center; gap: 8px; margin-inline-start: auto; }
 .g-btn.g-claim-open {
   padding: 4px 10px; border-color: #a39263; color: #f4dc9c; background: #283d2d;
   font-size: .85rem; font-weight: 650; white-space: nowrap;

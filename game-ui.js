@@ -221,7 +221,7 @@ function seatMarkup(ui, nameAt) {
     const standing = seatStanding(board, seat, beforeSettlement && !ui.preResultBoard);
     const balance = balanceText(balances?.[seat]);
     const chips = `<span class="g-seat-balance" data-chip-seat="${seat}"${balance ? '' : ' hidden'}><span class="visually-hidden">보유 칩 </span><span>${balance}</span></span>`;
-    const timer = `<span class="g-seat-clock" data-clock-seat="${seat}" role="timer" aria-live="off" hidden></span>`;
+    const timer = seat === view.seat ? "" : `<span class="g-seat-clock" data-clock-seat="${seat}" role="timer" aria-live="off" hidden></span>`;
     const header = `<span class="g-avatar g-avatar-${seat}" aria-label="${seat + 1}번 자리">${escapeHtml(avatar)}</span><span class="g-seat-tag"><span class="g-seat-identity"><span class="g-seat-name">${escapeHtml(name)}${seat === view.seat ? '<small>나</small>' : ""}</span>${standing}</span><span class="g-seat-meta">${chips}${timer}</span><span class="g-seat-detail">${isTurn ? '<i></i>' : ""}${status}</span></span>`;
     let call = "";
     if (inAuction) {
@@ -394,7 +394,7 @@ function renderHand(ui, newDeal) {
   if (!row) {
     ui.decisionHtml = null;
     hand.setAttribute("aria-label", "내 손패");
-    hand.innerHTML = '<div class="g-section-heading"><h2>내 손패 <span></span></h2><div class="g-hand-actions"><span class="g-role"></span><button type="button" class="g-btn g-claim-open" data-do="claim" aria-haspopup="dialog" hidden>세팅 선언</button></div></div><div class="g-cards"></div><section id="g-hand-decision" class="g-decision g-action" aria-label="내 차례 선택" hidden></section><div class="g-play-settings" hidden></div>';
+    hand.innerHTML = '<div class="g-section-heading"><h2>내 손패 <span class="g-hand-count"></span> <span class="g-hand-clock g-seat-clock" role="timer" aria-live="off" hidden></span></h2><div class="g-hand-actions"><span class="g-role"></span><button type="button" class="g-btn g-claim-open" data-do="claim" aria-haspopup="dialog" hidden>세팅 선언</button></div></div><div class="g-cards"></div><section id="g-hand-decision" class="g-decision g-action" aria-label="내 차례 선택" hidden></section><div class="g-play-settings" hidden></div>';
     row = hand.querySelector(".g-cards");
     ui.decisionObserver?.disconnect();
     ui.decisionInView = false;
@@ -406,7 +406,8 @@ function renderHand(ui, newDeal) {
     ui.decisionObserver.observe(hand.querySelector(".g-decision"));
   }
   const cards = ui.playPending ? view.hand.filter(card => card !== ui.playPending.move.card) : view.hand;
-  hand.querySelector("h2 span").textContent = cards.length + "장";
+  hand.querySelector(".g-hand-count").textContent = cards.length + "장";
+  hand.querySelector(".g-hand-clock").dataset.clockSeat = view.seat;
   const role = hand.querySelector(".g-role");
   hand.dataset.seatRole = visibleRole(view, view.seat);
   role.textContent = roleAt(view, view.seat) || roleLabels[view.selfRole] || "";
@@ -759,7 +760,7 @@ function updateTurnCountdown(ui) {
   const thinking = thinkingDeadline > now;
   const remaining = running ? Math.max(0, (thinking ? thinkingDeadline : turnDeadline) - now) : 0;
   const seconds = Math.ceil(remaining / 1000);
-  clock.hidden = !running || ui.view.turn !== turn;
+  clock.hidden = !running || ui.view.turn !== turn || (ui.view.seat >= 0 && Number.isFinite(seatTimeBanks?.[turn]));
   if (!clock.hidden) {
     clock.textContent = thinking ? `생각 시간 ${minutesAndSeconds(seconds)}`
       : seconds ? `AI 선택까지 ${seconds}초` : "AI 선택 중";
@@ -773,10 +774,12 @@ function updateTurnCountdown(ui) {
     const active = running && seat === turn;
     const overtime = active ? !thinking : bank <= 0;
     const value = active ? seconds : Math.ceil(bank / 1000);
-    let text = minutesAndSeconds(value);
-    let description = '남은 생각 시간 ' + text;
+    const personal = seat === ui.view.seat;
+    const time = minutesAndSeconds(value);
+    let text = personal ? `생각 시간 ${time}` : time;
+    let description = '남은 생각 시간 ' + time;
     if (overtime) {
-      text = active ? `초읽기 ${seconds}초` : '10초';
+      text = active ? `초읽기 ${seconds}초` : personal ? '다음 차례 10초' : '10초';
       description = active ? `AI 선택까지 ${seconds}초` : '생각 시간 소진 · 다음 차례 10초';
     }
     if (badge.textContent !== text) badge.textContent = text;
@@ -1021,8 +1024,8 @@ function redraw(ui, newDeal = false) {
   updateFriendTag(root.querySelector(".g-friend-tag"), view, nameAt);
   // Read the departing card's position before reconciling the player's hand.
   renderTable(ui, nameAt);
-  updateTurnCountdown(ui);
   renderHand(ui, newDeal);
+  updateTurnCountdown(ui);
   const claimDialog = root.querySelector(".g-claim-dialog");
   if (claimDialog.open && !canDeclareSetting(ui)) claimDialog.close();
   if (newDeal) dealToOtherSeats(root, view.seat);
@@ -1228,7 +1231,7 @@ function finishCollection(ui) {
 }
 
 function displayChipPlays(ui) {
-  if (ui.timer || ui.resolving) return;
+  if (ui.timer || ui.resolving) { updateTurnCountdown(ui); return; }
   const step = nextTablePlay(ui.view, ui.latest, ui.completedTricks);
   if (!step || document.hidden) { displayLatest(ui); return; }
   const now = performance.now();
@@ -1400,7 +1403,7 @@ export function renderGame(container, publicView, options = {}) {
     // Peers can send the next lead while this client is gathering the trick.
     // Keep the newest snapshot and never dispatch actions from the held frame.
     if (!document.hidden && publicView.phase !== "bid" && publicView.lastTrick?.number === ui.resolving.number
-      && publicView.friend === ui.view.friend) return;
+      && publicView.friend === ui.view.friend) { updateTurnCountdown(ui); return; }
     clearTimeout(ui.timer);
     ui.resolving = null;
   }
@@ -1449,6 +1452,6 @@ export function rulesContent(rules = DEFAULT_RULES, scoringVersion = TABLE_SCORI
     <p>${jokerCallFrom} 선이 클로버 3으로 조커콜을 선언할 수 있습니다. 조커를 가진 사람은 조커 또는 마이티를 내야 하며, 조커는 그 트릭에서 가장 약합니다. 클로버가 기루다일 때의 조커콜 카드는 스페이드 3입니다. 조커가 한 번 나오면 손패의 조커콜 표식이 사라지고 그 카드는 일반 3으로 냅니다.</p>
     <h3>점수 카드와 승패</h3><p>10, J, Q, K, A는 각각 1점으로, 한 판에는 총 20점이 있습니다. 가져간 점수 카드는 보드의 각자 자리 옆에 모읍니다. 주공은 처음부터 카드를 덮고, 프렌드는 정체가 밝혀지는 즉시 앞서 가져간 카드까지 모두 덮습니다. 열 번째 트릭이 끝났을 때 주공 팀의 점수가 공약 이상이면 주공 팀이 승리합니다.</p>
     <p>${scoring} 배율을 모두 곱한 값이 여당 기준점수입니다. 프렌드는 그 점수 그대로, 주공은 2배, 야당은 각각 부호를 바꿔 정산합니다. 노프렌드 주공은 4배입니다.</p>
-    <h3>생각 시간과 초읽기</h3><p>칩 대국과 무료 연습 모두 한 판에 각자 생각 시간 3분을 받습니다. 자기 차례에만 줄어들며 남은 시간은 각자 자리에서 확인할 수 있습니다. 3분을 다 쓰면 그 차례부터 매번 10초의 초읽기가 시작됩니다. 10초 안에 선택하지 않으면 AI가 그 차례만 대신합니다.</p>
+    <h3>생각 시간과 초읽기</h3><p>칩 대국과 무료 연습 모두 한 판에 각자 생각 시간 3분을 받습니다. 내 손패 장수 옆에서 내 남은 시간을, 다른 사람의 자리에서 그 사람의 남은 시간을 확인할 수 있습니다. 시간은 자기 차례에만 줄어듭니다. 3분을 다 쓰면 그 차례부터 매번 10초의 초읽기가 시작됩니다. 10초 안에 선택하지 않으면 AI가 그 차례만 대신합니다.</p>
   </div>`;
 }
