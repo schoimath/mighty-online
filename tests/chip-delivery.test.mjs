@@ -4,6 +4,24 @@ import {followChipHand} from '../chip-play.js';
 
 const visiblePublic = {publicTable:() => true, isVisible:() => true};
 
+test('a solo presence renewal preserves an in-progress selection until the game actually changes', async t => {
+  t.mock.timers.enable({apis:['Date','setTimeout'],now:1000});
+  const handId = crypto.randomUUID();
+  const original = {handId,revision:1,seat:0,bots:[false,true,true,true,true],turnDeadline:191000,
+    seatTimeBanks:[180000,null,null,null,null],game:{phase:'discard',turn:0,hand:['S5','H8','D6']}};
+  const renewed = {...original,revision:2,seatTimeBanks:[100000,null,null,null,null]};
+  const moved = {...renewed,revision:3,game:{...original.game,phase:'play'}};
+  const responses = [renewed,moved], changes = [];
+  const reader = followChipHand(async () => responses.shift(),handId,'view',
+    (_,balancesOnly,sameDecision) => changes.push(sameDecision),assert.fail,original);
+  try {
+    reader.start();
+    await reader.refresh();
+    await reader.refresh();
+    assert.deepEqual(changes,[false,true,false]);
+  } finally { reader.close(); }
+});
+
 test('a visible public reader follows another human closely, then backs off on the same turn', async t => {
   t.mock.timers.enable({apis:['Date','setTimeout'],now:0});
   const handId = crypto.randomUUID(), times = [];

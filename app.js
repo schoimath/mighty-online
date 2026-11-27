@@ -1,4 +1,4 @@
-import {clearGame, renderGame, rulesContent, THINKING_TIME_HELP, updateGameAutoPlay, updateGamePace, updateSeatBalances} from './game-ui.js';
+import {clearGame, renderGame, rulesContent, updateGameClocks, updateGamePace, updateSeatBalances} from './game-ui.js';
 import {botTurnDelay, normalizeGameSpeed, paceMultiplier} from './table-timing.js';
 import {createNextRoundTimer} from './next-round.js';
 import {hostRoom, joinRoom, normalizeRoomCode} from './network.js';
@@ -53,7 +53,7 @@ let transport = null;
 let snapshot = null;
 let mode = 'lobby';
 let generation = 0;
-let botTimer, botDueAt = null, toastTimer;
+let practiceTurnTimer, botDueAt = null, toastTimer;
 let botWorker = null;
 let claimWorker = null;
 let workerUnavailable = false;
@@ -82,7 +82,7 @@ let chipReader = null, preparing = null, acceptedOffer = null, resumeHand = null
 let activeRead = null, activeTimer, settlingHand = null;
 let leavingGeneration = null;
 let departureHand = null, departureTimer;
-const pendingSettings = {pace:null, autoPlay:null};
+let paceRequest = null;
 let lastAccount = null, settledChipHand = null;
 let accountUI;
 const nextRound = createNextRoundTimer({
@@ -207,7 +207,7 @@ function practiceSeatBalances(state) {
 function serverOnlySnapshot(data) {
   const scoreboard = snapshot?.chipHandId === data.handId && (!data.game.result || snapshot.game?.result)
     ? snapshot.scoreboard : undefined;
-  return {chipHandId:data.handId, seat:data.seat, spectator:data.seat < 0, pace:data.pace, autoPlay:data.autoPlay, scoreboard,
+  return {chipHandId:data.handId, seat:data.seat, spectator:data.seat < 0, pace:data.pace, scoreboard,
     players:data.names.map((name, i) => ({name, bot:data.bots[i], modelId:data.models[i]})),
     rules:data.game.rules, game:data.game};
 }
@@ -250,7 +250,6 @@ function trackChipHand(handId, initial = null, hintRevision) {
             backups?.share();
           }
           snapshot.pace = data.pace;
-          snapshot.autoPlay = data.autoPlay;
           paintTableSettings(reader, data);
         }
       }
@@ -276,93 +275,82 @@ function trackChipHand(handId, initial = null, hintRevision) {
 
 function broadcastTableSettings(handId, revision) {
   for (const id of authority.connections.keys()) {
-    transport?.send(id, {type:'table-pace', handId, pace:authority.pace, autoPlay:authority.autoPlay, revision});
+    transport?.send(id, {type:'table-pace', handId, pace:authority.pace, revision});
   }
 }
 
-function pendingSetting(key, reader) {
-  const request = pendingSettings[key];
-  return request && request.reader === reader ? request.value : null;
+function pendingPace(reader) {
+  return paceRequest && paceRequest.reader === reader ? paceRequest.value : null;
 }
 
 function paintTableSettings(reader, settings) {
-  updateGamePace($('game'), settings.pace, pendingSetting('pace', reader));
-  if (mode !== 'practice') {
-    updateGameAutoPlay($('game'), settings.autoPlay, pendingSetting('autoPlay', reader),
-      reader?.localTurnDeadline ?? null, reader?.localThinkingDeadline ?? null);
-  }
+  updateGamePace($('game'), settings.pace, pendingPace(reader));
+  if (reader) updateGameClocks($('game'), reader.current?.seatTimeBanks, reader.localTurnDeadline, reader.localThinkingDeadline);
 }
 
-async function changeTableSetting(key, value) {
-  const speed = key === 'pace';
+async function changeTablePace(value) {
   const reader = chipReader;
-  if ((speed ? normalizeGameSpeed(value) !== value : typeof value !== 'boolean') ||
+  if (normalizeGameSpeed(value) !== value ||
       preparing || !snapshot?.game || snapshot.scoreboard?.complete) return;
   if (mode === 'public') {
-    if (!snapshot.isHost || pendingSettings[key]) return;
+    if (!snapshot.isHost || paceRequest) return;
     const request = {reader,value};
-    pendingSettings[key] = request;
+    paceRequest = request;
     paintTableSettings(reader, reader?.current ?? snapshot);
     try {
-      await savePublicSetting(key,value);
+      await savePublicSetting('pace', value);
       if (reader && chipReader === reader) await reader.refresh();
     } catch (error) {
       if (mode === 'public' && reader === chipReader) toast(error.message);
     } finally {
-      if (pendingSettings[key] === request) pendingSettings[key] = null;
+      if (paceRequest === request) paceRequest = null;
       if (mode === 'public' && reader === chipReader) paintTableSettings(reader,reader?.current?.game.result ? snapshot : reader?.current ?? snapshot);
     }
     return;
   }
   if (mode === 'practice' || (mode === 'host' && authority.round?.result)) {
-    if (speed) {
-      const previous = authority.pace;
-      authority.setPace(value);
-      if (mode === 'practice' && botDueAt !== null) {
-        const remaining = Math.max(0, botDueAt - performance.now());
-        schedulePracticeBot(remaining * paceMultiplier(value) / paceMultiplier(previous));
-      }
-    } else {
-      if (mode === 'practice') return;
-      authority.setAutoPlay(value);
+    const previous = authority.pace;
+    authority.setPace(value);
+    if (mode === 'practice' && botDueAt !== null) {
+      const remaining = Math.max(0, botDueAt - performance.now());
+      schedulePracticeBot(remaining * paceMultiplier(value) / paceMultiplier(previous));
     }
-    snapshot[key] = value;
+    snapshot.pace = value;
     if (mode === 'host') {
       broadcastTableSettings(snapshot.chipHandId, snapshot.chipRevision);
       backups?.share();
     }
-    rememberRoom({[key]:value});
+    rememberRoom({pace:value});
     paintTableSettings(reader, snapshot);
     return;
   }
   if (!reader || reader.handId !== snapshot.chipHandId || reader.current?.game.result ||
-      pendingSettings[key]?.reader === reader || !(mode === 'host' || (mode === 'resume' && reader.current?.publicGame))) return;
+      paceRequest?.reader === reader || !(mode === 'host' || (mode === 'resume' && reader.current?.publicGame))) return;
   const request = {reader, value};
-  pendingSettings[key] = request;
+  paceRequest = request;
   paintTableSettings(reader, reader.current);
   try {
     if (inheritedHand === reader.handId && mode === 'host') {
       const store = roomChat.archive;
-      const data = await chipRequest({op:speed ? 'room-pace' : 'room-auto-play',handId:reader.handId,
-        term:store.term,credential:store.credential,[key]:value});
+      const data = await chipRequest({op:'room-pace',handId:reader.handId,
+        term:store.term,credential:store.credential,pace:value});
       if (authority && chipReader === reader) {
         authority.syncChipHand(data); broadcastTableSettings(reader.handId,data.revision);
         publicReader?.wake(data.revision);
-        rememberRoom({[key]:authority[key]});
+        rememberRoom({pace:authority.pace});
         publish();
         // Room control returns a spectator projection. Refresh this seat's own
         // view to pick up the new timer without replacing its private hand.
         await reader.refresh();
       }
     } else {
-      if (speed) await reader.changePace(value);
-      else await reader.changeAutoPlay(value);
-      if (chipReader === reader && reader.current?.[key] === value) rememberRoom({[key]:value});
+      await reader.changePace(value);
+      if (chipReader === reader && reader.current?.pace === value) rememberRoom({pace:value});
     }
   } catch (error) {
     if (chipReader === reader) toast(error.message);
   } finally {
-    if (pendingSettings[key] === request) pendingSettings[key] = null;
+    if (paceRequest === request) paceRequest = null;
     if (chipReader === reader) paintTableSettings(reader, authority?.round?.result ? authority : reader.current);
   }
 }
@@ -471,6 +459,7 @@ async function refreshDirectory() {
 
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) { clearTimeout(activeTimer); pauseDirectory(); return; }
+  if (mode === 'practice') { checkPracticeClock(); return; }
   if (mode === 'public') { publicLobby.wake(); chipReader?.wake(); return; }
   if (mode === 'spectate') { chipReader?.wake(); return; }
   if (mode === 'lobby' || settlingHand) refreshActiveHand();
@@ -555,6 +544,7 @@ window.addEventListener('pagehide', event => {
   else if (mode === 'joining') stopSession();
 });
 window.addEventListener('pageshow', event => {
+  if (event.persisted && mode === 'practice') { checkPracticeClock(); return; }
   if (event.persisted && mode === 'public') { publicLobby.wake(); return; }
   if (!event.persisted || !restoreRoomLobby) return;
   restoreRoomLobby = false;
@@ -661,18 +651,15 @@ function roomGameOptions(snapshot, host) {
   const board = snapshot.scoreboard;
   const limit = board?.roundLimit ?? 0;
   const selectedPace = normalizeGameSpeed(snapshot.pace);
-  const picker = (name, title, values, selected, hint) => {
+  const picker = (name, title, values, selected) => {
     const options = values.map(([value, label]) =>
       `<option value="${value}"${value === selected ? ' selected' : ''}>${label}</option>`).join('');
-    return `<label class="room-game-option"${hint ? ` title="${escape(hint)}"` : ''}><strong>${title}</strong><select name="${name}">${options}</select></label>`;
+    return `<label class="room-game-option"><strong>${title}</strong><select name="${name}">${options}</select></label>`;
   };
   const series = host && !board?.rounds ? picker('roundLimit', '경기 판수', [[10,'10판'],[20,'20판'],[0,'무제한']], limit) : seriesSummary(board);
   const speed = host ? picker('pace', '진행 속도', Object.entries(paceLabels), selectedPace)
     : `<p class="series-summary"><strong>진행 속도</strong> ${paceLabels[selectedPace]}</p>`;
-  const timed = snapshot.autoPlay !== false;
-  const clock = host ? picker('autoPlay', '10초 자동진행', [['on','켜짐'],['off','꺼짐']], timed ? 'on' : 'off', THINKING_TIME_HELP)
-    : `<p class="series-summary" title="${escape(THINKING_TIME_HELP)}"><strong>10초 자동진행</strong> ${timed ? '켜짐' : '꺼짐'}</p>`;
-  return '<div class="room-game-options">' + series + speed + clock + roomModelOption(snapshot, host) + '</div>';
+  return '<div class="room-game-options">' + series + speed + roomModelOption(snapshot, host) + '</div>';
 }
 
 function seriesSummary(board) {
@@ -686,8 +673,7 @@ function showRules() {
   const rules = activeRules();
   const board = snapshot?.scoreboard;
   const scoringVersion = snapshot ? board?.scoringVersion ?? (board ? 'contract-flat-v1' : 'ten-base-v1') : undefined;
-  const hasThinkingTime = !chipReader?.current || chipReader.current.timeBankMs > 0;
-  modal('게임 규칙', '<div class="rules-wrap">' + rulesSummary(rules) + modelSummary(snapshot) + rulesContent(rules, scoringVersion, hasThinkingTime) + '</div>');
+  modal('게임 규칙', '<div class="rules-wrap">' + rulesSummary(rules) + modelSummary(snapshot) + rulesContent(rules, scoringVersion) + '</div>');
 }
 $('nav-rules').onclick = showRules;
 
@@ -712,11 +698,11 @@ function stopSession(message, {returnToObserver = false, navigatingAway = false}
   $('room').inert = $('game').inert = false;
   chipReader?.close();
   chipReader = null;
-  pendingSettings.pace = pendingSettings.autoPlay = null;
+  paceRequest = null;
   roomAccounts.clear();
   if (publicListing) trackDirectoryRelease(roomCode,publicListing.close());
   publicListing = null;
-  clearTimeout(botTimer);
+  clearTimeout(practiceTurnTimer);
   botDueAt = null;
   botWorker?.terminate();
   botWorker = null;
@@ -1107,14 +1093,6 @@ function drawRoom() {
       publish();
     };
     if (focus?.name === 'pace') pacePicker.focus({preventScroll:true});
-    const autoPlayPicker = room.querySelector('select[name="autoPlay"]');
-    autoPlayPicker.onchange = () => {
-      if (mode === 'public') return savePublicSetting('autoPlay',autoPlayPicker.value === 'on');
-      authority.setAutoPlay(autoPlayPicker.value === 'on');
-      rememberRoom({autoPlay:authority.autoPlay});
-      publish();
-    };
-    if (focus?.name === 'autoPlay') autoPlayPicker.focus({preventScroll:true});
     room.querySelector('[name="modelChoice"]').onchange = event => {
       const modelChoice = event.target.value;
       if (mode === 'public') return savePublicSetting('modelChoice',modelChoice);
@@ -1227,6 +1205,7 @@ function draw() {
   if (!snapshot.game) { clearGame($('game')); showScreen('room'); drawRoom(); return; }
   showScreen('game');
   const remote = chipReader?.handId === snapshot.chipHandId ? chipReader?.current : null;
+  const practice = mode === 'practice' ? snapshot : null;
   const serverOnly = mode === 'resume' || mode === 'spectate';
   const useRoomSettings = remote?.game.result && !serverOnly;
   const host = Boolean(authority) || (mode === 'public' && snapshot.isHost);
@@ -1239,15 +1218,12 @@ function draw() {
     chipDelta:remote?.myDelta, handDeltas:remote?.deltas, settlementSeat:remote?.mySettlementSeat, resumed:serverOnly,
     onConnectLobby:mode === 'spectate' && watchOnlyRoom ? reconnectSpectatorLobby : undefined,
     connectingLobby:Boolean(pendingConnect),
-    turnDeadline:remote ? chipReader.localTurnDeadline : null,
-    thinkingDeadline:remote ? chipReader.localThinkingDeadline : null,
-    timeBankMs:remote?.timeBankMs,
+    turnDeadline:remote ? chipReader.localTurnDeadline : practice?.turnDeadline,
+    thinkingDeadline:remote ? chipReader.localThinkingDeadline : practice?.thinkingDeadline,
+    seatTimeBanks:remote?.seatTimeBanks ?? practice?.seatTimeBanks,
     pace:useRoomSettings ? snapshot.pace : remote?.pace ?? snapshot.pace,
-    pendingPace:pendingSetting('pace', chipReader),
-    onPaceChange:mayChange ? value => changeTableSetting('pace', value) : undefined,
-    autoPlay:mode === 'practice' ? undefined : (useRoomSettings ? snapshot.autoPlay : remote?.autoPlay ?? snapshot.autoPlay),
-    pendingAutoPlay:pendingSetting('autoPlay', chipReader),
-    onAutoPlayChange:mayChange && mode !== 'practice' ? value => changeTableSetting('autoPlay', value) : undefined,
+    pendingPace:pendingPace(chipReader),
+    onPaceChange:mayChange ? changeTablePace : undefined,
     modelLabels:remote ? remote.models.map((id,i) => remote.bots[i] ? modelLabel(id) : '') :
       snapshot.players.map(p => p?.bot && p.modelId ? modelLabel(p.modelId) : ''),
     replaySetupLabel: mode === 'practice' ? (snapshot.scoreboard?.complete ? '새 연습 경기 설정' : '규칙·AI 바꿔서 시작') : '대기실로 돌아가기',
@@ -1308,8 +1284,14 @@ function draw() {
         return true;
       }
       if (mode === 'practice' && authority) {
-        try { submitTurn(authority, authority.hostSeat, snapshot.revision, action); return true; }
-        catch (error) { toast(error.message); return false; }
+        if (checkPracticeClock()) return false;
+        const revision = snapshot.revision;
+        try { submitTurn(authority, authority.hostSeat, revision, action); return true; }
+        catch (error) {
+          if (authority.revision !== revision) publish();
+          toast(error.message);
+          return false;
+        }
       }
       return false;
     }
@@ -1343,13 +1325,28 @@ function expectedChipTable() {
 }
 
 function schedulePracticeBot(delay) {
-  clearTimeout(botTimer);
+  clearTimeout(practiceTurnTimer);
   botDueAt = performance.now() + delay;
-  botTimer = setTimeout(() => { botDueAt = null; takeBotTurn(); }, delay);
+  practiceTurnTimer = setTimeout(() => { botDueAt = null; takeBotTurn(); }, delay);
+}
+
+function checkPracticeClock() {
+  const deadline = mode === 'practice' ? authority?.activeTurnDeadline : null;
+  if (!Number.isFinite(deadline)) return false;
+  clearTimeout(practiceTurnTimer);
+  const remaining = deadline - Date.now();
+  if (remaining > 0) {
+    practiceTurnTimer = setTimeout(checkPracticeClock, remaining);
+    return false;
+  }
+  if (!authority.assistExpiredTurn()) return false;
+  toast('시간이 지나 AI가 이번 차례를 대신했습니다.', 2500);
+  publish();
+  return true;
 }
 
 function publish() {
-  clearTimeout(botTimer);
+  clearTimeout(practiceTurnTimer);
   botDueAt = null;
   if (authority.round?.phase !== 'result') nextRound.sync(null);
   const nextDeal = expectedChipTable();
@@ -1361,7 +1358,7 @@ function publish() {
   backups?.share(); publicListing?.refresh();
   if (mode === 'practice' && authority.botTurn) {
     schedulePracticeBot(botTurnDelay(snapshot.game, authority.pace));
-  }
+  } else if (mode === 'practice') checkPracticeClock();
 }
 
 function submitTurn(session, seat, revision, action) {
@@ -1653,7 +1650,7 @@ async function connectRoom(kind, name, code, signal, {roundLimit, publicRoom, in
     const preferences = roomPreferences();
     let session, committedDeal;
     const createSession = () => new HostSession(name, preferences.rules, undefined, roundLimit,
-      {publicRoom, hostSpectator:intent === 'watch', pace:preferences.pace, autoPlay:preferences.autoPlay, modelChoice:preferences.modelChoice});
+      {publicRoom, hostSpectator:intent === 'watch', pace:preferences.pace, modelChoice:preferences.modelChoice});
     let store;
     let reservedPublic = false, reservedPrivate = false;
     if (!recovery && slot) {
@@ -1834,7 +1831,6 @@ async function connectRoom(kind, name, code, signal, {roundLimit, publicRoom, in
         if (packet?.type === 'table-pace' && snapshot?.chipHandId === packet.handId &&
             normalizeGameSpeed(packet.pace) === packet.pace) {
           snapshot.pace = packet.pace;
-          if (typeof packet.autoPlay === 'boolean') snapshot.autoPlay = packet.autoPlay;
           if (snapshot.game?.result) paintTableSettings(chipReader, snapshot);
           else chipReader?.wake(packet.revision);
           return;

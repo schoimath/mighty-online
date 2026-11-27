@@ -49,7 +49,7 @@ function open(input,actor,accountId,now) {
   const p = input.preferences ?? {};
   const name = input.name.trim();
   const session = new HostSession(name,p.rules,undefined,p.roundLimit === undefined ? 10 : p.roundLimit,
-    {publicRoom:true,hostSpectator:true,pace:p.pace,autoPlay:p.autoPlay,modelChoice:p.modelChoice ?? 'random'});
+    {publicRoom:true,hostSpectator:true,pace:p.pace,modelChoice:p.modelChoice ?? 'random'});
   const state = {slot:input.slot,roomCode:'PUB00'+input.slot,owner:accountId,host:actor,
     controlKey:hex(crypto.getRandomValues(new Uint8Array(32))),controlTerm:1,
     members:{[actor]:newMember(accountId,name,now,0)},chat:[],chatSeq:0,effects:[],offer:null,nextRound:null};
@@ -128,6 +128,8 @@ function publicResult(state,session,actor,input,roomId,version,now) {
   if (!member) return {left:true,roomId,version,serverNow:now};
   const isHost = state.host === actor;
   const view = isHost ? session.hostView() : session.viewFor(actor);
+  // Cached clients compare the advertised clock with a pending pre-update offer.
+  if (state.offer?.status === 'pending' && state.offer.spec.autoPlay === false) view.autoPlay = false;
   const floor = input.op === 'join' ? state.chatSeq : Math.max(member.joinSeq,input.after ?? state.chatSeq);
   const messages = state.chat.filter(m => m.seq > floor).map(({author,...m}) => ({...m,own:author === actor}));
   return {roomId,version,serverNow:now,isHost,
@@ -174,12 +176,12 @@ async function act(state,session,actor,input,api,now) {
       if (key === 'rules') session.setRules(value);
       else if (key === 'roundLimit') session.setRoundLimit(value);
       else if (key === 'modelChoice') session.setModelChoice(value);
-      else if (key === 'autoPlay') session.setAutoPlay(value);
+      else if (key === 'autoPlay') break; // Obsolete requests from cached hosts.
       else if (key === 'pace') {
         check(normalizeGameSpeed(value) === value,'진행 속도를 확인해 주세요.');
         session.setPace(value);
       } else check(false,'테이블 설정을 확인해 주세요.');
-      if (live(session) && (key === 'pace' || key === 'autoPlay'))
+      if (live(session) && key === 'pace')
         state.effects.push({op:'setting',id:input.requestId,handId:session.chipHandId,key,value});
       break;
     }
@@ -213,7 +215,7 @@ async function act(state,session,actor,input,api,now) {
 async function drain(state,chips,roomId) {
   for (const effect of state.effects) {
     if (effect.op === 'leave') await chips.leave(effect.handId,effect.accountId,effect.finishIfAlone === true);
-    else {
+    else if (effect.key === 'pace') {
       try {
         await chips.setting(effect.handId,{roomId,effectId:effect.id,controlKey:state.controlKey,controlTerm:state.controlTerm,
           controllerId:hostAccount(state)},effect.key,effect.value);

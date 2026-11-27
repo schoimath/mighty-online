@@ -27,15 +27,9 @@ function dealPace(value = 'normal') {
   return normalizeGameSpeed(value) === value ? value : null;
 }
 
-function dealAutoPlay(value = true) {
-  return typeof value === 'boolean' ? value : null;
-}
-
 export function chipManifest(plan, room, host, accounts) {
   const pace = dealPace(plan.pace);
   if (!pace) throw new Error('대국 속도를 확인해 주세요.');
-  const autoPlay = dealAutoPlay(plan.autoPlay);
-  if (autoPlay === null) throw new Error('10초 자동진행 설정을 확인해 주세요.');
   const seats = plan.seats.map(p => p.bot ? null : accounts.get(p.id));
   if (!accountIdValid(host) || seats.some(id => id !== null && !accountIdValid(id))) {
     throw new Error('모든 참가자가 계정에 로그인한 뒤 다시 입장해 주세요.');
@@ -44,8 +38,7 @@ export function chipManifest(plan, room, host, accounts) {
   if (!humans.length) throw new Error('칩 대국에는 칩을 보유한 참가자가 한 명 이상 필요합니다.');
   if (new Set(humans).size !== humans.length) throw new Error('한 계정은 한 자리에서만 참가할 수 있습니다.');
   return {handId:crypto.randomUUID(), room, host, seats, names:plan.seats.map(p => p.name),
-    models:plan.models, rules:plan.rules, firstSeat:plan.firstSeat, ...(pace === 'normal' ? {} : {pace}),
-    ...(autoPlay ? {} : {autoPlay:false})};
+    models:plan.models, rules:plan.rules, firstSeat:plan.firstSeat, ...(pace === 'normal' ? {} : {pace})};
 }
 
 export function offeredSeat(snapshot, spec, room, userId) {
@@ -54,8 +47,9 @@ export function offeredSeat(snapshot, spec, room, userId) {
       !Array.isArray(spec.seats) || spec.seats.length !== 5) return -1;
   const pace = dealPace(spec.pace);
   if (!pace || pace !== dealPace(snapshot.pace)) return -1;
-  const autoPlay = dealAutoPlay(spec.autoPlay);
-  if (autoPlay === null || autoPlay !== dealAutoPlay(snapshot.autoPlay)) return -1;
+  // Old hosts may already have offered a deal with an explicit clock flag.
+  // The original manifest must reach the server unchanged for consent.
+  if (spec.autoPlay !== undefined && typeof spec.autoPlay !== 'boolean') return -1;
   const seat = snapshot.spectator ? snapshot.reservation?.seat : snapshot.seat;
   if (!Number.isInteger(seat) || seat < 0 || seat > 4 || spec.seats[seat] !== userId) return -1;
   const next = snapshot.nextDeal;
@@ -86,9 +80,12 @@ export function consentWindow(ids, handId, timeout = 30000) {
 function sameDecisionAfterUpdate(previous, next) {
   if (!previous || previous.handId !== next.handId) return false;
   const settingsChanged = normalizeGameSpeed(previous.pace) !== normalizeGameSpeed(next.pace) ||
-    dealAutoPlay(previous.autoPlay) !== dealAutoPlay(next.autoPlay);
-  const renewedPresence = previous.turnDeadline === null && next.turnDeadline === null &&
-    next.bots?.[next.game?.turn] === false && Number.isFinite(previous.dueAt) && next.dueAt > previous.dueAt;
+    (previous.autoPlay !== false) !== (next.autoPlay !== false);
+  // A solo player's presence renewal preserves their selection and running clock.
+  const renewedPresence = next.bots?.[next.game?.turn] === false && (
+    Number.isFinite(next.turnDeadline) && previous.turnDeadline === next.turnDeadline ||
+    previous.turnDeadline === null && next.turnDeadline === null &&
+      Number.isFinite(previous.dueAt) && next.dueAt > previous.dueAt);
   if (!settingsChanged && !renewedPresence) return false;
   return previous.seat === next.seat && ['game','publicGame','names','bots','models'].every(
     field => JSON.stringify(previous[field]) === JSON.stringify(next[field]));
@@ -286,19 +283,6 @@ export function followChipHand(request, handId, op, onState, onError, initial, {
         });
         return current;
       } finally { changingPace = false; }
-    },
-    async changeAutoPlay(autoPlay) {
-      if (closed) return current;
-      if (op !== 'view' || !current?.publicGame || current.game.result) {
-        throw new Error('진행 중인 판의 방장만 10초 자동진행을 변경할 수 있습니다.');
-      }
-      if (typeof autoPlay !== 'boolean') throw new Error('10초 자동진행 설정을 확인해 주세요.');
-      await write(async () => {
-        if (!current.game.result && dealAutoPlay(current.autoPlay) !== autoPlay) {
-          await send({op:'auto-play', autoPlay});
-        }
-      });
-      return current;
     },
     close() { closed = true; clearTimeout(timer); }
   };

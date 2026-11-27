@@ -65,6 +65,8 @@ test('consent covers the current seat, reserved seat or actual spectator host, a
   assert.equal(eligible({seat:1},'guest'),false);
   assert.equal(eligible({departing:true},'guest'),false);
   assert.equal(eligible({pace:'fast'},'guest'),false);
+  assert.equal(eligible({},'guest',{...offer,autoPlay:false}),true);
+  assert.equal(eligible({},'guest',{...offer,autoPlay:'false'}),false);
   assert.equal(eligible({},'guest',{...offer,room:'PUB004'}),false);
 });
 

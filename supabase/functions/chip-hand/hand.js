@@ -5,11 +5,9 @@ import {shouldDeclareSetting} from '../../../bot-setting.js';
 import {settlements} from '../../../table-scoring.js';
 import {jokerWasPlayed, withJokerStatus} from '../../../table-joker.js';
 import {decideTableTurn, hasSeatMemory, isModelId, memoryForReplacement} from '../../../lab/table-agents.js';
-import {botTurnDelay, normalizeGameSpeed, paceMultiplier} from '../../../table-timing.js';
+import {botTurnDelay, HUMAN_TURN_MS, normalizeGameSpeed, paceMultiplier, THINKING_TIME_MS} from '../../../table-timing.js';
 
 const RECONNECT_MS = 120_000;
-const HUMAN_TURN_MS = 10_000;
-const THINKING_TIME_MS = 180_000;
 const CATCHUP_BUDGET_MS = 120;
 const MAX_UNATTENDED_MOVES = 64;
 const SUBSTITUTE_NAMES = ['AI 솔', 'AI 달', 'AI 별', 'AI 구름', 'AI 바다'];
@@ -54,7 +52,7 @@ export function chipManifestDigest(input) {
 async function startHand(db, hand, spec, hash, now) {
   const row = await db.start(hand, spec, createState(spec, hash, now));
   check(row.host === spec.host && row.state.manifest === hash, '이미 다른 조건으로 시작된 판입니다.', 409);
-  return row;
+  return restoreFixedClock(row, db.save, now);
 }
 
 export async function startPublicLobbyHand(input, db, now = Date.now()) {
@@ -64,14 +62,15 @@ export async function startPublicLobbyHand(input, db, now = Date.now()) {
   return publicHandReceipt(row, now);
 }
 
-function usesTurnClock(state) {
-  return state.autoPlay !== false && !state.round.result && !state.bots[state.round.turn] && state.bots.filter(bot => !bot).length >= 2;
+function turnDeadline(state) {
+  return state.round.result || state.bots[state.round.turn] ? null : state.turnDeadline ?? null;
 }
 
-function turnDeadline(state) {
-  if (!usesTurnClock(state)) return null;
-  // Older hands stored the start of this human turn plus its two-minute grace.
-  return state.turnDeadline ?? state.dueAt - RECONNECT_MS + HUMAN_TURN_MS;
+// A lone participant can disconnect with nobody left to report it. The
+// connection lease is independent of the time allowed for their decision.
+function updateSoloPresence(state, now) {
+  state.soloPresenceUntil = state.bots.filter(bot => !bot).length === 1 ? now + RECONNECT_MS : null;
+  if (turnDeadline(state) !== null) state.dueAt = Math.min(state.turnDeadline, state.soloPresenceUntil ?? Infinity);
 }
 
 function scheduleTurn(state, now, botTime = now, previousSeat) {
@@ -79,31 +78,23 @@ function scheduleTurn(state, now, botTime = now, previousSeat) {
   // The deadline includes ten seconds of overtime. Save only the reserve
   // still unused by the previous actor; reads never consume or extend it.
   const banks = state.thinkingTime;
-  const timed = usesTurnClock(state);
-  let overtime = HUMAN_TURN_MS;
-  if (banks && previousSeat === undefined) {
-    // A toggle during overtime pauses and resumes the same decision.
-    overtime = Number.isFinite(state.turnDeadline)
-      ? Math.max(0, Math.min(HUMAN_TURN_MS, state.turnDeadline - now))
-      : state.pausedOvertimeMs ?? HUMAN_TURN_MS;
-  }
   if (banks && Number.isFinite(state.turnDeadline)) {
     const remaining = state.turnDeadline - HUMAN_TURN_MS - now;
     const seat = previousSeat ?? g.turn;
     banks[seat] = Math.max(0, Math.min(banks[seat], remaining));
   }
-  if (banks) state.pausedOvertimeMs = !timed && overtime < HUMAN_TURN_MS ? overtime : null;
-  state.turnDeadline = timed ? now + (banks?.[g.turn] ?? 0) + overtime : null;
+  state.turnDeadline = !g.result && !state.bots[g.turn] ? now + banks[g.turn] + HUMAN_TURN_MS : null;
   if (g.result) state.dueAt = null;
-  else if (!state.bots[g.turn]) state.dueAt = state.turnDeadline ?? now + RECONNECT_MS;
+  else if (!state.bots[g.turn]) state.dueAt = Math.min(state.turnDeadline, state.soloPresenceUntil ?? Infinity);
   else state.dueAt = botTime + botTurnDelay(g, state.pace, {showRedeal:false});
 }
 
 function createState(spec, manifest, now) {
-  const state = {manifest, names:spec.names, models:spec.models, firstSeat:spec.firstSeat, pace:normalizeGameSpeed(spec.pace), autoPlay:spec.autoPlay !== false,
+  const state = {manifest, names:spec.names, models:spec.models, firstSeat:spec.firstSeat, pace:normalizeGameSpeed(spec.pace), autoPlay:true,
     round:createGame({firstSeat:spec.firstSeat, rules:spec.rules}), bots:spec.seats.map(id => id === null),
     thinkingTime:spec.seats.map(id => id ? THINKING_TIME_MS : 0),
     history:Array.from({length:5}, () => []), memory:Array(5).fill(null), dueAt:null};
+  updateSoloPresence(state, now);
   scheduleTurn(state, now);
   return state;
 }
@@ -124,12 +115,18 @@ function present(row, id, now) {
   const deltas = round.result ? settlements(round.result, round.bid.suit) : null;
   const deadline = turnDeadline(state);
   const thinkingDeadline = deadline !== null && state.thinkingTime?.[round.turn] > 0 ? deadline - HUMAN_TURN_MS : null;
+  const showBanks = !round.result && state.thinkingTime;
+  const seatTimeBanks = state.bots.map((bot, i) => {
+    if (bot || !showBanks) return null;
+    const left = state.thinkingTime[i];
+    return i === round.turn && deadline !== null ? Math.max(0, Math.min(left, deadline - HUMAN_TURN_MS - now)) : left;
+  });
   const seatBalances = row.seats.map((account, i) =>
     account && (!state.bots[i] || row.settled) && Number.isSafeInteger(row.seatBalances?.[i]) ? row.seatBalances[i] : null);
   return {handId:row.hand, room:row.room, revision:row.revision, seat, game, bots:state.bots,
     names:state.names.map((_, i) => nameAt(row, i)), seatBalances, models:state.models, firstSeat:state.firstSeat, pace:normalizeGameSpeed(state.pace),
-    autoPlay:state.autoPlay !== false, dueAt:deadline ?? state.dueAt, turnDeadline:deadline, serverNow:now, lastTimedAction:state.lastTimedAction ?? null,
-    thinkingDeadline, timeBankMs:state.thinkingTime ? THINKING_TIME_MS : 0,
+    autoPlay:true, dueAt:deadline ?? state.dueAt, turnDeadline:deadline, serverNow:now, lastTimedAction:state.lastTimedAction ?? null,
+    thinkingDeadline, seatTimeBanks, timeBankMs:state.thinkingTime ? THINKING_TIME_MS : 0,
     deltas, ...(owner >= 0 && deltas ? {myDelta:deltas[owner], mySettlementSeat:owner} : {}),
     ...(id === row.host ? {publicGame} : {})};
 }
@@ -173,7 +170,7 @@ function advanceDue(row, now, catchup) {
   const s = row.state;
   const allBots = s.bots.every(Boolean);
   const finishing = s.finishUnattended === true && allBots;
-  let due = turnDeadline(s) ?? s.dueAt;
+  let due = s.dueAt;
   if (s.round.result || due > now) return false;
   // The clock only replays elapsed turns. An account explicitly closing an
   // all-AI hand also waives the pauses between moves. Persist a bounded batch
@@ -182,8 +179,11 @@ function advanceDue(row, now, catchup) {
   const deadline = performance.now() + CATCHUP_BUDGET_MS;
   for (let i = 0; i < limit && !s.round.result && due <= now; i++) {
     const seat = s.round.turn;
-    const assisted = usesTurnClock(s);
-    if (!assisted && !s.bots[seat]) replaceSeat(s, seat);
+    if (!s.bots[seat] && s.soloPresenceUntil != null && s.soloPresenceUntil <= now) {
+      replaceSeat(s, seat);
+      s.soloPresenceUntil = null;
+    }
+    const assisted = !s.bots[seat];
     const view = withJokerStatus(botObservation(s.round, seat));
     const memory = assisted ? memoryForReplacement(s.models[seat], s.history[seat]) : s.memory[seat];
     const next = !assisted && canDeclareSetting(s.round, seat) && shouldDeclareSetting(view)
@@ -209,27 +209,48 @@ function preserveTurn(row) {
   row.state.lastTurnPreservingChange = {from:firstPlayableRevision(row), revision:row.revision + 1};
 }
 
+async function restoreFixedClock(row, save, now) {
+  // Resume paused reserves and grant the initial reserve to games created
+  // before banks existed. A concurrent reader must not start the clock twice.
+  for (let retry = 0; !row.state.round.result && !row.state.bots.every(Boolean); retry++) {
+    const state = row.state;
+    const resume = state.autoPlay === false || !state.thinkingTime ||
+      (!state.bots[state.round.turn] && state.turnDeadline == null);
+    const missingPresence = state.soloPresenceUntil == null && state.bots.filter(bot => !bot).length === 1;
+    if (!resume && !missingPresence) break;
+    check(retry < 4, '차례가 바뀌었습니다. 다시 시도해 주세요.', 409);
+    state.autoPlay = true;
+    state.thinkingTime ??= state.bots.map(bot => bot ? 0 : THINKING_TIME_MS);
+    if (resume && !state.bots[state.round.turn]) {
+      state.turnDeadline = now + state.thinkingTime[state.round.turn] + (state.pausedOvertimeMs ?? HUMAN_TURN_MS);
+      state.dueAt = state.turnDeadline;
+    }
+    if (missingPresence) updateSoloPresence(state, now);
+    delete state.pausedOvertimeMs;
+    preserveTurn(row);
+    row = await save(row);
+  }
+  return row;
+}
+
 async function changeTableSetting(row, input, save, now) {
-  const changingClock = input.op === 'auto-play' || input.op === 'room-auto-play';
-  if (changingClock) check(typeof input.autoPlay === 'boolean', '10초 자동진행 설정을 확인해 주세요.');
-  else check(input.pace === normalizeGameSpeed(input.pace), '테이블 진행 속도를 확인해 주세요.');
+  // Previously released hosts can still send the old settings request.
+  if (input.op === 'auto-play' || input.op === 'room-auto-play') {
+    check(typeof input.autoPlay === 'boolean', '10초 자동진행 설정을 확인해 주세요.');
+    return row;
+  }
+  check(input.pace === normalizeGameSpeed(input.pace), '테이블 진행 속도를 확인해 주세요.');
   for (let retry = 0; ; retry++) {
     const state = row.state;
     check(!state.round.result, '이 판은 이미 끝났습니다.', 409);
     const previousPace = normalizeGameSpeed(state.pace);
-    if (changingClock ? (state.autoPlay !== false) === input.autoPlay : previousPace === input.pace) return row;
+    if (previousPace === input.pace) return row;
     check(retry < 4, '차례가 바뀌었습니다. 설정을 다시 선택해 주세요.', 409);
-    if (changingClock) {
-      const timed = usesTurnClock(state);
-      state.autoPlay = input.autoPlay;
-      if (usesTurnClock(state) !== timed) scheduleTurn(state, now);
-    } else {
-      if (state.bots[state.round.turn] && state.dueAt > now) {
-        const remaining = state.dueAt - now;
-        state.dueAt = now + Math.round(remaining * paceMultiplier(input.pace) / paceMultiplier(previousPace));
-      }
-      state.pace = input.pace;
+    if (state.bots[state.round.turn] && state.dueAt > now) {
+      const remaining = state.dueAt - now;
+      state.dueAt = now + Math.round(remaining * paceMultiplier(input.pace) / paceMultiplier(previousPace));
     }
+    state.pace = input.pace;
     preserveTurn(row);
     row = (await save(row)).hand;
   }
@@ -243,6 +264,7 @@ async function controlHand(input, id, db, hand, now, show) {
   const save = row => db.control(hand, proof, row);
   let context = await db.control(hand, proof);
   check(context?.hand, '해당 판을 찾을 수 없습니다.', 404);
+  context.hand = await restoreFixedClock(context.hand, async row => (await save(row)).hand, now);
   if (input.op !== 'room-takeover') {
     const row = await changeTableSetting(context.hand, input, save, now);
     const receipt = await show(row, legacy ? id : null);
@@ -255,9 +277,9 @@ async function controlHand(input, id, db, hand, now, show) {
     const leaving = departedSeats.filter(seat => row.seats[seat] && !row.state.bots[seat]);
     if (!leaving.length) break;
     check(retry < 4, '차례가 바뀌었습니다. 다시 시도해 주세요.', 409);
-    const timed = usesTurnClock(row.state);
     for (const seat of leaving) replaceSeat(row.state, seat);
-    if (leaving.includes(row.state.round.turn) || (timed && !usesTurnClock(row.state))) scheduleTurn(row.state, now);
+    updateSoloPresence(row.state, now);
+    if (leaving.includes(row.state.round.turn)) scheduleTurn(row.state, now);
     context = await save(row);
   }
   const receipt = await show(context.hand, null);
@@ -299,6 +321,7 @@ export async function operateHand(input, accountId, db, now = Date.now(), playba
   check(row, '해당 판을 찾을 수 없습니다.', 404);
   const seat = id ? row.seats.indexOf(id) : -1;
   if (!publicRead) check(seat >= 0 || row.host === id, '이 판의 참가 계정을 확인해 주세요.', 403);
+  row = await restoreFixedClock(row, db.save, now);
   const state = row.state;
   let changed = false;
   if (op === 'leave') {
@@ -312,9 +335,9 @@ export async function operateHand(input, accountId, db, now = Date.now(), playba
       if (s.bots[seat] && !finish) break;
       check(retry < 4, '차례가 바뀌었습니다. 다시 시도해 주세요.', 409);
       if (!s.bots[seat]) {
-        const wasTimed = usesTurnClock(s);
         replaceSeat(s, seat);
-        if (s.round.turn === seat || (wasTimed && !usesTurnClock(s))) scheduleTurn(s, now);
+        updateSoloPresence(s, now);
+        if (s.round.turn === seat) scheduleTurn(s, now);
       }
       if (finish) {
         s.finishUnattended = true;
@@ -330,18 +353,22 @@ export async function operateHand(input, accountId, db, now = Date.now(), playba
          input.revision >= firstPlayableRevision(row) && input.revision <= row.revision; retry++) {
       check(retry < 4, '설정이 변경되고 있습니다. 잠시 후 카드를 다시 내 주세요.', 409);
       check(!row.state.bots[seat] && row.state.round.turn === seat, '지금은 내 차례가 아닙니다.');
+      if (row.state.soloPresenceUntil != null) updateSoloPresence(row.state, now);
       const deadline = turnDeadline(row.state);
       if (deadline !== null && now >= deadline) advanceDue(row, now, false);
       else move(row, input.action, now);
       row = await db.save(row);
     }
-  } else if (op === 'view' && !state.round.result && state.round.turn === seat &&
-             !state.bots[seat] && !usesTurnClock(state) && state.dueAt - now <= 45_000) {
-    // An authenticated read renews the active seat's presence while thinking.
-    state.dueAt = now + RECONNECT_MS;
-    preserveTurn(row);
-    changed = true;
-  } else changed = advanceDue(row, now, op === 'tick');
+  } else {
+    const renew = op === 'view' && seat >= 0 && !state.bots[seat] && !state.round.result &&
+      state.soloPresenceUntil != null && state.soloPresenceUntil - now <= 45_000;
+    if (renew) updateSoloPresence(state, now);
+    changed = advanceDue(row, now, op === 'tick');
+    if (renew && !changed) {
+      preserveTurn(row);
+      changed = true;
+    }
+  }
   if (changed) row = await db.save(row);
   if (op === 'tick') return {handId:hand, revision:row.revision, settled:row.settled};
   return show(row, publicRead ? null : id);

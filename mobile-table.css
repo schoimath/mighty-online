@@ -34,8 +34,8 @@
   .g-match-progress { order: 1; font-size: .73rem; }
   .g-records-open { order: 2; min-height: 32px; }
   .g-pace { order: 3; }
-  .g-screen .g-auto-play { order: 4; flex-direction: column; gap: 1px; padding: 3px 5px; font-size: .7rem; line-height: 1.2; }
-  .g-auto-play strong { font-size: .68rem; }
+  .g-seat-clock { font-size: .69rem; }
+  .g-seat-meta { gap: 0 3px; }
   .g-pace > span { position: absolute; clip-path: inset(50%); width: 1px; height: 1px; overflow: hidden; }
   .g-pace select { min-height: 34px; font-size: 1rem; }
   .g-layout { gap: 5px; }

@@ -18,8 +18,10 @@ test('watch skips over a covered trick and receives only its actual plays, separ
   }
   play({type:'prepare',cards:own.filter(card => card !== 'SA').slice(0,3),friend:{kind:'none'}});
   const hand = crypto.randomUUID(), host = crypto.randomUUID();
+  const now = Date.now();
   const row = {hand,room:'PUB002',host,seats:[host,null,null,null,null],revision:0,
-    state:{round,pace:'normal',dueAt:Date.now()+120_000,autoPlay:false,names:['A','B','C','D','E'],bots:[false,true,true,true,true]}};
+    state:{round,pace:'normal',dueAt:now+120_000,soloPresenceUntil:now+120_000,turnDeadline:now+190_000,
+      thinkingTime:[180_000,0,0,0,0],autoPlay:true,names:['A','B','C','D','E'],bots:[false,true,true,true,true]}};
   const handler = chipHandler({url:'https://game.test',publicKey:'p',serviceKey:'s',send:async url => {
     assert.ok(url.endsWith('/rpc/chips_read_hand'));
     return Response.json(row);

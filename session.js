@@ -3,7 +3,7 @@ import {applyAction, canDeclareSetting, createGame, getView, getSpectatorView, r
 import {jokerWasPlayed, withJokerStatus} from './table-joker.js';
 import {shouldDeclareSetting} from './bot-setting.js';
 import {settlements, TABLE_SCORING_VERSION} from './table-scoring.js';
-import {normalizeGameSpeed} from './table-timing.js';
+import {HUMAN_TURN_MS, normalizeGameSpeed, THINKING_TIME_MS} from './table-timing.js';
 import {commonModelChoice, decideTableTurn, hasSeatMemory, isModelId, memoryForReplacement, modelsForChoice} from './lab/table-agents.js';
 
 const BOT_NAMES = ['솔', '달', '별', '구름', '바다'];
@@ -43,13 +43,16 @@ export class HostSession {
   #guestDecisions = Array.from({length:5}, () => []);
   #claim = null;
   #skipBotClaim = false;
+  #practiceBanks = Array(5).fill(null);
+  #practiceDeadline = null;
+  #pausedPracticeMs = null;
+  #lastTimedAction = null;
   chipHandId = null;
   #chipRevision = -1;
 
-  constructor(hostName, rules = DEFAULT_RULES, botModels, roundLimit = null, {publicRoom = false, hostSpectator = false, pace, autoPlay = true, modelChoice = commonModelChoice(botModels)} = {}) {
+  constructor(hostName, rules = DEFAULT_RULES, botModels, roundLimit = null, {publicRoom = false, hostSpectator = false, pace, modelChoice = commonModelChoice(botModels)} = {}) {
     this.publicRoom = publicRoom === true;
     this.pace = normalizeGameSpeed(pace);
-    this.autoPlay = autoPlay !== false;
     this.#hostName = hostName;
     this.players = Array(5).fill(null);
     this.hostSeat = this.publicRoom && hostSpectator ? -1 : 0;
@@ -92,7 +95,7 @@ export class HostSession {
         choices:{canPass:false, bids:[], discard:false, contracts:[], friends:[], plays:[], canDeclareSetting:false}};
       for (const key of fields) if (Object.hasOwn(game,key)) round[key] = game[key];
     }
-    return structuredClone({version:1, publicRoom:this.publicRoom, rules:this.rules, pace:this.pace, autoPlay:this.autoPlay,
+    return structuredClone({version:1, publicRoom:this.publicRoom, rules:this.rules, pace:this.pace, autoPlay:true,
       models:this.botModels, modelChoice:this.modelChoice, roundLimit:this.#roundLimit, revision:this.revision, hostSeat:this.hostSeat,
       hostMemberId:this.#hostMemberId,
       players:this.players, connections:[...this.connections], observers:[...this.#observers],
@@ -115,7 +118,7 @@ export class HostSession {
     const peers = new Map(state.connections), observers = new Map(state.observers);
     const name = state.players[state.hostSeat]?.name ?? observers.get(null);
     const session = new HostSession(name,state.rules,state.models,state.roundLimit,
-      {publicRoom:state.publicRoom,pace:state.pace,autoPlay:state.autoPlay,modelChoice:state.modelChoice});
+      {publicRoom:state.publicRoom,pace:state.pace,modelChoice:state.modelChoice});
     session.hostSeat = state.hostSeat;
     session.players = state.players;
     session.connections = peers;
@@ -328,6 +331,11 @@ export class HostSession {
       this.#botIds[seat] = 'sub-' + this.#nextBot++;
     }
     this.players[seat] = this.round ? this.botPlayer(seat) : null;
+    this.#practiceBanks[seat] = null;
+    if (this.round?.turn === seat) {
+      this.#practiceDeadline = null;
+      this.#pausedPracticeMs = null;
+    }
     if (!this.chipHandId && this.round && this.round.phase !== 'result' && hasSeatMemory(this.botModels[seat])) {
       this.#botMemory[seat] = memoryForReplacement(this.botModels[seat], this.#guestDecisions[seat]);
       this.#guestDecisions[seat] = [];
@@ -444,13 +452,6 @@ export class HostSession {
     if (!this.round) this.revision++;
   }
 
-  setAutoPlay(enabled) {
-    if (typeof enabled !== 'boolean') throw new Error('10초 자동진행 설정을 확인해 주세요.');
-    if (this.autoPlay === enabled) return;
-    this.autoPlay = enabled;
-    if (!this.round) this.revision++;
-  }
-
   get #complete() {
     return this.#roundLimit !== null && this.#completedRounds >= this.#roundLimit;
   }
@@ -469,7 +470,7 @@ export class HostSession {
       const id = seat === this.hostSeat ? null : Array.from(this.connections).find(([, n]) => n === seat)?.[0];
       return {id, name:player.name};
     });
-    return {seats, firstSeat, models:[...this.botModels], rules:{...this.rules}, pace:this.pace, autoPlay:this.autoPlay};
+    return {seats, firstSeat, models:[...this.botModels], rules:{...this.rules}, pace:this.pace};
   }
 
   start() {
@@ -482,6 +483,10 @@ export class HostSession {
     this.round = round;
     this.#resetBotMemory();
     this.players = this.players.map((p, i) => p ?? this.botPlayer(i));
+    this.#practiceBanks = this.players.map(player => this.chipHandId || player.bot ? null : THINKING_TIME_MS);
+    this.#pausedPracticeMs = null;
+    this.#lastTimedAction = null;
+    this.#startPracticeTurn();
     this.#dealtPlayers = (this.publicRoom || this.chipHandId) ? [...this.players] : null;
     // A substitute finishes on behalf of the member who received the original hand.
     this.#roundMembers = this.players.map(player => player.memberId);
@@ -507,7 +512,6 @@ export class HostSession {
     this.#chipRevision = reply.revision;
     if (!this.round?.result || !reply.publicGame.result) {
       this.pace = normalizeGameSpeed(reply.pace);
-      this.autoPlay = reply.autoPlay !== false;
     }
     this.round = reply.publicGame;
     for (let seat = 0; seat < 5; seat++) {
@@ -546,6 +550,7 @@ export class HostSession {
     if (!this.round || !Number.isInteger(seat) || seat < 0 || seat > 4 || this.players[seat]?.bot) throw new Error('플레이어 자리를 확인해 주세요.');
     if (revision !== this.revision) throw new Error('테이블 상태가 바뀌었습니다. 다시 선택해 주세요.');
     if (this.#claim) throw new Error('세팅을 판정하고 있습니다.');
+    if (this.round.turn === seat && this.assistExpiredTurn()) throw new Error('시간이 지나 AI가 이번 수를 대신했습니다.');
     if (action?.type === 'claim') return this.#beginClaim(seat);
     this.#applyTurn(seat, action);
   }
@@ -555,6 +560,11 @@ export class HostSession {
     const {phase, turn, declarer, trickNo, trick, hands, bid, rules} = this.round;
     // This position goes only to the host's local solver. Peers receive view().
     this.#claim = structuredClone({phase, turn, declarer, trickNo, trick, hands, bid, rules});
+    if (this.#practiceDeadline !== null) {
+      const now = Date.now();
+      this.#pausedPracticeMs = Math.max(0, this.#practiceDeadline - now);
+      this.#finishPracticeTurn(seat, now);
+    }
     this.revision++;
     return this.#claim;
   }
@@ -569,6 +579,8 @@ export class HostSession {
     if (!position || this.#claim !== position) return false;
     resolveSetting(this.round, this.round.declarer, verdict);
     this.#claim = null;
+    this.#pausedPracticeMs = null;
+    this.#startPracticeTurn();
     this.#recordResult();
     this.revision++;
     return true;
@@ -577,6 +589,8 @@ export class HostSession {
   abandonClaim(position) {
     if (!position || this.#claim !== position) return false;
     this.#claim = null;
+    if (this.#pausedPracticeMs !== null) this.#practiceDeadline = Date.now() + this.#pausedPracticeMs;
+    this.#pausedPracticeMs = null;
     this.#skipBotClaim = Boolean(this.players[position.declarer]?.bot);
     this.revision++;
     return true;
@@ -584,6 +598,34 @@ export class HostSession {
 
   get botTurn() {
     return Boolean(!this.chipHandId && !this.#claim && this.round && this.round.phase !== 'result' && this.players[this.round.turn]?.bot);
+  }
+
+  get activeTurnDeadline() { return this.#practiceDeadline; }
+
+  #startPracticeTurn() {
+    const bank = this.#practiceBanks[this.round.turn];
+    this.#practiceDeadline = !this.round.result && bank != null ? Date.now() + bank + HUMAN_TURN_MS : null;
+  }
+
+  #practiceTimeLeft(seat, now) {
+    return Math.max(0, Math.min(this.#practiceBanks[seat], this.#practiceDeadline - HUMAN_TURN_MS - now));
+  }
+
+  #finishPracticeTurn(seat, now) {
+    if (this.#practiceDeadline !== null) this.#practiceBanks[seat] = this.#practiceTimeLeft(seat, now);
+    this.#practiceDeadline = null;
+  }
+
+  assistExpiredTurn() {
+    if (this.#practiceDeadline === null || Date.now() < this.#practiceDeadline) return false;
+    const seat = this.round.turn;
+    const modelId = this.botModels[seat];
+    const view = withJokerStatus(botObservation(this.round, seat));
+    const memory = memoryForReplacement(modelId, this.#guestDecisions[seat]);
+    const decision = decideTableTurn({modelId, view, memory});
+    this.#applyTurn(seat, decision.action);
+    this.#lastTimedAction = {seat, revision:this.revision};
+    return true;
   }
 
   botRequest(seed) {
@@ -610,10 +652,11 @@ export class HostSession {
   }
 
   #applyTurn(seat, action, memory) {
+    const now = Date.now();
     const dealNo = this.round.dealNo;
     // Keep only the departing player's own decision history for a possible
     // mid-round recurrent substitute. These records never enter a room view.
-    const track = (this.publicRoom || seat !== this.hostSeat) && !this.players[seat].bot && hasSeatMemory(this.botModels[seat]);
+    const track = !this.players[seat].bot && hasSeatMemory(this.botModels[seat]);
     // Older clients still offer a call after everyone has seen the Joker.
     if (action?.type === 'play' && action.jokerCall === true && this.round.phase === 'play' &&
         jokerWasPlayed(this.round) && legalPlays(this.round, this.round.hands[seat]).some(move =>
@@ -621,6 +664,8 @@ export class HostSession {
       action = {...action, jokerCall:false};
     }
     applyAction(this.round, seat, action, undefined, track ? this.#guestDecisions[seat] : undefined);
+    this.#finishPracticeTurn(seat, now);
+    this.#startPracticeTurn();
     this.#skipBotClaim = false;
     if (this.round.dealNo !== dealNo) this.#resetBotMemory();
     else if (!track && memory != null) this.#botMemory[seat] = structuredClone(memory);
@@ -708,10 +753,17 @@ export class HostSession {
     const positions = new Map(this.#queue.map(({id, seat}, i) => [id, {position:i + 1, seat}]));
     const spectators = Array.from(this.#observers, ([id, name]) => ({name, position:null, seat:null, ...positions.get(id)}));
     const roster = game?.result && this.#dealtPlayers ? this.#dealtPlayers : this.players;
+    const now = Date.now(), deadline = this.#practiceDeadline;
     return {revision: this.revision, chipHandId:this.chipHandId, chipRevision:this.#chipRevision, seat, hostSeat: this.hostSeat, swap: swap ? {...swap} : null,
+      ...(!this.chipHandId && game ? {
+        turnSeat:deadline !== null ? game.turn : null, turnDeadline:deadline, timeBankMs:THINKING_TIME_MS,
+        thinkingDeadline:deadline !== null && this.#practiceBanks[game.turn] > 0 ? deadline - HUMAN_TURN_MS : null,
+        seatTimeBanks:this.#practiceBanks.map((bank, i) => game.result ? null : deadline !== null && i === game.turn ? this.#practiceTimeLeft(i, now) : bank),
+        lastTimedAction:this.#lastTimedAction && {...this.#lastTimedAction}
+      } : {}),
       publicRoom:this.publicRoom, spectator, spectators, reservation:positions.get(id) ?? null, supportsReservedExit:true,
       supportsOpenSeatChoice:this.publicRoom,
-      rules: {...this.rules}, pace:this.pace, autoPlay:this.autoPlay, botModels: [...this.botModels], modelChoice:this.modelChoice, players: roster.map(p => p && {...p}),
+      rules: {...this.rules}, pace:this.pace, autoPlay:true, botModels: [...this.botModels], modelChoice:this.modelChoice, players: roster.map(p => p && {...p}),
       scoreboard: this.#scoreboard(), game};
   }
 }

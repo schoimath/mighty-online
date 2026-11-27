@@ -94,6 +94,30 @@ test('chat is archived once and delivered only for the current visit',async () =
   assert.ok(!JSON.stringify(delivered).includes(founder.id));
 });
 
+test('a legacy public table finishes its signed offer with the fixed clock and drops queued clock edits',async () => {
+  const l = lobby();
+  const joined = await l.call(founder,'join',{preferences:{autoPlay:false}});
+  assert.equal(joined.view.autoPlay,true);
+  await l.call(founder,'reserve',{wanted:true});
+  assert.equal((await l.call(founder,'settings',{key:'autoPlay',value:false})).view.autoPlay,true);
+  const {offer} = await l.call(founder,'start');
+  assert.equal(Object.hasOwn(offer,'autoPlay'),false);
+  l.row.state.session.autoPlay = false;
+  l.row.state.offer.spec.autoPlay = false;
+  const pending = await l.call(founder,'poll');
+  assert.equal(pending.offer.handId,offer.handId);
+  assert.equal(pending.offer.autoPlay,false);
+  assert.equal(pending.view.autoPlay,false,'a cached client can confirm the exact pending manifest');
+  const started = await l.call(founder,'ready',{accepted:true,handId:offer.handId});
+  assert.equal(started.view.autoPlay,true);
+  assert.equal(l.starts[0].handId,offer.handId);
+  l.row.state.effects.push({op:'setting',id:crypto.randomUUID(),handId:offer.handId,key:'autoPlay',value:false});
+  l.api.chips.setting = assert.fail;
+  assert.equal((await l.call(founder,'poll')).view.autoPlay,true);
+  assert.deepEqual(l.row.state.effects,[]);
+  assert.equal((await l.call(founder,'settings',{key:'autoPlay',value:false})).view.autoPlay,true);
+});
+
 test('fresh visitor can reopen an expired edition and active guests take over without the founder',async () => {
   const l = lobby();
   const a = await l.call(founder,'join');

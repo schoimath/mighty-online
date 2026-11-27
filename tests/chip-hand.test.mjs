@@ -170,7 +170,7 @@ test('server plays abandoned hands to completion and only its terminal deltas ar
   assert.deepEqual(left.bots,[true,false,true,true,true]);
   assert.deepEqual(left.seatBalances,[null,300,null,null,null]);
   assert.equal(left.seat,-1);
-  assert.equal(left.turnDeadline,null);
+  assert.equal(left.turnDeadline,resumed.turnDeadline);
   assert.equal(left.myDelta,undefined);
   assert.equal(left.mySettlementSeat,undefined);
   assert.deepEqual(left.game.hand,[]);
@@ -251,8 +251,9 @@ test('a departure preserves other human turns and overlapping last departures ar
   t.beforeNextSave(async () => {
     const watching = await guestLeft();
     assert.deepEqual(watching.bots,[false,true,true,true,true]);
-    assert.equal(watching.dueAt,at+120_000);
-    assert.equal(watching.turnDeadline,null);
+    assert.equal(watching.dueAt,at+190_000);
+    assert.equal(watching.turnDeadline,at+190_000);
+    assert.equal(t.row().state.dueAt,at+120_000);
     assert.equal(watching.game.turn,0);
     assert.equal(t.row().state.finishUnattended,undefined);
   });
@@ -356,12 +357,12 @@ test('human timeouts are independent of pace and old saved games still have norm
     delete legacy.state.thinkingTime;
     delete legacy.state.turnDeadline;
     legacy.state.dueAt = at+120_000;
-    const view = await operateHand({op:'watch',handId},null,{read:()=>legacy},at);
+    const view = await operateHand({op:'watch',handId},null,{read:()=>legacy,save:row=>({...row,revision:row.revision+1})},at);
     assert.equal(view.pace,'normal');
     assert.equal(view.autoPlay,true);
-    assert.equal(view.timeBankMs,0);
-    assert.equal(view.thinkingDeadline,null);
-    assert.equal(view.turnDeadline,at+10_000);
+    assert.equal(view.timeBankMs,180_000);
+    assert.equal(view.thinkingDeadline,at+180_000);
+    assert.equal(view.turnDeadline,at+190_000);
     assert.equal(view.dueAt,view.turnDeadline);
   }
   const phases = [
@@ -380,37 +381,25 @@ test('human timeouts are independent of pace and old saved games still have norm
   assert.equal(botTurnDelay(phases[0][0],'fast',{showRedeal:false}),tableDelay(1800,'fast'));
 });
 
-test('turn assistance is consented to, can be switched live, and keeps the reconnect grace while off', async () => {
+test('old offers bind their original consent but all new multiplayer hands run the fixed clock', async () => {
   const t = table(), spec = {...game,autoPlay:false};
   for (const id of [host,guest]) await t.call(id,'ready',spec);
   await assert.rejects(t.call(host,'start',game));
   const opening = await t.call(host,'start',spec);
-  assert.equal(opening.autoPlay,false);
-  assert.equal(opening.turnDeadline,null);
-  const before = await t.call(null,'watch',{},at+25_000);
-  assert.equal(before.revision,0);
-  assert.equal(before.dueAt,at+120_000);
-  const present = await t.call(host,'view',{},at+90_000);
-  assert.equal(present.dueAt,at+210_000);
-  assert.equal((await t.call(null,'tick',{},at+121_000)).revision,present.revision);
+  assert.equal(opening.autoPlay,true);
+  assert.equal(opening.thinkingDeadline,at+180_000);
+  assert.equal(opening.turnDeadline,at+190_000);
+  assert.deepEqual(opening.seatTimeBanks,[180_000,180_000,null,null,null]);
   for (const value of [null,0,1,'off']) {
     await assert.rejects(t.call(host,'auto-play',{autoPlay:value}),{status:400});
     await assert.rejects(t.call(host,'ready',{...spec,autoPlay:value}),{status:400});
   }
   await assert.rejects(t.call(guest,'auto-play',{autoPlay:true}),{status:403});
-  const enabled = await t.call(host,'auto-play',{autoPlay:true},at+130_000);
-  assert.equal(enabled.thinkingDeadline,at+310_000);
-  assert.equal(enabled.turnDeadline,at+320_000);
-  assert.equal((await t.call(host,'auto-play',{autoPlay:true},at+135_000)).revision,enabled.revision);
-  const disabled = await t.call(host,'auto-play',{autoPlay:false},at+139_000);
-  assert.equal(disabled.dueAt,at+259_000);
-  assert.equal(disabled.turnDeadline,null);
-  assert.equal((await t.call(null,'tick',{},at+140_000)).revision,disabled.revision);
-  const abandoned = await t.call(null,'watch',{},disabled.dueAt);
-  assert.equal(abandoned.bots[0],true);
-  assert.equal(abandoned.bots[1],false);
-  assert.equal(abandoned.game.bidHistory.length,1);
-  assert.equal(abandoned.lastTimedAction,null);
+  const oldToggle = await t.call(host,'auto-play',{autoPlay:false},at+130_000);
+  assert.equal(oldToggle.autoPlay,true);
+  assert.equal(oldToggle.revision,opening.revision);
+  assert.equal(oldToggle.turnDeadline,opening.turnDeadline);
+  assert.deepEqual(oldToggle.seatTimeBanks,[50_000,180_000,null,null,null]);
 });
 
 test('each player spends only their own reserve across bidding, declaring and playing', async () => {
@@ -443,32 +432,35 @@ test('each player spends only their own reserve across bidding, declaring and pl
   }
 });
 
-test('toggle pauses both periods of the current turn and never replenishes a reserve', async () => {
+test('a paused pre-update hand resumes its remaining overtime once even across racing reads',async () => {
   const t = table();
   for (const id of [host,guest]) await t.call(id,'ready',game);
   await t.call(host,'start',game);
-  const toggle = (autoPlay,elapsed) => t.call(host,'auto-play',{autoPlay},at+elapsed);
-  await toggle(false,50_000);
-  const resumed = await toggle(true,60_000);
-  assert.equal(resumed.thinkingDeadline,at+190_000);
-  assert.equal(resumed.turnDeadline,at+200_000);
-  assert.equal((await toggle(true,61_000)).revision,resumed.revision);
-  assert.equal((await t.call(null,'tick',{},at+190_000)).revision,resumed.revision);
-  const paused = await toggle(false,193_000);
-  assert.equal(paused.turnDeadline,null);
-  assert.equal(paused.thinkingDeadline,null);
-  const lastSeconds = await toggle(true,198_000);
-  assert.equal(lastSeconds.thinkingDeadline,null);
-  assert.equal(lastSeconds.turnDeadline,at+205_000);
-  assert.equal((await t.call(null,'tick',{},at+204_999)).revision,lastSeconds.revision);
-  const next = await t.call(guest,'view',{},at+205_000);
-  assert.equal(next.game.bidHistory.length,1);
-  assert.deepEqual(next.bots,[false,false,true,true,true]);
-  assert.deepEqual(t.row().state.thinkingTime,[0,180_000,0,0,0]);
-  assert.equal(next.turnDeadline,at+395_000);
+  let legacy = t.row(), changed=0;
+  Object.assign(legacy.state,{autoPlay:false,thinkingTime:[0,143000,0,0,0],pausedOvertimeMs:3000,turnDeadline:null,dueAt:at+120_000});
+  const db = {read:()=>structuredClone(legacy),save:row=>{
+    if (row.revision===legacy.revision) {legacy={...structuredClone(row),revision:row.revision+1}; changed++;}
+    return structuredClone(legacy);
+  }};
+  const resumed = await Promise.all([at+200_000,at+200_010].map(now=>
+    operateHand({op:'view',handId},host,db,now)));
+  const due = resumed[0].turnDeadline;
+  assert.equal(due,at+203000);
+  assert.equal(changed,1);
+  for (const view of resumed) {
+    assert.equal(view.autoPlay,true);
+    assert.equal(view.turnDeadline,due);
+    assert.deepEqual(view.seatTimeBanks,[0,143000,null,null,null]);
+    assert.equal(view.game.bidHistory.length,0);
+  }
+  // The old tab may submit the bid with the revision it had while paused.
+  const moved=await operateHand({op:'act',handId,revision:0,action:{type:'pass'}},host,db,due-1);
+  assert.equal(moved.game.bidHistory.length,1);
+  assert.equal(moved.lastTimedAction,null);
+  assert.equal(moved.turnDeadline,due-1+153000);
 });
 
-test('other departures preserve the current deadline until the last opponent leaves', async () => {
+test('other departures preserve the current deadline and reserve even when only one human remains', async () => {
   const t = table(), spec = {...game,seats:[host,guest,other,null,null]};
   for (const id of [host,guest,other]) await t.call(id,'ready',spec);
   const opening = await t.call(host,'start',spec);
@@ -476,11 +468,12 @@ test('other departures preserve the current deadline until the last opponent lea
   assert.equal(stillTimed.turnDeadline,opening.turnDeadline);
   assert.equal(stillTimed.thinkingDeadline,opening.thinkingDeadline);
   const solo = await t.call(guest,'leave',{},at+35_000);
-  assert.equal(solo.turnDeadline,null);
-  assert.equal(solo.thinkingDeadline,null);
-  assert.equal(t.row().state.thinkingTime[0],145_000);
+  assert.equal(solo.turnDeadline,opening.turnDeadline);
+  assert.equal(solo.thinkingDeadline,opening.thinkingDeadline);
+  assert.deepEqual(solo.seatTimeBanks,[145_000,null,null,null,null]);
+  assert.equal(t.row().state.dueAt,at+155_000);
   await t.call(host,'act',{revision:solo.revision,action:{type:'bid',points:14,suit:'H'}},at+100_000);
-  assert.equal(t.row().state.thinkingTime[0],145_000);
+  assert.equal(t.row().state.thinkingTime[0],80_000);
 });
 
 test('an all-pass redeal keeps each reserve within the same scored hand', async () => {
@@ -497,72 +490,59 @@ test('an all-pass redeal keeps each reserve within the same scored hand', async 
   assert.equal(current.thinkingDeadline,at+188_000);
 });
 
-test('in-flight ten-second hands retain their saved deadline and original per-turn timing', async () => {
+test('a live hand from before time banks existed receives full personal reserves exactly once', async () => {
   const t = table();
   for (const id of [host,guest]) await t.call(id,'ready',game);
   await t.call(host,'start',game);
   let legacy = t.row();
   delete legacy.state.thinkingTime;
-  delete legacy.state.pausedOvertimeMs;
   legacy.state.turnDeadline = legacy.state.dueAt = at+10_000;
   const db = {read:() => structuredClone(legacy), save:row => {
     legacy = {...structuredClone(row),revision:row.revision+1};
     return structuredClone(legacy);
   }};
-  const resumed = await operateHand({op:'view',handId},host,db,at+5000);
-  assert.equal(resumed.timeBankMs,0);
-  assert.equal(resumed.turnDeadline,at+10_000);
-  assert.equal(resumed.thinkingDeadline,null);
-  const passed = await operateHand({op:'act',handId,revision:0,action:{type:'pass'}},host,db,at+8000);
-  assert.equal(passed.turnDeadline,at+18_000);
-  assert.equal(passed.thinkingDeadline,null);
+  const resumed = await operateHand({op:'view',handId},host,db,at+12_000);
+  assert.equal(resumed.timeBankMs,180_000);
+  assert.equal(resumed.turnDeadline,at+202_000);
+  assert.equal(resumed.thinkingDeadline,at+192_000);
+  assert.deepEqual(resumed.seatTimeBanks,[180_000,180_000,null,null,null]);
+  const passed = await operateHand({op:'act',handId,revision:0,action:{type:'pass'}},host,db,at+20_000);
+  assert.equal(passed.turnDeadline,at+210_000);
+  assert.equal(passed.thinkingDeadline,at+200_000);
   assert.equal(passed.game.turn,1);
-  assert.equal(legacy.state.thinkingTime,undefined);
+  assert.deepEqual(legacy.state.thinkingTime,[172_000,180_000,0,0,0]);
 });
 
-test('a manual choice survives multiple refreshes and a concurrent presence renewal while the clock is off', async () => {
-  const t = table(), spec = {...game,autoPlay:false};
-  for (const id of [host,guest]) await t.call(id,'ready',spec);
-  const opening = await t.call(host,'start',spec);
-  const action = {revision:opening.revision,action:{type:'bid',points:14,suit:'H'}};
-  await t.call(host,'view',{},at+90_000);
-  await t.call(host,'pace',{pace:'fast'},at+100_000);
-  t.beforeNextSave(() => t.call(host,'view',{},at+170_000));
-  const played = await t.call(host,'act',action,at+170_000);
-  assert.equal(played.autoPlay,false);
-  assert.equal(played.revision,4);
-  assert.equal(played.game.bidHistory.length,1);
-  assert.equal(played.game.turn,1);
-  assert.deepEqual(played.bots,[false,false,true,true,true]);
-  await t.call(guest,'view',{},at+260_000);
-  const duplicate = await t.call(host,'act',action,at+260_000);
-  assert.equal(duplicate.revision,5);
-  assert.deepEqual(duplicate.game.bidHistory,played.game.bidHistory);
+test('public seat clocks charge exactly once and a new turn spends only that seat’s reserve', async () => {
+  const t = table();
+  for (const id of [host,guest]) await t.call(id,'ready',game);
+  const opening = await t.call(host,'start',game);
+  const watching = await t.call(null,'watch',{},at+25_000);
+  assert.deepEqual(watching.seatTimeBanks,[155_000,180_000,null,null,null]);
+  assert.equal(watching.revision,opening.revision);
+  assert.deepEqual(t.row().state.thinkingTime,[180_000,180_000,0,0,0]);
+  const guestTurn=await t.call(host,'act',{revision:0,action:{type:'pass'}},at+30_000);
+  assert.deepEqual(guestTurn.seatTimeBanks,[150_000,180_000,null,null,null]);
+  const botTurn=await t.call(guest,'act',{revision:guestTurn.revision,action:{type:'pass'}},at+70_000);
+  assert.deepEqual(botTurn.seatTimeBanks,[150_000,140_000,null,null,null]);
+  assert.equal(botTurn.turnDeadline,null);
 });
 
-test('a room clock change racing with a human move commits both and preserves any AI time already scheduled', async () => {
-  const proof = {term:1,credential:'a'.repeat(64)};
-  for (const clockFirst of [true,false]) {
-    const t = table();
-    for (const id of [host,guest]) await t.call(id,'ready',game);
-    await t.call(host,'start',game);
-    const action = {revision:0,action:{type:'bid',points:14,suit:'H'}};
-    const card = () => t.call(host,'act',action,at+200);
-    const turnOff = () => t.call(host,'room-auto-play',{...proof,autoPlay:false},at+200);
-    await assert.rejects(t.call(guest,'room-auto-play',{...proof,autoPlay:false}),{status:403});
-    t.beforeNextSave(clockFirst ? turnOff : card);
-    const result = await (clockFirst ? card() : turnOff());
-    assert.equal(result.revision,2);
-    assert.equal(result.autoPlay,false);
-    assert.equal(result.turnDeadline,null);
-    assert.equal(result.game.bidHistory.length,1);
-    if (!clockFirst) assert.deepEqual(result.game.hand,[]);
-    const passed = await t.call(guest,'act',{revision:2,action:{type:'pass'}},at+20_000);
-    const turnOn = await t.call(host,'room-auto-play',{...proof,autoPlay:true},at+20_050);
-    assert.equal(turnOn.dueAt,passed.dueAt);
-    assert.equal(turnOn.turnDeadline,null);
-    assert.equal((await t.call(null,'watch',{},turnOn.dueAt)).game.bidHistory.length,3);
-  }
+test('a deprecated room clock request cannot change a turn or override host control authorization', async () => {
+  const proof = {term:1,credential:'a'.repeat(64)}, t = table();
+  for (const id of [host,guest]) await t.call(id,'ready',game);
+  const opening = await t.call(host,'start',game);
+  await assert.rejects(t.call(guest,'room-auto-play',{...proof,autoPlay:false}),{status:403});
+  const response = await t.call(host,'room-auto-play',{...proof,autoPlay:false},at+300);
+  assert.deepEqual(response.game.hand,[]);
+  assert.equal(response.revision,0);
+  assert.equal(response.turnDeadline,opening.turnDeadline);
+  assert.equal(response.autoPlay,true);
+  const played = await t.call(host,'act',{revision:0,action:{type:'bid',points:14,suit:'H'}},at+1000);
+  const bot = await t.call(guest,'act',{revision:played.revision,action:{type:'pass'}},at+2000);
+  const unchanged = await t.call(host,'room-auto-play',{...proof,autoPlay:true},at+2200);
+  assert.equal(unchanged.dueAt,bot.dueAt);
+  assert.equal(unchanged.turnDeadline,null);
 });
 
 test('multiplayer deadline survives reads, invalid input and pace changes; a racing late request plays only once', async () => {
@@ -629,19 +609,70 @@ test('timeouts make legal choices at every phase without taking seats, exposing 
   assert.equal(result.game.result.setting,undefined);
 });
 
-test('a solo seat keeps its two-minute reconnection window and can renew it while thinking', async () => {
+test('the solo bank runs through authenticated reads; its expiry assists once and subsequent turns get ten seconds', async () => {
   const t = table(), spec = {...game,seats:[host,null,null,null,null]};
   await t.call(host,'ready',spec);
   const opening = await t.call(host,'start',spec);
-  assert.equal(opening.turnDeadline,null);
-  assert.equal(opening.dueAt,at+120_000);
+  assert.equal(opening.turnDeadline,at+190_000);
+  assert.deepEqual(opening.seatTimeBanks,[180_000,null,null,null,null]);
+  assert.equal(t.row().state.dueAt,at+120_000);
   const active = await t.call(host,'view',{},at+90_000);
-  assert.equal(active.dueAt,at+210_000);
+  assert.equal(active.turnDeadline,opening.turnDeadline);
+  assert.deepEqual(active.seatTimeBanks,[90_000,null,null,null,null]);
   assert.equal(active.game.bidHistory.length,0);
-  await t.call(null,'tick',{},active.dueAt);
-  const abandoned = await t.call(host,'view',{},active.dueAt);
+  await t.call(null,'tick',{},at+120_000);
+  assert.equal(t.row().revision,active.revision);
+  t.beforeNextSave(() => t.call(null,'tick',{},opening.turnDeadline));
+  const assisted = await t.call(host,'act',{revision:0,action:{type:'play'}},opening.turnDeadline);
+  assert.deepEqual(assisted.lastTimedAction,{seat:0,revision:assisted.revision});
+  assert.equal(assisted.seat,0);
+  assert.equal(assisted.game.bidHistory.length,1);
+  assert.deepEqual(assisted.seatTimeBanks,[0,null,null,null,null]);
+  let turn = assisted;
+  for (let i = 0; i < 70 && turn.game.turn !== 0; i++) turn = await t.call(host,'view',{},turn.dueAt);
+  assert.equal(turn.game.turn,0);
+  assert.equal(turn.turnDeadline,turn.serverNow+10_000);
+  const next = await t.call(host,'view',{},turn.turnDeadline);
+  assert.deepEqual(next.lastTimedAction,{seat:0,revision:next.revision});
+  assert.equal(next.seat,0);
+});
+
+test('spectators cannot renew a missing sole player; AI completes their original hand', async () => {
+  const t = table(), spec = {...game,seats:[host,null,null,null,null]};
+  await t.call(host,'ready',spec);
+  await t.call(host,'start',spec);
+  const until = t.row().state.soloPresenceUntil;
+  await t.call(null,'watch',{},until-1);
+  await t.call(null,'tick',{},until);
+  const abandoned = await t.call(host,'view',{},until);
   assert.equal(abandoned.seat,-1);
   assert.equal(abandoned.lastTimedAction,null);
+  assert.deepEqual(abandoned.seatTimeBanks,Array(5).fill(null));
+  for (let i=1; i<=100 && !t.row().settled; i++) await t.call(null,'tick',{},until+i*60_000);
+  const result = await t.call(host,'view');
+  assert.equal(result.myDelta,result.deltas[0]);
+  assert.equal(t.charges(),1);
+});
+
+test('an active legacy solo hand initializes its clock once and keeps remaining reserve', async () => {
+  const t = table(), spec = {...game,seats:[host,null,null,null,null]};
+  await t.call(host,'ready',spec);
+  await t.call(host,'start',spec);
+  let old = t.row();
+  delete old.state.soloPresenceUntil;
+  old.state.turnDeadline = null;
+  old.state.thinkingTime[0] = 34_000;
+  const db = {read:()=>structuredClone(old),save:row=>{
+    if (row.revision===old.revision) old={...structuredClone(row),revision:row.revision+1};
+    return structuredClone(old);
+  }};
+  const read = now => operateHand({op:'view',handId},host,db,now);
+  const [first,second] = await Promise.all([read(at+10_000),read(at+12_000)]);
+  assert.equal(first.revision,1);
+  assert.equal(second.revision,1);
+  assert.equal(second.turnDeadline,first.turnDeadline);
+  assert.equal(first.turnDeadline,at+54_000);
+  assert.deepEqual(second.seatTimeBanks,[32_000,null,null,null,null]);
 });
 
 test('HTTP handler authenticates against Auth and keeps its privileged credential out of user requests',async () => {

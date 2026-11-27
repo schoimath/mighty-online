@@ -63,20 +63,6 @@
 .g-pace select { min-height: 34px; cursor: pointer; color-scheme: dark; }
 .g-pace select:disabled { cursor: wait; opacity: .7; }
 .g-pace-value { font-weight: 600; }
-.g-screen .g-auto-play {
-  display: inline-flex; flex: none; align-items: center; gap: 6px; padding: 5px 8px;
-  min-height: 34px; border-radius: 6px; border: 1px solid #566f5c;
-  color: #d6dfd1; background: #1b352a; white-space: nowrap; font-size: .82rem; font-weight: 650;
-}
-.g-auto-play strong { color: #c4cec6; font-size: .75rem; }
-.g-auto-play strong::before {
-  content: ""; display: inline-block; width: .5em; height: .5em; margin-right: .3em;
-  border: 1px solid currentColor; border-radius: 50%; vertical-align: .08em;
-}
-.g-auto-play[aria-checked="true"] strong { color: #bce7a6; }
-.g-auto-play[aria-checked="true"] strong::before { background: currentColor; }
-.g-auto-play:enabled:hover { border-color: #b7c7a9; background: #284637; }
-.g-auto-play[aria-busy="true"] { opacity: .75; cursor: wait; }
 .g-heading h1 { margin: 0; color: var(--g-cream); font-size: clamp(1.75rem, 3.4vw, 2.5rem); font-weight: 700; letter-spacing: -.055em; line-height: 1.2; }
 .g-eyebrow { display: flex; align-items: center; gap: 6px; font-size: .8rem; font-weight: 600; color: #b9c8b3; }
 .g-eyebrow i { color: #ddbc76; font: normal 1.1rem Georgia, serif; }
@@ -232,6 +218,18 @@ html:has(.g-screen) { scrollbar-gutter: stable; }
 .g-seat-name { display: block; max-width: 112px; padding-right: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .83rem; font-weight: 700; }
 .g-seat-name small { color: #d4c39a; margin-left: 4px; font-size: .72rem; }
 .g-seat-balance { color: #f1dfa9; font-size: .75rem; line-height: 1.3; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.g-seat-meta { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 5px; }
+.g-seat-clock {
+  color: #c9d7ce; font-size: .74rem; font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.g-seat-clock::before {
+  content: ''; display: inline-block; width: .65em; height: .65em; margin-right: .23em;
+  border: 1px solid currentColor; border-radius: 50%; vertical-align: .02em;
+  background: linear-gradient(currentColor,currentColor) center 24% / 1px 38% no-repeat,
+    linear-gradient(currentColor,currentColor) 65% 55% / 26% 1px no-repeat;
+}
+.g-seat-clock.g-clock-running { color: #fff2bc; font-weight: 750; }
+.g-seat-clock.g-clock-overtime { color: #ffcf99; }
 .g-seat-detail { display: flex; align-items: center; gap: 4px; color: #b6c8b6; font-size: .75rem; word-break: keep-all; }
 .g-seat-detail:empty { display: none; }
 .g-seat-active .g-seat-detail { color: #f7d88e; }

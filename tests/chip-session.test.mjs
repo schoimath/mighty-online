@@ -205,37 +205,37 @@ test('chip hand consent binds the advertised pace and supports legacy normal-spe
   }
 });
 
-test('chip hand consent binds the auto-play setting and accepts older rooms as enabled', () => {
+test('new deals omit the legacy clock option and private guests can still confirm older pinned manifests', () => {
   const {table,accounts} = signedRoom();
   const plan = table.plannedTable(), view = guestSnapshot(table,'connection');
   const legacy = {...view};
   delete legacy.autoPlay;
   const enabled = chipManifest({...plan,autoPlay:true},code,owner,accounts);
-  const disabled = chipManifest({...plan,autoPlay:false},code,owner,accounts);
+  const restored = chipManifest({...plan,autoPlay:false},code,owner,accounts);
+  const disabled = {...enabled,autoPlay:false};
   assert.equal(Object.hasOwn(enabled,'autoPlay'),false);
-  assert.equal(disabled.autoPlay,false);
+  assert.equal(Object.hasOwn(restored,'autoPlay'),false);
   assert.equal(offeredSeat(legacy,enabled,code,guest),1);
-  assert.equal(offeredSeat(legacy,disabled,code,guest),-1);
-  assert.equal(offeredSeat({...view,autoPlay:false},enabled,code,guest),-1);
+  assert.equal(offeredSeat(legacy,disabled,code,guest),1);
+  assert.equal(offeredSeat({...view,autoPlay:false},enabled,code,guest),1);
   assert.equal(offeredSeat({...view,autoPlay:false},disabled,code,guest),1);
   for (const invalid of ['false',0,null]) {
-    assert.throws(() => chipManifest({...plan,autoPlay:invalid},code,owner,accounts), /자동진행/);
-    assert.equal(offeredSeat({...view,autoPlay:invalid},{...disabled,autoPlay:invalid},code,guest),-1);
+    assert.equal(offeredSeat(view,{...disabled,autoPlay:invalid},code,guest),-1);
   }
 });
 
 test('a room controller can submit its credential without a game account, but the original-host operation requires a session', async t => {
   const client = {url:'https://example.invalid',publishableKey:'test',accessToken:async () => null};
-  const payload = {op:'room-auto-play',handId:crypto.randomUUID(),term:2,credential:'1'.repeat(64),autoPlay:false};
+  const payload = {op:'room-pace',handId:crypto.randomUUID(),term:2,credential:'1'.repeat(64),pace:'fast'};
   let calls = 0;
   t.mock.method(globalThis,'fetch',async (_url, options) => {
     calls++;
     assert.equal(options.headers.Authorization,undefined);
     assert.deepEqual(JSON.parse(options.body),payload);
-    return Response.json({autoPlay:false});
+    return Response.json({pace:'fast'});
   });
-  await assert.rejects(callChipService(client,{op:'auto-play',autoPlay:false}), /로그인/);
-  assert.deepEqual(await callChipService(client,payload),{autoPlay:false});
+  await assert.rejects(callChipService(client,{op:'pace',pace:'fast'}), /로그인/);
+  assert.deepEqual(await callChipService(client,payload),{pace:'fast'});
   assert.equal(calls,1);
 });
 
@@ -560,44 +560,30 @@ test('a player move retries the host pace revision without repeating a played ca
   } finally { reader.close(); }
 });
 
-test('disabling auto-play clears the countdown and keeps a queued private play on the same trick', async () => {
+test('an old disabled hand receives the server clock without dropping the queued private play', async () => {
   const handId = crypto.randomUUID(), calls = [], events = [];
   const first = {handId,seat:2,revision:4,game:{phase:'play',turn:2,dealNo:1,trickNo:4,hand:['H8']},
-    turnDeadline:Date.now()+10000, publicGame:{seat:-1}};
-  const off = {...first,revision:5,autoPlay:false,turnDeadline:null};
-  const played = {...off,revision:6,game:{...first.game,turn:3,hand:[]}};
+    autoPlay:false,turnDeadline:null, publicGame:{seat:-1}};
+  const enabled = {...first,revision:5,autoPlay:true,turnDeadline:Date.now()+190000};
+  const played = {...enabled,revision:6,game:{...first.game,turn:3,hand:[]}};
   const reader = followChipHand(async req => {
     calls.push(req);
-    return req.op === 'auto-play' ? off : played;
+    return req.op === 'view' ? enabled : played;
   },handId,'view',(data,_wallet,settingsOnly) => events.push([data.revision,settingsOnly,reader.localTurnDeadline]),assert.fail,first);
   try {
     reader.start();
-    await assert.rejects(reader.changeAutoPlay(null), /자동진행/);
-    const changing = reader.changeAutoPlay(false);
+    const changing = reader.refresh();
     const moving = reader.act({type:'play',card:'H8'});
-    assert.equal((await changing).autoPlay,false);
+    assert.equal((await changing).autoPlay,true);
     assert.equal(await moving,true);
-    await reader.changeAutoPlay(false);
-    assert.deepEqual(calls,[{op:'auto-play',autoPlay:false,handId},{op:'act',revision:5,action:{type:'play',card:'H8'},handId}]);
-    assert.deepEqual(events,[[4,false,first.turnDeadline],[5,true,null],[6,false,null]]);
+    assert.deepEqual(calls,[{op:'view',handId},{op:'act',revision:5,action:{type:'play',card:'H8'},handId}]);
+    assert.deepEqual(events,[[4,false,null],[5,true,enabled.turnDeadline],[6,false,enabled.turnDeadline]]);
   } finally { reader.close(); }
 });
 
-test('watchers and non-host participants cannot send direct auto-play controls', async () => {
-  const handId = crypto.randomUUID();
-  for (const [op,publicGame] of [['watch',{}],['view',undefined]]) {
-    const initial = {handId,revision:2,seat:-1,game:{phase:'bid'},publicGame};
-    const reader = followChipHand(assert.fail,handId,op,assert.ok,assert.fail,initial);
-    try {
-      reader.start();
-      await assert.rejects(reader.changeAutoPlay(false), /방장/);
-    } finally { reader.close(); }
-  }
-});
-
-test('a presence renewal preserves the manual play after auto-play was turned off', async () => {
+test('a solo seat presence renewal preserves the manual play', async () => {
   const handId = crypto.randomUUID(), revisions = [];
-  const initial = {handId,revision:7,seat:1,autoPlay:false,turnDeadline:null,dueAt:120000,bots:[true,false,true,true,true],
+  const initial = {handId,revision:7,seat:1,turnDeadline:null,dueAt:120000,bots:[true,false,true,true,true],
     game:{phase:'play',turn:1,hand:['H8'],dealNo:1,trickNo:4}};
   const renewed = {...initial,revision:8,dueAt:200000};
   const played = {...renewed,revision:9,game:{...initial.game,turn:2,hand:[]}};

@@ -13,8 +13,6 @@ const suitInfo = {
   C: ["♣", "클로버"], N: ["NT", "노기루다"],
 };
 const rankNames = { A: "에이스", K: "킹", Q: "퀸", J: "잭" };
-export const THINKING_TIME_HELP = "사람이 둘 이상인 대국에서는 각자 한 판에 3분을 자기 차례에 나눠 씁니다. 다 쓰면 그때부터 매 차례 10초 뒤에 AI가 대신 선택합니다.";
-const legacyClockHelp = "사람이 둘 이상인 대국에서 10초 동안 선택하지 않으면 AI가 이번 차례를 대신합니다.";
 const labels = { bid: "경매", discard: "카드 교환", friend: "프렌드 지정", play: "트릭 진행", result: "라운드 결과" };
 const roleLabels = { declarer: "주공", friend: "프렌드", opposition: "수비" };
 const chipNumber = new Intl.NumberFormat('ko-KR');
@@ -223,7 +221,8 @@ function seatMarkup(ui, nameAt) {
     const standing = seatStanding(board, seat, beforeSettlement && !ui.preResultBoard);
     const balance = balanceText(balances?.[seat]);
     const chips = `<span class="g-seat-balance" data-chip-seat="${seat}"${balance ? '' : ' hidden'}><span class="visually-hidden">보유 칩 </span><span>${balance}</span></span>`;
-    const header = `<span class="g-avatar g-avatar-${seat}" aria-label="${seat + 1}번 자리">${escapeHtml(avatar)}</span><span class="g-seat-tag"><span class="g-seat-identity"><span class="g-seat-name">${escapeHtml(name)}${seat === view.seat ? '<small>나</small>' : ""}</span>${standing}</span>${chips}<span class="g-seat-detail">${isTurn ? '<i></i>' : ""}${status}</span></span>`;
+    const timer = `<span class="g-seat-clock" data-clock-seat="${seat}" role="timer" aria-live="off" hidden></span>`;
+    const header = `<span class="g-avatar g-avatar-${seat}" aria-label="${seat + 1}번 자리">${escapeHtml(avatar)}</span><span class="g-seat-tag"><span class="g-seat-identity"><span class="g-seat-name">${escapeHtml(name)}${seat === view.seat ? '<small>나</small>' : ""}</span>${standing}</span><span class="g-seat-meta">${chips}${timer}</span><span class="g-seat-detail">${isTurn ? '<i></i>' : ""}${status}</span></span>`;
     let call = "";
     if (inAuction) {
       const last = view.bidHistory.findLast(entry => entry.seat === seat);
@@ -753,17 +752,44 @@ function updateNextCountdown(ui) {
 function updateTurnCountdown(ui) {
   clearTimeout(ui.turnTimer);
   const clock = ui.root.querySelector(".g-turn-clock");
-  const deadline = ui.options.turnDeadline;
-  clock.hidden = ui.options.autoPlay === false || !Number.isFinite(deadline) || ui.view.turn == null || ui.view.phase === "result";
-  if (clock.hidden) return;
+  const {turnDeadline, thinkingDeadline, seatTimeBanks} = ui.options;
+  const turn = ui.latest?.turn;
+  const running = Number.isFinite(turnDeadline) && Number.isInteger(turn) && !ui.latest.result;
   const now = Date.now();
-  const thinking = ui.options.thinkingDeadline > now;
-  const remaining = Math.max(0, (thinking ? ui.options.thinkingDeadline : deadline) - now);
+  const thinking = thinkingDeadline > now;
+  const remaining = running ? Math.max(0, (thinking ? thinkingDeadline : turnDeadline) - now) : 0;
   const seconds = Math.ceil(remaining / 1000);
-  clock.textContent = thinking ? `생각 시간 ${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`
-    : seconds ? `AI 선택까지 ${seconds}초` : "AI 선택 중";
-  clock.classList.toggle("g-turn-ending", !thinking && seconds <= 3);
+  clock.hidden = !running || ui.view.turn !== turn;
+  if (!clock.hidden) {
+    clock.textContent = thinking ? `생각 시간 ${minutesAndSeconds(seconds)}`
+      : seconds ? `AI 선택까지 ${seconds}초` : "AI 선택 중";
+    clock.classList.toggle("g-turn-ending", !thinking && seconds <= 3);
+  }
+  for (const badge of ui.root.querySelectorAll('[data-clock-seat]')) {
+    const seat = Number(badge.dataset.clockSeat);
+    const bank = seatTimeBanks?.[seat];
+    badge.hidden = !Number.isFinite(bank) || ui.latest.phase === 'result';
+    if (badge.hidden) continue;
+    const active = running && seat === turn;
+    const overtime = active ? !thinking : bank <= 0;
+    const value = active ? seconds : Math.ceil(bank / 1000);
+    let text = minutesAndSeconds(value);
+    let description = '남은 생각 시간 ' + text;
+    if (overtime) {
+      text = active ? `초읽기 ${seconds}초` : '10초';
+      description = active ? `AI 선택까지 ${seconds}초` : '생각 시간 소진 · 다음 차례 10초';
+    }
+    if (badge.textContent !== text) badge.textContent = text;
+    badge.title = description;
+    badge.setAttribute('aria-label', nameAtSeat(ui,seat) + ' · ' + description);
+    badge.classList.toggle('g-clock-running', active);
+    badge.classList.toggle('g-clock-overtime', overtime);
+  }
   if (seconds) ui.turnTimer = setTimeout(() => updateTurnCountdown(ui), remaining - (seconds - 1) * 1000);
+}
+
+function minutesAndSeconds(seconds) {
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
 }
 
 function resultControls(view, ui) {
@@ -875,10 +901,7 @@ function mountTable(root) {
         <div class="g-title-row"><div class="g-title-context"><h1></h1><div class="g-round-tags"><span class="g-round-tag"></span><span class="g-friend-tag" aria-live="polite" aria-atomic="true" hidden></span></div></div>
           <label class="g-pace"><span>진행 속도</span>
             <select data-table-pace><option value="slow">느리게</option><option value="normal">보통</option><option value="fast">빠르게</option></select>
-            <strong class="g-pace-value" hidden></strong></label>
-          <button type="button" class="g-auto-play" data-table-auto-play role="switch" aria-label="10초 자동진행"
-            aria-checked="true" hidden>
-            <span>10초 자동진행</span><strong aria-hidden="true">켜짐</strong></button></div></div>
+            <strong class="g-pace-value" hidden></strong></label></div></div>
       <div class="g-layout">
         <div class="g-decision-surface">
         <section class="g-board" aria-label="게임 테이블"><span class="g-turn-clock" role="timer" aria-live="off" hidden></span><div class="g-felt"><div class="g-felt-line"></div>
@@ -931,27 +954,10 @@ export function updateGamePace(container, pace, pendingPace = null) {
   paintPace(ui);
 }
 
-function paintAutoPlay(ui) {
-  const {autoPlay, pendingAutoPlay, onAutoPlayChange} = ui.options;
-  const control = ui.root.querySelector('[data-table-auto-play]');
-  control.hidden = typeof autoPlay !== "boolean";
-  if (control.hidden) return;
-  control.title = ui.options.timeBankMs > 0 ? THINKING_TIME_HELP : legacyClockHelp;
-  const pending = typeof pendingAutoPlay === "boolean";
-  const enabled = pending ? pendingAutoPlay : autoPlay;
-  control.disabled = pending || typeof onAutoPlayChange !== "function";
-  control.setAttribute("aria-busy", String(pending));
-  control.setAttribute("aria-checked", String(enabled));
-  control.querySelector("strong").textContent = enabled ? "켜짐" : "꺼짐";
-}
-
-export function updateGameAutoPlay(container, autoPlay, pendingAutoPlay = null, turnDeadline, thinkingDeadline) {
+export function updateGameClocks(container, seatTimeBanks, turnDeadline, thinkingDeadline) {
   const ui = cache.get(container);
   if (!ui?.options || !container.firstElementChild) return;
-  ui.options = {...ui.options, autoPlay, pendingAutoPlay};
-  if (turnDeadline !== undefined) ui.options.turnDeadline = turnDeadline;
-  if (thinkingDeadline !== undefined) ui.options.thinkingDeadline = thinkingDeadline;
-  paintAutoPlay(ui);
+  ui.options = {...ui.options, seatTimeBanks, turnDeadline, thinkingDeadline};
   if (ui.view) updateTurnCountdown(ui);
 }
 
@@ -969,7 +975,6 @@ function redraw(ui, newDeal = false) {
   if (enteringDecision && phoneLayout.matches) {
     root.querySelector(".g-main").scrollTop = 0;
   }
-  updateTurnCountdown(ui);
   root.querySelector(".g-nav-phase").textContent = view.seat < 0 ? "테이블 관전" : "게임 테이블";
   const lobbyButton = root.querySelector('[data-do="connect-lobby"]');
   lobbyButton.hidden = !options.onConnectLobby;
@@ -1016,6 +1021,7 @@ function redraw(ui, newDeal = false) {
   updateFriendTag(root.querySelector(".g-friend-tag"), view, nameAt);
   // Read the departing card's position before reconciling the player's hand.
   renderTable(ui, nameAt);
+  updateTurnCountdown(ui);
   renderHand(ui, newDeal);
   const claimDialog = root.querySelector(".g-claim-dialog");
   if (claimDialog.open && !canDeclareSetting(ui)) claimDialog.close();
@@ -1081,7 +1087,6 @@ function bind(ui) {
     if (!ui.root.querySelector(".g-screen")) return;
     const el = event.target.closest("button");
     if (!el || el.disabled) return;
-    if (el.hasAttribute("data-table-auto-play")) return ui.options.onAutoPlayChange?.(!ui.options.autoPlay);
     if (el.dataset.card) {
       const card = el.dataset.card;
       if (ui.view.phase === "discard") {
@@ -1370,7 +1375,6 @@ export function renderGame(container, publicView, options = {}) {
   }
   ui.options = options;
   paintPace(ui);
-  paintAutoPlay(ui);
   if (replay) {
     displayChipPlays(ui);
     return;
@@ -1418,7 +1422,7 @@ export function renderGame(container, publicView, options = {}) {
   displayLatest(ui);
 }
 
-export function rulesContent(rules = DEFAULT_RULES, scoringVersion = TABLE_SCORING_VERSION, hasThinkingTime = true) {
+export function rulesContent(rules = DEFAULT_RULES, scoringVersion = TABLE_SCORING_VERSION) {
   const bidRange = rules.minBid === 20 ? "20점을 걸고" : `${escapeHtml(rules.minBid)}~20점 사이에서`;
   const firstFriend = rules.allowFirstFriend ? " 첫 트릭의 승자를 초구 프렌드로 지정할 수도 있습니다." : "";
   const jokerCallFrom = rules.allowFirstJokerCall ? "첫 트릭부터" : "두 번째 트릭부터";
@@ -1445,6 +1449,6 @@ export function rulesContent(rules = DEFAULT_RULES, scoringVersion = TABLE_SCORI
     <p>${jokerCallFrom} 선이 클로버 3으로 조커콜을 선언할 수 있습니다. 조커를 가진 사람은 조커 또는 마이티를 내야 하며, 조커는 그 트릭에서 가장 약합니다. 클로버가 기루다일 때의 조커콜 카드는 스페이드 3입니다. 조커가 한 번 나오면 손패의 조커콜 표식이 사라지고 그 카드는 일반 3으로 냅니다.</p>
     <h3>점수 카드와 승패</h3><p>10, J, Q, K, A는 각각 1점으로, 한 판에는 총 20점이 있습니다. 가져간 점수 카드는 보드의 각자 자리 옆에 모읍니다. 주공은 처음부터 카드를 덮고, 프렌드는 정체가 밝혀지는 즉시 앞서 가져간 카드까지 모두 덮습니다. 열 번째 트릭이 끝났을 때 주공 팀의 점수가 공약 이상이면 주공 팀이 승리합니다.</p>
     <p>${scoring} 배율을 모두 곱한 값이 여당 기준점수입니다. 프렌드는 그 점수 그대로, 주공은 2배, 야당은 각각 부호를 바꿔 정산합니다. 노프렌드 주공은 4배입니다.</p>
-    <h3>온라인 대국의 생각 시간</h3><p>방장이 10초 자동진행을 켜면 다음 시간 규칙을 적용합니다. ${hasThinkingTime ? THINKING_TIME_HELP : legacyClockHelp} 끄면 접속 중인 플레이어의 선택을 기다립니다.</p>
+    <h3>생각 시간과 초읽기</h3><p>칩 대국과 무료 연습 모두 한 판에 각자 생각 시간 3분을 받습니다. 자기 차례에만 줄어들며 남은 시간은 각자 자리에서 확인할 수 있습니다. 3분을 다 쓰면 그 차례부터 매번 10초의 초읽기가 시작됩니다. 10초 안에 선택하지 않으면 AI가 그 차례만 대신합니다.</p>
   </div>`;
 }

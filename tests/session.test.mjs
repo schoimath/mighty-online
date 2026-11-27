@@ -39,24 +39,17 @@ test('the selected pace follows the host, seated guests and spectators into the 
   assert.equal(room.round.bid.suit, 'H');
 });
 
-test('the turn assistance setting follows the room through a host change and old checkpoints default to on', () => {
-  const room = new HostSession('방장', undefined, undefined, 10, {publicRoom:true});
+test('the fixed clock survives old room preferences and disabled checkpoints during a host change', () => {
+  const room = new HostSession('방장', undefined, undefined, 10, {publicRoom:true,autoPlay:false});
   room.addGuest('guest','친구','play');
   assert.equal(room.hostView().autoPlay,true);
-  room.setAutoPlay(false);
-  assert.equal(room.viewFor('guest').autoPlay,false);
-  assert.equal(room.plannedTable().autoPlay,false);
-  const checkpoint = room.handoffState();
-  const successor = HostSession.takeOver(checkpoint,'guest');
-  assert.equal(successor.plannedTable().autoPlay,false);
-  delete checkpoint.autoPlay;
-  assert.equal(HostSession.takeOver(checkpoint,'guest').autoPlay,true);
-  room.start();
-  const revision = room.revision;
-  room.setAutoPlay(true);
   assert.equal(room.viewFor('guest').autoPlay,true);
-  room.act(room.round.turn,revision,{type:'bid',points:14,suit:'H'});
-  assert.equal(room.round.bid.suit,'H');
+  const checkpoint = {...room.handoffState(),autoPlay:false};
+  const successor = HostSession.takeOver(checkpoint,'guest');
+  assert.equal(successor.handoffState().autoPlay,true);
+  assert.equal(Object.hasOwn(successor.plannedTable(),'autoPlay'),false);
+  delete checkpoint.autoPlay;
+  assert.equal(HostSession.takeOver(checkpoint,'guest').hostView().autoPlay,true);
 });
 
 function finishWithFriend(session, friendSeat) {
@@ -72,6 +65,72 @@ function finishWithFriend(session, friendSeat) {
   }
   assert.equal(session.round.result.friend, friendSeat);
 }
+
+test('solo practice shares three minutes across decisions and assists only the overdue turn', t => {
+  t.mock.timers.enable({apis:['Date'], now:1000});
+  const room = new HostSession('연습', undefined, Array(5).fill('heuristic'));
+  room.start();
+  const view = () => room.hostView();
+  assert.equal(view().thinkingDeadline, Date.now() + 180_000);
+  assert.equal(view().turnDeadline, Date.now() + 190_000);
+  assert.deepEqual(view().seatTimeBanks, [180_000,null,null,null,null]);
+  t.mock.timers.tick(120_000);
+  room.act(0, room.revision, {type:'bid', points:14, suit:'S'});
+  t.mock.timers.tick(70_000); // The bots' turns cannot use the human reserve.
+  assert.equal(view().turnDeadline, null);
+  for (let i = 0; i < 4; i++) room.runBot({type:'pass'});
+  assert.equal(view().game.phase, 'discard');
+  const deadline = view().turnDeadline;
+  assert.equal(deadline, Date.now() + 70_000);
+  room.setPace('fast');
+  assert.throws(() => room.act(0, room.revision, {type:'discard', cards:[]}));
+  assert.equal(view().turnDeadline, deadline);
+  t.mock.timers.tick(69_999);
+  assert.equal(view().seatTimeBanks[0], 0);
+  assert.equal(room.assistExpiredTurn(), false);
+  t.mock.timers.tick(1);
+  assert.equal(room.assistExpiredTurn(), true);
+  assert.equal(view().game.phase, 'friend');
+  assert.equal(view().turnDeadline, Date.now() + 10_000);
+  assert.equal(view().thinkingDeadline, null);
+  assert.equal(room.assistExpiredTurn(), false);
+  assert.equal(room.players[0].bot, false);
+  t.mock.timers.tick(10_000);
+  assert.throws(() => room.act(0, room.revision, {type:'friend',kind:'none'}), /AI/);
+  assert.equal(view().game.phase, 'play');
+  assert.equal(view().lastTimedAction.seat, 0);
+  assert.equal(room.players[0].bot, false);
+  assert.equal(view().turnDeadline, Date.now() + 10_000);
+  room.act(0, room.revision, {type:'play',...view().game.choices.plays[0]});
+  assert.equal(view().turnDeadline, null);
+});
+
+test('shared practice keeps distinct reserves, freezes during a claim and refreshes at the next hand', t => {
+  t.mock.timers.enable({apis:['Date'], now:1000});
+  const room = fullRoom();
+  room.start();
+  const submit = action => room.act(room.round.turn, room.revision, action);
+  t.mock.timers.tick(1000);
+  submit({type:'bid', points:14, suit:'S'});
+  t.mock.timers.tick(7000);
+  assert.deepEqual(room.view(1).seatTimeBanks, [179_000,173_000,180_000,180_000,180_000]);
+  for (let i = 0; i < 4; i++) submit({type:'pass'});
+  submit({type:'discard',cards:room.hostView().game.hand.slice(0,3)});
+  submit({type:'friend',kind:'none'});
+  t.mock.timers.tick(180_000);
+  const job = submit({type:'claim'});
+  assert.equal(room.hostView().turnDeadline, null);
+  t.mock.timers.tick(200_000);
+  assert.equal(room.assistExpiredTurn(), false);
+  assert.equal(room.abandonClaim(job), true);
+  assert.equal(room.hostView().turnDeadline, Date.now() + 9000);
+  assert.equal(room.finishClaim(submit({type:'claim'}), false), true);
+  assert.equal(room.hostView().turnDeadline, null);
+  assert.deepEqual(room.hostView().seatTimeBanks, Array(5).fill(null));
+  room.start();
+  assert.deepEqual(room.hostView().seatTimeBanks, Array(5).fill(180_000));
+  assert.equal(room.hostView().lastTimedAction, null);
+});
 
 test('members start at zero and keep their own cumulative scores after a lobby seat swap and rematches', () => {
   const room = fullRoom();
@@ -402,7 +461,8 @@ test('declining, canceling, moving, leaving or starting settles pending seat req
   assert.equal(room.seatFor('b'), 1);
 });
 
-test('host room rules are shared before play, frozen for a round and reusable on replay', () => {
+test('host room rules are shared before play, frozen for a round and reusable on replay', t => {
+  t.mock.timers.enable({apis:['Date'], now:1000});
   const session = new HostSession('방장');
   session.addGuest('guest', '친구');
   const original = session.view(1);
@@ -436,7 +496,8 @@ test('host room rules are shared before play, frozen for a round and reusable on
   assert.deepEqual(session.view(0).game.rules, expected);
 });
 
-test('each connection has one seat, one private hand, and a revision-checked turn', () => {
+test('each connection has one seat, one private hand, and a revision-checked turn', t => {
+  t.mock.timers.enable({apis:['Date'], now:1000});
   const session = fullRoom();
   assert.equal(typeof session.addGuest('conn-extra', '다섯 번째 손님'), 'string');
   assert.equal(session.seatFor('conn-extra'), -1);

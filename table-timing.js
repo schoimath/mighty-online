@@ -1,5 +1,7 @@
 export const AUCTION_BEAT_MS = 1350;
 export const FRIEND_ANNOUNCEMENT_MS = 2200;
+export const THINKING_TIME_MS = 180_000;
+export const HUMAN_TURN_MS = 10_000;
 
 const paceFactors = {slow:1.45, normal:1, fast:0.65};
 
