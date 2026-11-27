@@ -38,7 +38,6 @@ svg.icon{width:1.25em;height:1.25em;display:block;fill:none;stroke:currentColor;
 .chip-leaderboard td:first-child { white-space:nowrap; color:#4e6454; font-weight:650; font-variant-numeric:tabular-nums; }
 .chip-leaderboard tr[data-rank="1"] td:first-child { color:#805920; }
 .chip-leaderboard tbody th { overflow-wrap:anywhere; font-weight:550; }
-.chip-leaderboard .rank-virtual { color:var(--muted); font-size:.76rem; font-weight:400; white-space:nowrap; }
 .chip-leaderboard :is(th,td):last-child { text-align:end; white-space:nowrap; font-variant-numeric:tabular-nums; }
 .chip-leaderboard tbody tr:last-child > * { border-bottom:0; }
 .chip-leaderboard nav { margin-top:9px; justify-content:flex-end; color:var(--muted); font-size:.8rem; }

@@ -167,6 +167,28 @@ test('verified login reads chips from the authenticated RPC, including zero and 
   assert.equal(await client.accessToken(),null);
 });
 
+test('the wallet carries a global, possibly tied standing and tolerates unavailable optional rank data', async () => {
+  const auth = authStub(person());
+  let wallet = {balance:350,rank:34,tied:true};
+  const client = new AccountClient(config,{makeAuth:async () => auth,fetcher:async () =>
+    wallet ? {ok:true,json:async () => wallet} : {ok:false}});
+  await client.ready;
+  assert.deepEqual(client.state.chipRank,{rank:34,tied:true});
+  wallet = {balance:350,rank:25,tied:false};
+  assert.deepEqual((await client.refreshWallet()).chipRank,{rank:25,tied:false});
+  for (const rankInfo of [{}, {rank:null,tied:null}, {rank:0,tied:false}, {rank:34,tied:'yes'}]) {
+    wallet = {balance:350,...rankInfo};
+    const state = await client.refreshWallet();
+    assert.equal(state.chipRank,null);
+    assert.equal(state.balance,350);
+    assert.equal(state.error,'');
+  }
+  wallet = null;
+  await client.refreshWallet();
+  assert.equal(client.state.chipRank,null);
+  assert.match(client.state.error,/칩 잔액/);
+});
+
 test('signup, resend and password recovery identify mail delivery failures and give the appropriate retry action', async () => {
   const auth = authStub();
   const failSending = message => async () => ({data:null,error:{status:500,code:'unexpected_failure',message}});
@@ -229,16 +251,18 @@ test('wallet responses from a previous login are discarded after logout', async 
   const auth = authStub(person());
   let release, first = true;
   const client = new AccountClient(config,{makeAuth:async () => auth,fetcher:async () => {
-    if (first) { first=false;return mockWallet(1000); }
+    if (first) { first=false;return Response.json({balance:1000,rank:21,tied:true}); }
     return new Promise(resolve => {release = resolve;});
   }});
   await client.ready;
+  assert.deepEqual(client.state.chipRank,{rank:21,tied:true});
   const read = client.refreshWallet();
   await new Promise(resolve=>setImmediate(resolve));
   await client.signOut();
-  release(mockWallet(999));
+  release(Response.json({balance:999,rank:22,tied:false}));
   await read;
   assert.equal(client.state.balance,null);
+  assert.equal(client.state.chipRank,null);
   assert.equal(client.state.user,null);
 });
 

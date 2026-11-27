@@ -80,7 +80,7 @@ export class AccountClient {
     this.#fetch = fetcher.bind(globalThis);
     this.#redirect = location ? new URL('.', location.href).href : undefined;
     this.#state = {configured:Boolean(this.url && this.publishableKey), ready:false,
-      user:null, balance:null, recoveryDate:null, recovering:false, authLink:false, linkError:'', error:''};
+      user:null, balance:null, chipRank:null, recoveryDate:null, recovering:false, authLink:false, linkError:'', error:''};
     const link = takeAccountLink(location,history);
     this.identityReady = this.#restoreIdentity(makeAuth,link);
     this.ready = this.identityReady.then(async () => {
@@ -147,7 +147,7 @@ export class AccountClient {
       this.#recoveryUserId = null;
       clearTimeout(this.#recoveryTimer);
       this.#pendingWallet = null;
-      this.#set({user, balance:null, recoveryDate:null, recovering:Boolean(this.#pendingRecoveryHash), error:''});
+      this.#set({user, balance:null, chipRank:null, recoveryDate:null, recovering:Boolean(this.#pendingRecoveryHash), error:''});
     } else if (user && (this.state.user.email !== user.email || this.state.user.nickname !== user.nickname)) {
       this.#set({user});
     }
@@ -196,7 +196,9 @@ export class AccountClient {
       if (wallet === undefined) return this.state;
       if (!Number.isSafeInteger(wallet.balance)) throw new Error();
       if (this.#identityVersion !== identityVersion) return this.state;
-      this.#set({balance:wallet.balance, recoveryDate:wallet.recoveryDate ?? null, error:''});
+      const chipRank = Number.isSafeInteger(wallet.rank) && wallet.rank > 0 && typeof wallet.tied === 'boolean'
+        ? {rank:wallet.rank,tied:wallet.tied} : null;
+      this.#set({balance:wallet.balance, chipRank, recoveryDate:wallet.recoveryDate ?? null, error:''});
       clearTimeout(this.#recoveryTimer);
       if (wallet.recoveryDate) {
         const wait = Date.parse(wallet.recoveryDate + 'T00:00:00+09:00') - Date.now();
@@ -205,7 +207,7 @@ export class AccountClient {
         this.#recoveryTimer?.unref?.();
       }
     } catch {
-      if (this.#identityVersion === identityVersion) this.#set({balance:null, error:'칩 잔액을 확인하지 못했습니다. 잠시 후 다시 조회해 주세요.'});
+      if (this.#identityVersion === identityVersion) this.#set({balance:null, chipRank:null, error:'칩 잔액을 확인하지 못했습니다. 잠시 후 다시 조회해 주세요.'});
     } finally {
       clearTimeout(timer);
     }

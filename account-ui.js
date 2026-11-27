@@ -46,8 +46,9 @@ export function setupAccountUI(client, {onChange} = {}) {
     }
     if (page === 'account' && state.user) {
       body.innerHTML = '<dl class="account-summary"><div><dt>닉네임</dt><dd data-value="nickname"></dd></div>' +
-        '<div><dt>인증 이메일</dt><dd data-value="email"></dd></div><div><dt>보유 칩</dt><dd data-value="balance"></dd></div></dl>' +
-        '<p data-recovery hidden></p>' + actions(link('refresh','잔액 다시 조회'),link('logout','로그아웃'));
+        '<div><dt>인증 이메일</dt><dd data-value="email"></dd></div><div><dt>보유 칩</dt><dd data-value="balance"></dd></div>' +
+        '<div><dt>전체 칩 순위</dt><dd data-value="rank"></dd></div></dl>' +
+        '<p data-recovery hidden></p>' + actions(link('refresh','잔액·순위 다시 조회'),link('logout','로그아웃'));
       body.querySelector('[data-value="nickname"]').textContent = state.user.nickname;
       body.querySelector('[data-value="email"]').textContent = state.user.email;
       updateWalletDetails();
@@ -83,7 +84,11 @@ export function setupAccountUI(client, {onChange} = {}) {
   function updateWalletDetails() {
     const state = client.state, value = body.querySelector('[data-value=balance]');
     if (!value) return;
-    value.textContent = state.balance === null ? (state.error ? '조회 필요' : '확인 중…') : format.format(state.balance) + '칩';
+    const pending = state.error ? '조회 필요' : '확인 중…';
+    value.textContent = state.balance === null ? pending : format.format(state.balance) + '칩';
+    const rank = body.querySelector('[data-value=rank]');
+    if (state.chipRank) rank.textContent = (state.chipRank.tied ? '공동 ' : '') + format.format(state.chipRank.rank) + '위';
+    else rank.textContent = state.balance === null ? pending : '조회 불가';
     const recovery = body.querySelector('[data-recovery]');
     recovery.hidden = !state.recoveryDate;
     recovery.textContent = state.recoveryDate ? '한국시간 ' + state.recoveryDate + ' 0시부터 100칩으로 복구됩니다.' : '';
@@ -100,6 +105,7 @@ export function setupAccountUI(client, {onChange} = {}) {
     if (!dialog.open) dialog.showModal();
     const state = client.state;
     show(state.recovering ? 'password' : state.user ? 'account' : 'signin',message);
+    if (page === 'account') void client.refreshWallet();
   }
   $('account-close').onclick = () => dialog.close();
   dialog.addEventListener('click', e => { if (e.target === dialog) dialog.close(); });
@@ -131,7 +137,7 @@ export function setupAccountUI(client, {onChange} = {}) {
     const action = e.target.closest('[data-account]')?.dataset.account;
     if (!action || busy) return;
     if (action === 'logout') return void run(async () => { await client.signOut(); return ['signin','로그아웃했습니다.']; });
-    if (action === 'refresh') return void run(async () => { await client.refreshWallet(); return ['account']; });
+    if (action === 'refresh') return void run(async () => { await client.refreshWallet(); return [client.state.user ? 'account' : 'signin']; });
     email = body.querySelector('[name=email]')?.value.trim() || email;
     show(action);
   });
@@ -182,9 +188,10 @@ export function setupAccountUI(client, {onChange} = {}) {
       } else if (page !== 'checking') {
         show('checking','메일 링크를 확인하고 있습니다…',false);
       }
+    } else if (dialog.open && page === 'account' && previousId && previousId !== state.user?.id) {
+      show(state.user ? 'account' : 'signin');
     } else if (dialog.open && !busy) {
       if (page === 'password' && state.linkError) show('linkError');
-      else if (previousId && !state.user && page === 'account') show('signin');
       else if (page === 'password' && !state.recovering) show('forgot','재설정할 계정이 바뀌었습니다. 메일을 다시 요청해 주세요.');
       else if (state.user && ['signin','sent','signup','resend'].includes(page)) show(state.recovering ? 'password' : 'account');
       else if (page === 'account') updateWalletDetails();

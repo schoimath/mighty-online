@@ -36,7 +36,7 @@ begin
   update auth.users set email_confirmed_at=now() where id=alice;
   update auth.users set email_confirmed_at=now() where id=alice;
   set local role authenticated;
-  assert public.chip_wallet() = '{"balance":1000,"recoveryDate":null}'::jsonb, 'initial balance';
+  assert public.chip_wallet() @> '{"balance":1000,"recoveryDate":null}'::jsonb, 'initial balance';
   assert public.chips_ready(first_hand,'ABC234',0,manifest);
   reset role;
   assert (select count(*)=1 from mighty_private.chip_entries where user_id=alice and kind='welcome');
@@ -104,7 +104,7 @@ begin
   assert (select balance=1012 and active_hand is null from mighty_private.wallets where user_id=bob);
   perform set_config('request.jwt.claim.sub',alice::text,true);
   set local role authenticated;
-  assert public.chip_wallet()=jsonb_build_object('balance',-7,'recoveryDate',korean_today+1), 'negative balance or KST date';
+  assert public.chip_wallet() @> jsonb_build_object('balance',-7,'recoveryDate',korean_today+1), 'negative balance or KST date';
   assert public.chips_active_hand() is null;
   begin
     perform public.chips_ready(next_hand,'DEF567',0,manifest);
@@ -131,7 +131,7 @@ begin
   update mighty_private.wallets set balance=0, recover_on=korean_today where user_id=carol;
   perform set_config('request.jwt.claim.sub',alice::text,true);
   set local role authenticated;
-  assert public.chip_wallet() = '{"balance":100,"recoveryDate":null}'::jsonb, 'negative did not reset to exactly 100';
+  assert public.chip_wallet() @> '{"balance":100,"recoveryDate":null}'::jsonb, 'negative did not reset to exactly 100';
   reset role;
   set local role service_role;
   perform public.chips_recover_due();

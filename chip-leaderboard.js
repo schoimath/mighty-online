@@ -16,13 +16,6 @@ export function setupChipLeaderboard(section, client) {
       const nickname = document.createElement('th');
       nickname.scope = 'row';
       nickname.textContent = member.nickname;
-      if (member.isVirtual === true) {
-        const label = document.createElement('small');
-        label.className = 'rank-virtual';
-        label.textContent = '가상';
-        label.title = '순위표용 가상 계정';
-        nickname.append(' ', label);
-      }
       row.append(nickname);
       row.insertCell().textContent = number.format(BigInt(member.balance));
       rows.append(row);
