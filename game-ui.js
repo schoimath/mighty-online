@@ -5,7 +5,7 @@ import {jokerWasPlayed, withJokerStatus} from "./table-joker.js";
 import {seriesFromBoard} from "./table-series.js";
 import {playTableSound, soundControl, toggleSound} from "./sound.js";
 import {AUCTION_BEAT_MS, FRIEND_ANNOUNCEMENT_MS, normalizeGameSpeed, paceMultiplier, tableDelay} from "./table-timing.js";
-import {settlementDetails, settlements, TABLE_SCORING_VERSION} from "./table-scoring.js";
+import {settlementDetails, settlements, LEGACY_TABLE_SCORING_VERSION, TABLE_SCORING_VERSION} from "./table-scoring.js";
 import {settlements as archivedSettlements} from "./lab/scoring.js";
 import {intermediatePlayView, nextTablePlay, rememberCompletedTricks, sweptTrickView} from "./table-playback.js";
 
@@ -261,16 +261,26 @@ function hasHandDeltas(deltas) {
   return Array.isArray(deltas) && deltas.length === 5 && deltas.every(Number.isSafeInteger);
 }
 
+export function displayedScoringVersion(view, board, serverHand) {
+  return view?.scoringVersion ?? board?.scoringVersion ??
+    (serverHand ? LEGACY_TABLE_SCORING_VERSION : board ? 'contract-flat-v1' : 'ten-base-v1');
+}
+
+function hasContractReward(version) {
+  return version === TABLE_SCORING_VERSION || version === LEGACY_TABLE_SCORING_VERSION;
+}
+
 function roundSweep(view, options) {
   if (view.phase !== "result") return null;
-  if (!options.scoreboard && !options.resumed && !hasHandDeltas(options.handDeltas)) {
+  const version = displayedScoringVersion(view, options.scoreboard, options.resumed || hasHandDeltas(options.handDeltas));
+  if (version === 'ten-base-v1') {
     // The original host awards a backrun for a ten-point contract shortfall.
     const {won, target, points} = view.result;
     if (won && points === 20) return "run";
     if (!won && target - points >= 10) return "backrun";
     return null;
   }
-  const {bonuses} = settlementDetails(view.result, view.bid.suit);
+  const {bonuses} = settlementDetails(view.result, view.bid.suit, version);
   if (bonuses.includes("런")) return "run";
   if (bonuses.includes("백런")) return "backrun";
   return null;
@@ -830,17 +840,18 @@ function resultControls(view, ui) {
   const outcome = handOutcome(result, seat, view.bid.suit, ui.sweep);
   const handDeltas = ui.options.handDeltas;
   const hasServerScores = hasHandDeltas(handDeltas);
-  const currentRules = board?.scoringVersion === TABLE_SCORING_VERSION || ui.options.resumed || hasServerScores;
+  const version = displayedScoringVersion(view, board, ui.options.resumed || hasServerScores);
+  const contractReward = hasContractReward(version);
   let net = chipDelta;
   if (outcome.role && net == null) {
     if (hasServerScores) net = handDeltas[seat];
-    else if (currentRules) net = settlements(result, view.bid.suit)[seat];
+    else if (contractReward) net = settlements(result, view.bid.suit, version)[seat];
     else if (board) net = board.members.find(m => m.seat === seat)?.lastDelta;
     else net = archivedSettlements(result, view.bid.suit)[seat];
   }
   let breakdown = "";
-  if (currentRules) {
-    const {base, bonuses, unit} = settlementDetails(result, view.bid.suit);
+  if (contractReward) {
+    const {base, bonuses, unit} = settlementDetails(result, view.bid.suit, version);
     const factors = bonuses.map(name => {
       const label = name === "노기루다" ? '<abbr title="노기루다">NT</abbr>' : name === "백런" ? "빽런" : name;
       return `<span class="g-factor">×2 <small>(${label})</small></span>`;
@@ -863,7 +874,7 @@ function resultControls(view, ui) {
   }
   let standings = board;
   if (!standings) {
-    const deltas = hasServerScores ? handDeltas : (currentRules ? settlements : archivedSettlements)(result,view.bid.suit);
+    const deltas = hasServerScores ? handDeltas : contractReward ? settlements(result,view.bid.suit,version) : archivedSettlements(result,view.bid.suit);
     standings = {members:deltas.map((lastDelta,seat)=>({seat,name:nameAtSeat(ui,seat),lastDelta}))};
   }
   const table = board?.complete ? "" : scoreTable(standings,seat,{roundResult:true,title:"플레이어 성적"});
@@ -1464,11 +1475,12 @@ export function rulesContent(rules = DEFAULT_RULES, scoringVersion = TABLE_SCORI
   const jokerCallFrom = rules.allowFirstJokerCall ? "첫 트릭부터" : "두 번째 트릭부터";
   const hasStandings = scoringVersion !== 'ten-base-v1';
   const opening = hasStandings ? " 처음 받은 10장에 점수 카드(10·J·Q·K·A)가 한 장도 없는 사람이 있으면 파토입니다. 공약 전에 모두 다시 받고 같은 자리부터 시작합니다." : "";
-  const contractRule = scoringVersion === TABLE_SCORING_VERSION
+  const contractRule = hasContractReward(scoringVersion)
     ? "여당이 공약에 성공하면 기본점수는 2 × (최종 공약 − 13) + (여당 득점 − 최종 공약)입니다. 실패하면 모자란 점수만큼 잃습니다. 15점 공약에서 17점이면 +6점, 14점이면 −1점입니다."
     : "이 방에서는 최종 공약에서 10을 뺀 값을 한 몫으로 정해 성공하면 더하고 실패하면 뺍니다.";
+  const bonusRules = scoringVersion === TABLE_SCORING_VERSION ? "노기루다" : "노기루다, 노프렌드";
   const scoring = hasStandings
-    ? contractRule + " 런(여당 20점), 빽런(야당 10점 이상), 노기루다, 노프렌드는 각각 2배이며 겹치면 곱합니다. 새 테이블에서는 모두 0점으로 시작하며 개인 점수는 판마다 누적됩니다."
+    ? contractRule + ` 런(여당 20점), 빽런(야당 10점 이상), ${bonusRules}는 각각 2배이며 겹치면 곱합니다. 새 테이블에서는 모두 0점으로 시작하며 개인 점수는 판마다 누적됩니다.`
     : "여당이 성공하면 획득 점수에서 10을 뺀 값, 실패하면 공약에 모자란 값으로 정산합니다. 런(여당 20점), 빽런(공약보다 10점 이상 부족), 노기루다, 노프렌드는 각각 2배입니다.";
   const jokerTiming = rules.allowLastJoker
     ? "첫 트릭에서는 조커가 가장 약하고, 조커로 시작하면 두 번째 카드가 따를 무늬를 정합니다. 2~10번째 트릭에서는 조커가 기루다를 이기며, 조커로 시작하는 사람이 따를 무늬를 부릅니다."
@@ -1484,7 +1496,7 @@ export function rulesContent(rules = DEFAULT_RULES, scoringVersion = TABLE_SCORI
     <p>${jokerTiming}</p>
     <p>${jokerCallFrom} 선이 클로버 3으로 조커콜을 선언할 수 있습니다. 조커를 가진 사람은 조커 또는 마이티를 내야 하며, 조커는 그 트릭에서 가장 약합니다. 클로버가 기루다일 때의 조커콜 카드는 스페이드 3입니다. 조커가 한 번 나오면 손패의 조커콜 표식이 사라지고 그 카드는 일반 3으로 냅니다.</p>
     <h3>점수 카드와 승패</h3><p>10, J, Q, K, A는 각각 1점으로, 한 판에는 총 20점이 있습니다. 가져간 점수 카드는 보드의 각자 자리 옆에 모읍니다. 주공은 처음부터 카드를 덮고, 프렌드는 정체가 밝혀지는 즉시 앞서 가져간 카드까지 모두 덮습니다. 열 번째 트릭이 끝났을 때 주공 팀의 점수가 공약 이상이면 주공 팀이 승리합니다.</p>
-    <p>${scoring} 배율을 모두 곱한 값이 여당 기준점수입니다. 프렌드는 그 점수 그대로, 주공은 2배, 야당은 각각 부호를 바꿔 정산합니다. 노프렌드 주공은 4배입니다.</p>
+    <p>${scoring} 배율을 모두 곱한 값이 여당 기준점수입니다. 프렌드가 있으면 주공은 두 몫, 프렌드는 한 몫을 정산합니다. 노프렌드면 주공 혼자 네 몫을 정산합니다. 야당은 각자 한 몫씩 반대 부호로 정산합니다.</p>
     <h3>생각 시간과 초읽기</h3><p>칩 대국과 무료 연습 모두 한 판에 각자 생각 시간 3분을 받습니다. 내 손패 장수 옆에서 내 남은 시간을, 다른 사람의 자리에서 그 사람의 남은 시간을 확인할 수 있습니다. 시간은 자기 차례에만 줄어듭니다. 3분을 다 쓰면 그 차례부터 매번 10초의 초읽기가 시작됩니다. 10초 안에 선택하지 않으면 AI가 그 차례만 대신합니다.</p>
   </div>`;
 }

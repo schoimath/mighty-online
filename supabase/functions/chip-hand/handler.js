@@ -1,6 +1,6 @@
 import {operateHand} from './hand.js';
 import {liveTrickPlayback} from './playback.js';
-import {settlements} from '../../../table-scoring.js';
+import {roundScoringVersion, settlements} from '../../../table-scoring.js';
 
 const headers = {'content-type':'application/json; charset=utf-8', 'cache-control':'no-store',
   'access-control-allow-origin':'*', 'access-control-allow-methods':'POST, OPTIONS',
@@ -36,7 +36,7 @@ export function repository(url, publicKey, serviceKey, bearer, send, lobbyEffect
       p_revision:row?.revision ?? null, p_state:row?.state ?? null}, true),
     save:row => {
       const round = row.state.round;
-      const deltas = round.result ? settlements(round.result, round.bid.suit) : null;
+      const deltas = round.result ? settlements(round.result, round.bid.suit, roundScoringVersion(round)) : null;
       return rpc('chips_update_hand', {p_hand:row.hand, p_revision:row.revision,
         p_state:row.state, p_deltas:deltas}, true);
     }

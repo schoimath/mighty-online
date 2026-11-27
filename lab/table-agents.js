@@ -1,8 +1,8 @@
-import agents from '../agent-kit/registry.js?v=1.1.20261127193934';
-import {checkAgent, runAgent} from '../agent-kit/protocol.js?v=1.1.20261127193934';
-import {withTableStrategy} from './table-strategy.js?v=1.1.20261127193934';
+import agents from '../agent-kit/registry.js?v=1.1.20261127195129';
+import {checkAgent, runAgent} from '../agent-kit/protocol.js?v=1.1.20261127195129';
+import {withTableStrategy} from './table-strategy.js?v=1.1.20261127195129';
 import {rngFor} from './game.js';
-import {contractSearchAction} from './contract-search.js';
+import {contractSearchAction} from './contract-search.js?v=1.1.20261127195129';
 import {replayBalancedMemory, balancedTurn} from './table-memory.js';
 
 export const DEFAULT_MODEL = 'contract_search';

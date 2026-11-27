@@ -1,6 +1,6 @@
 import {applyAction, baselinePlay, botDecision, DECK, getView, mighty, pointsIn, sortHand} from '../engine.js';
 import {selectDiscard} from '../bot-exchange.js';
-import {settlements} from '../table-scoring.js';
+import {settlements} from '../table-scoring.js?v=1.1.20261127195129';
 import {protectPartner} from './partnership-policy.js';
 import {searchAction} from './search-policy.js';
 
@@ -61,13 +61,13 @@ export function contractSearchAction(view, rng = Math.random) {
     if (!hands) continue;
     const results = new Map();
     for (const [suit, plan] of plans) results.set(suit, playContract(view, hands, plan));
-    const baseline = settlements(results.get(original.suit), original.suit)[view.seat];
+    const baseline = settlements(results.get(original.suit), original.suit, view.scoringVersion)[view.seat];
     for (const [i, contract] of candidates.entries()) {
       // The frozen follow-up policy makes exactly the same plays for different
       // target points in the same suit. Only the terminal settlement changes.
       const result = results.get(contract.suit);
       const outcome = {...result, target:contract.points, won:result.points >= contract.points};
-      const gain = settlements(outcome, contract.suit)[view.seat] - baseline;
+      const gain = settlements(outcome, contract.suit, view.scoringVersion)[view.seat] - baseline;
       gains[i].sum += gain;
       gains[i].squares += gain * gain;
     }

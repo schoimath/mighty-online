@@ -1,8 +1,8 @@
 import {botObservation, DEFAULT_RULES, legalPlays, validateRules} from './engine.js';
-import {applyAction, canDeclareSetting, createGame, getView, getSpectatorView, resolveSetting} from './table-deal.js';
+import {applyAction, canDeclareSetting, createGame, getTableBotObservation, getView, getSpectatorView, resolveSetting} from './table-deal.js';
 import {jokerWasPlayed, withJokerStatus} from './table-joker.js';
 import {shouldDeclareSetting} from './bot-setting.js';
-import {settlements, TABLE_SCORING_VERSION} from './table-scoring.js';
+import {roundScoringVersion, settlements, TABLE_SCORING_VERSION} from './table-scoring.js';
 import {HUMAN_TURN_MS, normalizeGameSpeed, THINKING_TIME_MS} from './table-timing.js';
 import {commonModelChoice, decideTableTurn, hasSeatMemory, isModelId, memoryForReplacement, modelsForChoice} from './lab/table-agents.js';
 
@@ -86,7 +86,7 @@ export class HostSession {
       const game = this.round;
       if (!this.chipHandId || game.seat !== -1 || game.selfRole !== 'spectator' ||
           game.hand?.length !== 0 || game.discarded?.length !== 0) return null;
-      const fields = ['phase','turn','dealNo','rules','counts','passed','bid','bidHistory','declarer','friendKnown',
+      const fields = ['phase','turn','dealNo','rules','scoringVersion','counts','passed','bid','bidHistory','declarer','friendKnown',
         'friend','call','trick','trickNo','lastTrick','result','scores','captured','misdealCount','settingAwaitingFriend',
         'settingPenaltyCards','jokerPlayed'];
       round = {seat:-1, selfRole:'spectator', hand:[], discarded:[],
@@ -613,7 +613,7 @@ export class HostSession {
     if (this.#practiceDeadline === null || Date.now() < this.#practiceDeadline) return false;
     const seat = this.round.turn;
     const modelId = this.botModels[seat];
-    const view = withJokerStatus(botObservation(this.round, seat));
+    const view = getTableBotObservation(this.round, seat);
     const memory = memoryForReplacement(modelId, this.#guestDecisions[seat]);
     const decision = decideTableTurn({modelId, view, memory});
     this.#applyTurn(seat, decision.action);
@@ -624,7 +624,7 @@ export class HostSession {
   botRequest(seed) {
     if (!this.botTurn) return null;
     const seat = this.round.turn, modelId = this.players[seat].modelId;
-    const request = {revision:this.revision, seed, modelId, view:withJokerStatus(botObservation(this.round, seat))};
+    const request = {revision:this.revision, seed, modelId, view:getTableBotObservation(this.round, seat)};
     if (hasSeatMemory(modelId)) request.memory = structuredClone(this.#botMemory[seat]);
     return request;
   }
@@ -671,7 +671,7 @@ export class HostSession {
 
   #recordResult() {
     if (this.round.result && this.#roundMembers) {
-      const changes = settlements(this.round.result, this.round.bid.suit);
+      const changes = settlements(this.round.result, this.round.bid.suit, roundScoringVersion(this.round));
       this.#lastSettlement.clear();
       this.#roundMembers.forEach((id, seat) => {
         const member = this.#members.get(id);
@@ -708,7 +708,7 @@ export class HostSession {
       });
     }
     members.sort((a, b) => (a.seat ?? BOT_NAMES.length) - (b.seat ?? BOT_NAMES.length));
-    const board = {scoringVersion: TABLE_SCORING_VERSION, rounds: this.#completedRounds,
+    const board = {scoringVersion: this.round ? roundScoringVersion(this.round) : TABLE_SCORING_VERSION, rounds: this.#completedRounds,
       roundLimit:this.#roundLimit, complete:this.#complete, members};
     if (this.round?.result && this.#dealtPlayers) board.panelMemberIds = this.#dealtPlayers.map(p => p.memberId);
     return board;

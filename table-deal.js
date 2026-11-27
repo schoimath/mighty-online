@@ -1,5 +1,6 @@
 import {applyAction as applyEngineAction, botObservation, createGame as deal, getView as project, pointsIn} from './engine.js';
 import {canDeclareSetting, finishSettingFriendTrick} from './table-setting.js';
+import {roundScoringVersion, TABLE_SCORING_VERSION} from './table-scoring.js';
 import {withJokerStatus} from './table-joker.js';
 
 export {canDeclareSetting, resolveSetting} from './table-setting.js';
@@ -17,19 +18,19 @@ function dealRandom(random) {
   };
 }
 
-function checkOpeningHands(state, random) {
+function checkOpeningHands(state, random, scoringVersion) {
   const {dealNo, firstSeat, rules} = state;
   let misdealCount = 0;
   while (state.hands.some(hand => pointsIn(hand) === 0)) {
     misdealCount++;
     state = deal({firstSeat, rules, random});
   }
-  return Object.assign(state, {dealNo, misdealCount});
+  return Object.assign(state, {dealNo, misdealCount, scoringVersion});
 }
 
 export function createGame(options = {}) {
   const random = dealRandom(options.random);
-  return checkOpeningHands(deal({...options, random}), random);
+  return checkOpeningHands(deal({...options, random}), random, TABLE_SCORING_VERSION);
 }
 
 function applySingleAction(state, seat, action, randomSource) {
@@ -44,7 +45,7 @@ function applySingleAction(state, seat, action, randomSource) {
   const next = {...state, passed: [...state.passed], bidHistory: [...state.bidHistory]};
   const random = dealRandom(randomSource);
   applyEngineAction(next, seat, action, random);
-  return Object.assign(state, next.dealNo !== state.dealNo ? checkOpeningHands(next, random) : next);
+  return Object.assign(state, next.dealNo !== state.dealNo ? checkOpeningHands(next, random, roundScoringVersion(state)) : next);
 }
 
 export function applyAction(state, seat, action, randomSource, history) {
@@ -59,7 +60,7 @@ export function applyAction(state, seat, action, randomSource, history) {
     if (history) history.push(...entries);
     return Object.assign(state, next);
   }
-  const observation = history && withJokerStatus(botObservation(state, seat));
+  const observation = history && getTableBotObservation(state, seat);
   const result = applySingleAction(state, seat, action, randomSource);
   if (observation && state.dealNo === observation.dealNo) {
     const entry = {observation};
@@ -67,6 +68,10 @@ export function applyAction(state, seat, action, randomSource, history) {
     history.push(entry);
   }
   return result;
+}
+
+export function getTableBotObservation(state, seat) {
+  return {...withJokerStatus(botObservation(state, seat)), scoringVersion:roundScoringVersion(state)};
 }
 
 export function getView(state, seat, settingAvailable = false) {
@@ -100,5 +105,5 @@ function withTableRules(state, view, settingAvailable = false) {
   if (state.result?.setting?.success === false) {
     view.settingPenaltyCards = state.settingOppositionPile.slice();
   }
-  return {...view, misdealCount: state.misdealCount ?? 0};
+  return {...view, misdealCount: state.misdealCount ?? 0, scoringVersion: roundScoringVersion(state)};
 }

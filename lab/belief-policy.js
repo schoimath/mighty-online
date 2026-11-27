@@ -1,4 +1,5 @@
 import {applyAction,botObservation} from '../engine.js';
+import {TABLE_SCORING_VERSION} from '../table-scoring.js';
 import {ruleAction} from './rules-agents.js';
 import {PARTNERSHIP_POLICY_VERSION,protectPartner} from './partnership-policy.js';
 import {rngFor} from './game.js';
@@ -32,6 +33,7 @@ function compareWorlds(v, actions, objective, n, {model,seed,continuation,reward
     const seeds=Array.from({length:5},()=>Math.floor(crn()*2**32));
     for(const [i,move] of actions.entries()) {
       const state=structuredClone(world.state);
+      state.scoringVersion=v.scoringVersion ?? TABLE_SCORING_VERSION;
       // Each branch gets independent memory copied from each seat's own sampled history.
       const actors=seeds.map((_,seat)=>prepareSeat(seat));
       const rngs=seeds.map(rngFor);

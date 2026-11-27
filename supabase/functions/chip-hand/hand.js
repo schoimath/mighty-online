@@ -1,8 +1,8 @@
-import {botObservation, validateRules} from '../../../engine.js';
-import {applyAction, canDeclareSetting, createGame, getSpectatorView, getView, resolveSetting} from '../../../table-deal.js';
+import {validateRules} from '../../../engine.js';
+import {applyAction, canDeclareSetting, createGame, getSpectatorView, getTableBotObservation, getView, resolveSetting} from '../../../table-deal.js';
 import {analyzeSetting} from '../../../table-claim.js';
 import {shouldDeclareSetting} from '../../../bot-setting.js';
-import {settlements} from '../../../table-scoring.js';
+import {roundScoringVersion, settlements} from '../../../table-scoring.js';
 import {handSeries} from '../../../table-series.js';
 import {jokerWasPlayed, withJokerStatus} from '../../../table-joker.js';
 import {decideTableTurn, hasSeatMemory, isModelId, memoryForReplacement} from '../../../lab/table-agents.js';
@@ -129,7 +129,7 @@ function present(row, id, now) {
   const publicGame = (id === row.host || seat < 0) ? withJokerStatus(getSpectatorView(round), seenJoker) : null;
   const game = seat >= 0 ? withJokerStatus(getView(round, seat, settingProof(round, seat)?.success), seenJoker) : publicGame;
   if (game.phase === 'discard' && seat === game.declarer) game.incomingCards = [...round.knownKitty];
-  const deltas = round.result ? settlements(round.result, round.bid.suit) : null;
+  const deltas = round.result ? settlements(round.result, round.bid.suit, roundScoringVersion(round)) : null;
   const deadline = turnDeadline(state);
   const thinkingDeadline = deadline !== null && state.thinkingTime?.[round.turn] > 0 ? deadline - HUMAN_TURN_MS : null;
   const showBanks = !round.result && state.thinkingTime;
@@ -203,7 +203,7 @@ function advanceDue(row, now, catchup) {
       s.soloPresenceUntil = null;
     }
     const assisted = !s.bots[seat];
-    const view = withJokerStatus(botObservation(s.round, seat));
+    const view = getTableBotObservation(s.round, seat);
     const memory = assisted ? memoryForReplacement(s.models[seat], s.history[seat]) : s.memory[seat];
     const next = !assisted && shouldDeclareSetting(view) && settingProof(s.round, seat)?.success
       ? {action:{type:'claim'}}

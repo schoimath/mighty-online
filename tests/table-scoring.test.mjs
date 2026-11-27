@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {settlementDetails, settlements} from '../table-scoring.js';
+import {LEGACY_TABLE_SCORING_VERSION, settlementDetails, settlements} from '../table-scoring.js';
 import {handOutcome, scoreTable} from '../score-ui.js';
 
 const round = (points, target = 15, friend = 1) => ({points, target, won:points >= target, declarer:0, friend});
@@ -42,10 +42,19 @@ test('a made contract earns a bid bonus and overtricks, a missed contract loses 
   assert.deepEqual(settlements(round(13, 13), 'H'), [0, 0, 0, 0, 0]);
 });
 
-test('run or backrun, no trump and no friend each double the stake exactly once', () => {
+test('a solo declarer settles with four opponents at the ordinary rate on wins and losses', () => {
+  assert.deepEqual(settlements(round(15,15,null), 'H'), [16, -4, -4, -4, -4]);
+  assert.deepEqual(settlements(round(14,15,null), 'H'), [-4, 1, 1, 1, 1]);
+  const solo = round(20,15,null);
+  assert.deepEqual(settlementDetails(solo,'N'), {base:9, bonuses:['런','노기루다'], multiplier:4, unit:36});
+  assert.deepEqual(settlements(solo,'N',LEGACY_TABLE_SCORING_VERSION), [288, -72, -72, -72, -72]);
+  assert.deepEqual(settlementDetails(solo,'N',LEGACY_TABLE_SCORING_VERSION).bonuses, ['런','노기루다','노프렌드']);
+});
+
+test('run or backrun and no trump each double the stake exactly once', () => {
   assert.deepEqual(settlements(round(20), 'H'), [36, 18, -18, -18, -18]);
-  assert.deepEqual(settlements(round(20, 15, null), 'N'), [288, -72, -72, -72, -72]);
-  assert.deepEqual(settlements(round(10, 15, null), 'N'), [-160, 40, 40, 40, 40]);
+  assert.deepEqual(settlements(round(20, 15, null), 'N'), [144, -36, -36, -36, -36]);
+  assert.deepEqual(settlements(round(10, 15, null), 'N'), [-80, 20, 20, 20, 20]);
   for (let target = 13; target <= 20; target++) for (let points = 0; points <= 20; points++) {
     for (const friend of [1, null]) for (const suit of ['H','N']) {
       assert.equal(settlements(round(points,target,friend),suit).reduce((a,b) => a+b, 0), 0);

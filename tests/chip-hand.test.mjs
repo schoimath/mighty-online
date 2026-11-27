@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {operateHand} from '../supabase/functions/chip-hand/hand.js';
-import {chipHandler} from '../supabase/functions/chip-hand/handler.js';
-import {settlements} from '../table-scoring.js';
+import {chipHandler, repository} from '../supabase/functions/chip-hand/handler.js';
+import {LEGACY_TABLE_SCORING_VERSION, roundScoringVersion, settlements, TABLE_SCORING_VERSION} from '../table-scoring.js';
 import {DECK, pointsIn, validateRules} from '../engine.js';
 import {createGame} from '../table-deal.js';
 import {botTurnDelay, tableDelay} from '../table-timing.js';
@@ -52,7 +52,8 @@ function table(initialRound) {
         if (row.revision === update.revision && !row.settled) {
           row = {...clone(update), revision:row.revision+1, settled:Boolean(update.state.round.result)};
           if (row.settled) {
-            const deltas = settlements(row.state.round.result, row.state.round.bid.suit);
+            const round = row.state.round;
+            const deltas = settlements(round.result, round.bid.suit, roundScoringVersion(round));
             row.seatBalances = row.seatBalances.map((balance,i) => balance === null ? null : balance + deltas[i]);
             charges++;
           }
@@ -257,6 +258,41 @@ test('server plays abandoned hands to completion and only its terminal deltas ar
   assert.equal(result.deltas.reduce((a,b)=>a+b,0),0);
   await t.call(null,'tick');
   assert.equal(t.charges(),1);
+});
+
+test('finishing, retrying and rereading a no-friend chip hand use the scoring rules of its original deal', async () => {
+  for (const legacy of [true,false]) {
+    const round = createGame();
+    if (legacy) delete round.scoringVersion;
+    Object.assign(round, {phase:'play', turn:0, declarer:0, bid:{seat:0,suit:'H',points:15},
+      call:{kind:'none'}, friendKnown:true, trickNo:10, scores:[15,5,0,0,0], hands:[['H9'],[],[],[],[]],
+      trick:['H3','H4','H5','H6'].map((card,i) => ({seat:i+1,card}))});
+    const t = table(round);
+    for (const id of [host,guest]) await t.call(id,'ready',game);
+    const opening = await t.call(host,'start',game);
+    const expectedVersion = legacy ? LEGACY_TABLE_SCORING_VERSION : TABLE_SCORING_VERSION;
+    const deltas = legacy ? [32,-8,-8,-8,-8] : [16,-4,-4,-4,-4];
+    assert.equal(opening.game.scoringVersion,expectedVersion);
+    const attempt = {revision:opening.revision, action:{type:'play', card:'H9'}};
+    const finished = await t.call(host,'act',attempt);
+    assert.equal(finished.game.result.points,15);
+    assert.deepEqual(finished.deltas,deltas);
+    assert.deepEqual(finished.seatBalances,[120+deltas[0],300+deltas[1],null,null,null]);
+    assert.equal((await t.call(guest,'view')).myDelta,deltas[1]);
+    assert.deepEqual((await t.call(host,'act',attempt)).deltas,deltas);
+    const watch = await t.call(null,'watch');
+    assert.equal(watch.game.scoringVersion,expectedVersion);
+    assert.deepEqual(watch.deltas,deltas);
+    assert.equal(t.charges(),1);
+
+    // Verify the real adapter sends the same amounts to the chip ledger.
+    const db = repository('https://example.invalid','public','service',null,async (url,options) => {
+      assert.ok(url.endsWith('/rpc/chips_update_hand'));
+      assert.deepEqual(JSON.parse(options.body).p_deltas,deltas);
+      return Response.json({});
+    });
+    await db.save(t.row());
+  }
 });
 
 test('a spectating host starts only with separate host and actual player consent', async () => {

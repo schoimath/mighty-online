@@ -7,9 +7,31 @@ import {rngFor} from '../lab/game.js';
 import {MODEL_CATALOG, decideTableTurn} from '../lab/table-agents.js';
 import {contractSearchAction} from '../lab/contract-search.js';
 import { HostSession } from '../session.js';
-import {settlements} from '../table-scoring.js';
+import {settlements, TABLE_SCORING_VERSION, LEGACY_TABLE_SCORING_VERSION} from '../table-scoring.js';
+import {createGame, getSpectatorView} from '../table-deal.js';
 
 const guests = ['conn-amber', 'conn-blue', 'conn-coral', 'conn-denim'];
+
+test('room handoff keeps the hand’s no-friend rule and settles its scoreboard once', () => {
+  for (const [version, gain] of [[undefined, 32], [TABLE_SCORING_VERSION, 16]]) {
+    const original = new HostSession('주공');
+    const publicGame = getSpectatorView(createGame());
+    if (version === undefined) delete publicGame.scoringVersion; // Existing server or saved hand.
+    const packet = {handId:crypto.randomUUID(),revision:0,publicGame,bots:[false,true,true,true,true]};
+    original.startChipHand(packet);
+    const checkpoint = original.handoffState();
+    assert.equal(checkpoint.round.scoringVersion, version);
+    const room = HostSession.restore(checkpoint);
+    const finish = {...packet,revision:1,publicGame:{...checkpoint.round,phase:'result',turn:null,
+      bid:{seat:0,points:15,suit:'H'},declarer:0,friend:null,friendKnown:true,
+      result:{won:true,points:15,target:15,declarer:0,friend:null}}};
+    assert.equal(room.syncChipHand(finish),true);
+    assert.equal(room.syncChipHand(finish),false);
+    const board = room.hostView().scoreboard;
+    assert.equal(board.scoringVersion,version ?? LEGACY_TABLE_SCORING_VERSION);
+    assert.deepEqual(board.members.map(m=>m.lastDelta),[gain,-gain/4,-gain/4,-gain/4,-gain/4]);
+  }
+});
 
 function fullRoom() {
   const session = new HostSession('방장');

@@ -95,7 +95,7 @@ test('a certified opening sweep makes a first-trick declarer play alone', () => 
   assert.equal(g.result.friend,null);
   assert.deepEqual(g.result.setting,{...verdict,remainingTricks:10,remainingPoints:19});
   assert.deepEqual(g.playedTricks,[]);
-  assert.deepEqual(settlements(g.result,'N'),[256,-64,-64,-64,-64]);
+  assert.deepEqual(settlements(g.result,'N'),[128,-32,-32,-32,-32]);
 });
 
 for (const [opening, friend] of [

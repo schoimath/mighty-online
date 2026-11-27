@@ -1,4 +1,4 @@
-import {clearGame, renderGame, rulesContent, updateGameClocks, updateGamePace, updateSeatBalances} from './game-ui.js';
+import {clearGame, displayedScoringVersion, renderGame, rulesContent, updateGameClocks, updateGamePace, updateSeatBalances} from './game-ui.js';
 import {botTurnDelay, normalizeGameSpeed, paceMultiplier} from './table-timing.js';
 import {createNextRoundTimer} from './next-round.js';
 import {handSeries, seriesFromBoard} from './table-series.js';
@@ -715,7 +715,8 @@ function seriesSummary(board) {
 function showRules() {
   const rules = activeRules();
   const board = snapshot?.scoreboard;
-  const scoringVersion = snapshot ? board?.scoringVersion ?? (board ? 'contract-flat-v1' : 'ten-base-v1') : undefined;
+  const remote = chipReader?.handId === snapshot?.chipHandId ? chipReader?.current?.game : null;
+  const scoringVersion = snapshot ? displayedScoringVersion(remote ?? snapshot.game, board, Boolean(snapshot.chipHandId)) : undefined;
   modal('게임 규칙', '<div class="rules-wrap">' + rulesSummary(rules) + modelSummary(snapshot) + rulesContent(rules, scoringVersion) + '</div>');
 }
 $('nav-rules').onclick = showRules;

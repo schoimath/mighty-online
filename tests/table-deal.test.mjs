@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {createGame as rawDeal, DECK, getView as rawView, pointsIn} from '../engine.js';
 import {rngFor} from '../lab/game.js';
-import {applyAction, createGame, getSpectatorView, getView} from '../table-deal.js';
+import {applyAction, createGame, getSpectatorView, getTableBotObservation, getView} from '../table-deal.js';
+import {LEGACY_TABLE_SCORING_VERSION, TABLE_SCORING_VERSION} from '../table-scoring.js';
 
 function pass(game, random) {
   applyAction(game, game.turn, {type: 'pass'}, random);
@@ -30,6 +31,7 @@ test('preparing the contract, burial and friend matches legacy turns and preserv
     assert.deepEqual(combined, legacy);
     assert.deepEqual(combinedHistory, legacyHistory);
     const [burial, call] = combinedHistory;
+    assert.equal(burial.observation.scoringVersion, TABLE_SCORING_VERSION);
     assert.equal(burial.observation.phase, 'discard');
     assert.deepEqual(burial.action.contract, {seat:0,...contract});
     assert.equal(call.observation.phase, 'friend');
@@ -79,8 +81,9 @@ test('all five original ten-card hands must contain a point; joker alone cannot 
     assert.deepEqual(live.hands, expected.hands);
     assert.deepEqual(live.kitty, expected.kitty);
     for (let viewer = 0; viewer < 5; viewer++) {
-      const {misdealCount, ...visible} = getView(live, viewer);
+      const {misdealCount, scoringVersion, ...visible} = getView(live, viewer);
       assert.equal(misdealCount, discarded);
+      assert.equal(scoringVersion, TABLE_SCORING_VERSION);
       assert.deepEqual(visible, rawView(live, viewer));
     }
   }
@@ -107,6 +110,7 @@ test('an all-pass auction checks the next deal and rotates the opening seat exac
   assert.equal(game.firstSeat, 0);
   assert.equal(game.turn, 0);
   assert.ok(game.misdealCount > 0);
+  assert.equal(game.scoringVersion, TABLE_SCORING_VERSION);
   assert.ok(game.hands.every(hand => pointsIn(hand) >= 1));
   assert.equal(game.rules.minBid, 16);
   assert.equal(game.rules.allowLastJoker, true);
@@ -115,6 +119,19 @@ test('an all-pass auction checks the next deal and rotates the opening seat exac
   assert.equal(game.misdealCount, 0);
   assert.equal(game.dealNo, 3);
   assert.equal(game.turn, 1);
+});
+
+test('restored unversioned hands keep their original scoring even after a forced redeal', () => {
+  const random = rngFor(67);
+  const restored = createGame({firstSeat:4, random});
+  delete restored.scoringVersion;
+  assert.equal(getView(restored,0).scoringVersion, LEGACY_TABLE_SCORING_VERSION);
+  assert.equal(getSpectatorView(restored).scoringVersion, LEGACY_TABLE_SCORING_VERSION);
+  assert.equal(getTableBotObservation(restored,0).scoringVersion, LEGACY_TABLE_SCORING_VERSION);
+  for (let n = 0; n < 5; n++) pass(restored, random);
+  assert.ok(restored.misdealCount > 0);
+  assert.equal(restored.scoringVersion, LEGACY_TABLE_SCORING_VERSION);
+  assert.equal(getSpectatorView(createGame({random})).scoringVersion, TABLE_SCORING_VERSION);
 });
 
 test('a broken random source cannot loop forever or partially commit the final pass', () => {

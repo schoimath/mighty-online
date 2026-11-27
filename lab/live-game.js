@@ -1,12 +1,12 @@
-import {botObservation, DEFAULT_RULES} from '../engine.js';
-import {applyAction, createGame} from '../table-deal.js';
-import {settlements} from '../table-scoring.js';
+import {DEFAULT_RULES} from '../engine.js';
+import {applyAction, createGame, getTableBotObservation} from '../table-deal.js';
+import {roundScoringVersion, settlements} from '../table-scoring.js';
 import {rngFor} from './game.js';
 
 export function liveOutcomes(state) {
   if (!state.result) throw new Error('Terminal returns require a finished game.');
   const {won, declarer, friend} = state.result;
-  return settlements(state.result, state.bid.suit).map((settlement, seat) => {
+  return settlements(state.result, state.bid.suit, roundScoringVersion(state)).map((settlement, seat) => {
     const attacker = seat === declarer || seat === friend;
     const role = seat === declarer ? (friend == null ? 'solo' : 'declarer')
       : seat === friend ? 'friend' : 'opposition';
@@ -64,8 +64,8 @@ export function createLiveEnv({seed, firstSeat = 0, rules = DEFAULT_RULES}) {
   reset();
   return {
     reset,
-    observe: seat => botObservation(state, seat),
-    legalActions: seat => legalActionsFromObservation(botObservation(state, seat)),
+    observe: seat => getTableBotObservation(state, seat),
+    legalActions: seat => legalActionsFromObservation(getTableBotObservation(state, seat)),
     step(action) {
       const oldDeal = state.dealNo;
       applyAction(state, state.turn, action, random);

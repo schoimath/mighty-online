@@ -60,7 +60,7 @@ test('the highest outside trump is a reachable fallback when side aces are dead 
   step({type:'play',card:'S2'});
 });
 
-test('a proven solo sweep with all three controls keeps the no-friend multiplier', () => {
+test('a proven solo sweep with all three controls chooses no friend', () => {
   const state = createGame({random:rngFor(234)});
   declareAndBury(state, 'H');
   const hand = ['SA','HA','HK','HQ','HJ','H10','H9','H8','H7','JK'];
