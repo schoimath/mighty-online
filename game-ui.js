@@ -1,11 +1,12 @@
 import {handOutcome, isCoveredSeat, scoreTable, seatPile, seatStanding, settingPenaltyPile, signedScore} from "./score-ui.js";
-import {DECK, DEFAULT_RULES, leadSuit, mighty} from "./engine.js";
+import {DECK, DEFAULT_RULES, leadSuit, mighty, pointsIn} from "./engine.js";
 import {VERSION} from "./release.js";
 import {jokerWasPlayed, withJokerStatus} from "./table-joker.js";
 import {playTableSound, soundControl, toggleSound} from "./sound.js";
 import {AUCTION_BEAT_MS, FRIEND_ANNOUNCEMENT_MS, normalizeGameSpeed, paceMultiplier, tableDelay} from "./table-timing.js";
 import {settlementDetails, settlements, TABLE_SCORING_VERSION} from "./table-scoring.js";
 import {settlements as archivedSettlements} from "./lab/scoring.js";
+import {intermediatePlayView, nextTablePlay, rememberCompletedTricks, sweptTrickView} from "./table-playback.js";
 
 const suitInfo = {
   S: ["♠", "스페이드"], H: ["♥", "하트"], D: ["♦", "다이아몬드"],
@@ -181,7 +182,8 @@ export function updateSeatBalances(container, seatBalances) {
   const ui = cache.get(container);
   if (!ui?.options) return;
   ui.options = {...ui.options, seatBalances};
-  if (ui.resolving && ui.latest.phase === 'result') return;
+  if (holdingSettlement(ui)) return;
+  if (ui.latest?.phase !== 'result') ui.preResultBalances = seatBalances;
   for (const badge of container.querySelectorAll('[data-chip-seat]')) {
     const text = balanceText(seatBalances?.[Number(badge.dataset.chipSeat)]);
     if (badge.lastElementChild.textContent !== text) badge.lastElementChild.textContent = text;
@@ -193,10 +195,20 @@ function nameAtSeat(ui, seat) {
   return String(ui.options.names?.[seat] ?? ((seat + 1) + "번 플레이어"));
 }
 
+function holdingSettlement(ui) {
+  // The lobby can publish standings before the private hand receipt arrives.
+  return ui.view?.phase === "play" && (ui.latest?.phase === "result" || Boolean(ui.options.scoreboard?.panelMemberIds));
+}
+
+function visibleScoreboard(ui) {
+  return holdingSettlement(ui) ? ui.preResultBoard ?? ui.options.scoreboard : ui.options.scoreboard;
+}
+
 function seatMarkup(ui, nameAt) {
   const {view, options, resolving} = ui;
-  const beforeSettlement = resolving && ui.latest.phase === "result";
-  const balances = beforeSettlement ? resolving.previousBalances : options.seatBalances;
+  const beforeSettlement = holdingSettlement(ui);
+  const balances = beforeSettlement ? ui.preResultBalances : options.seatBalances;
+  const board = visibleScoreboard(ui);
   return Array.from({ length: 5 }, (_, offset) => {
     const seat = (Math.max(0, view.seat) + offset) % 5, name = nameAt(seat);
     const model = options.modelLabels?.[seat];
@@ -208,7 +220,7 @@ function seatMarkup(ui, nameAt) {
     const status = [isTurn ? "차례" : "", details].filter(Boolean).join(" · ");
     const leader = inAuction && view.bid?.seat === seat;
     const avatar = inAuction ? seat + 1 : Array.from(name.trim().replace(/^AI\s+/i, ""))[0] || "♠";
-    const standing = seatStanding(options.scoreboard, seat, beforeSettlement);
+    const standing = seatStanding(board, seat, beforeSettlement && !ui.preResultBoard);
     const balance = balanceText(balances?.[seat]);
     const chips = `<span class="g-seat-balance" data-chip-seat="${seat}"${balance ? '' : ' hidden'}><span class="visually-hidden">보유 칩 </span><span>${balance}</span></span>`;
     const header = `<span class="g-avatar g-avatar-${seat}" aria-label="${seat + 1}번 자리">${escapeHtml(avatar)}</span><span class="g-seat-tag"><span class="g-seat-identity"><span class="g-seat-name">${escapeHtml(name)}${seat === view.seat ? '<small>나</small>' : ""}</span>${standing}</span>${chips}<span class="g-seat-detail">${isTurn ? '<i></i>' : ""}${status}</span></span>`;
@@ -831,7 +843,7 @@ function bidHistoryMarkup(view, nameAt) {
 function renderRecords(ui) {
   const {view, options, root} = ui;
   const nameAt = seat => nameAtSeat(ui, seat);
-  const markup = previousTrick(view, nameAt) + bidHistoryMarkup(view, nameAt) + scoreTable(options.scoreboard, options.settlementSeat ?? view.seat);
+  const markup = previousTrick(view, nameAt) + bidHistoryMarkup(view, nameAt) + scoreTable(visibleScoreboard(ui), options.settlementSeat ?? view.seat);
   if (markup === ui.recordsHtml) return;
   root.querySelector(".g-records-body").innerHTML = markup || "<p>아직 기록된 입찰이나 트릭이 없습니다.</p>";
   ui.recordsHtml = markup;
@@ -968,14 +980,14 @@ function redraw(ui, newDeal = false) {
   const nameAt = seat => nameAtSeat(ui, seat);
   const focused = root.contains(document.activeElement) ? document.activeElement : null;
   const oldFocus = focused && ["card", "field", "do"].map(attr => [attr, focused.dataset[attr]]).find(([, value]) => value != null);
-  const board = options.scoreboard;
+  const board = visibleScoreboard(ui);
   const finished = view.phase === "result" && board?.complete;
   root.querySelector("h1").textContent = finished ? `${board.rounds}판 경기 종료`
     : view.phase === "play" ? `${view.trickNo}번째 트릭` : combined ? "주공 준비" : labels[view.phase];
   const progress = root.querySelector(".g-match-progress");
   progress.hidden = !board?.roundLimit || finished;
   if (!progress.hidden) {
-    const settled = view.phase === "result" || (ui.resolving && ui.latest.phase === "result");
+    const settled = view.phase === "result" || (holdingSettlement(ui) && !ui.preResultBoard);
     const current = board.rounds + (settled ? 0 : 1);
     progress.textContent = `${current} / ${board.roundLimit}판`;
     progress.setAttribute("aria-label", `총 ${board.roundLimit}판 중 ${current}번째 판`);
@@ -1200,8 +1212,51 @@ function displayLatest(ui) {
 }
 
 function finishCollection(ui) {
+  ui.timer = null;
+  if (ui.completedTricks) {
+    ui.completedTricks.delete(ui.resolving.number);
+    ui.view = sweptTrickView(ui.view,ui.resolving.winner);
+  }
   ui.resolving = null;
-  displayLatest(ui);
+  if (ui.completedTricks) displayChipPlays(ui);
+  else displayLatest(ui);
+}
+
+function displayChipPlays(ui) {
+  if (ui.timer || ui.resolving) return;
+  const step = nextTablePlay(ui.view, ui.latest, ui.completedTricks);
+  if (!step || document.hidden) { displayLatest(ui); return; }
+  const now = performance.now();
+  const gap = tableDelay(step.behind > 0 ? 170 : 240, ui.options.pace);
+  const remaining = (ui.playShownAt ?? -Infinity) + gap - now;
+  if (remaining > 1) {
+    // A newer authoritative frame has arrived, so the held frame must never
+    // submit a decision (even if its player is also next in the new trick).
+    if (ui.view.turn !== null) {
+      ui.view = {...ui.view, turn:null};
+      redraw(ui);
+    }
+    ui.timer = setTimeout(() => { ui.timer = null; displayChipPlays(ui); }, remaining);
+    return;
+  }
+  ui.playShownAt = now;
+  if (step.live) { displayLatest(ui); return; }
+  ui.view = intermediatePlayView(ui.view, ui.latest, step);
+  const completed = Number.isInteger(step.winner);
+  if (completed && !ui.latest.result?.setting) {
+    const points = pointsIn(step.trick.map(play => play.card));
+    ui.resolving = {number:step.number, winner:step.winner, points};
+  }
+  updateDefaults(ui, ui.view);
+  redraw(ui);
+  // Let the five cards and their winner remain legible before sweeping. Catch
+  // up more quickly when the rest of the table is already on another trick.
+  if (ui.resolving) {
+    const longerHold = step.behind <= 1 && !ui.latest.trick.length;
+    ui.timer = setTimeout(() => collectTrick(ui), tableDelay(longerHold ? TRICK_HOLD_MS : 500, ui.options.pace));
+  } else {
+    ui.timer = setTimeout(() => { ui.timer = null; displayChipPlays(ui); }, gap);
+  }
 }
 
 function collectTrick(ui) {
@@ -1234,6 +1289,9 @@ export function clearGame(container) {
   clearTimeout(ui.friendTimer);
   clearTimeout(ui.countdownTimer);
   clearTimeout(ui.turnTimer);
+  if (ui.onVisibility) document.removeEventListener('visibilitychange', ui.onVisibility);
+  ui.completedTricks = ui.playbackHandId = ui.playShownAt = ui.timer = null;
+  ui.preResultBoard = ui.preResultBalances = null;
   ui.decisionObserver?.disconnect();
   phoneLayout.removeEventListener("change", ui.onPhoneLayout);
   ui.auctionTimer = null;
@@ -1264,7 +1322,33 @@ export function renderGame(container, publicView, options = {}) {
     mountTable(container);
     phoneLayout.addEventListener("change", ui.onPhoneLayout);
     ui.auctionMarkup = ui.centerMarkup = ui.settingsHtml = ui.finalHtml = ui.recordsHtml = ui.resultHtml = null;
+    ui.onVisibility = () => {
+      if (!document.hidden || !ui.completedTricks) return;
+      clearTimeout(ui.timer);
+      ui.timer = ui.resolving = ui.playShownAt = null;
+      ui.completedTricks.clear();
+      ui.skipPlayHistory = true;
+      if (ui.latest && ['play','result'].includes(ui.latest.phase)) displayLatest(ui);
+    };
+    document.addEventListener('visibilitychange', ui.onVisibility);
   }
+  const previous = ui.latest;
+  if (ui.playbackHandId !== options.playbackHandId) ui.preResultBoard = ui.preResultBalances = null;
+  const sameVisit = options.playbackHandId && options.playbackHandId === ui.playbackHandId &&
+    previous?.dealNo === publicView.dealNo && previous.seat === publicView.seat;
+  const replay = sameVisit && !document.hidden && !ui.skipPlayHistory &&
+    ui.view?.phase === 'play' && ['play','result'].includes(publicView.phase);
+  if (!sameVisit || document.hidden || ui.skipPlayHistory) {
+    if (ui.completedTricks || options.playbackHandId) {
+      clearTimeout(ui.timer);
+      ui.timer = ui.resolving = ui.playShownAt = null;
+      ui.completedTricks = options.playbackHandId ? new Map() : null;
+    }
+    ui.playbackHandId = options.playbackHandId;
+    ui.skipPlayHistory = document.hidden;
+  }
+  if (replay) rememberCompletedTricks(ui.completedTricks, publicView, previous, options.recentTricks,
+    ui.view.trickNo + Number(ui.view.trick.length === 5));
   publicView = withRememberedJoker(publicView, ui.latest);
   if (ui.latest && !hasSettingDeclaration(ui.latest) && hasSettingDeclaration(publicView)) {
     playTableSound("setting");
@@ -1280,10 +1364,22 @@ export function renderGame(container, publicView, options = {}) {
     if (!canStillPlay) ui.playPending = null;
   }
   ui.claimSubmitting = false;
-  const previousBalances = ui.options?.seatBalances;
+  if (publicView.phase !== "result") {
+    if (options.seatBalances) ui.preResultBalances = options.seatBalances;
+    if (options.scoreboard && !options.scoreboard.panelMemberIds) ui.preResultBoard = options.scoreboard;
+  }
   ui.options = options;
   paintPace(ui);
   paintAutoPlay(ui);
+  if (replay) {
+    displayChipPlays(ui);
+    return;
+  }
+  // The first frame (or a changed seat, deal or resumed tab) starts live.
+  if (options.playbackHandId && ['play','result'].includes(publicView.phase) && !ui.auctionTimer) {
+    displayLatest(ui);
+    return;
+  }
   // A failed opening claim may play one trick solely to identify the friend.
   // Its point cards are awarded by the claim, not to that trick's winner.
   if (publicView.phase === "result" && publicView.result.setting) {
@@ -1312,7 +1408,7 @@ export function renderGame(container, publicView, options = {}) {
     const cards = last.cards.length === 5 ? last.cards : last.finalPlay && shown.length === 4
       ? [...shown, last.finalPlay] : null;
     if (!cards) { displayLatest(ui); return; }
-    ui.resolving = {...last, previousBalances};
+    ui.resolving = last;
     ui.view = {...publicView, phase: "play", trickNo: last.number, trick: cards, turn: null};
     updateDefaults(ui, ui.view);
     redraw(ui);

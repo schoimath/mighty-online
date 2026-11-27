@@ -266,7 +266,10 @@ function trackChipHand(handId, initial = null, hintRevision) {
     }
     if (mode === 'host' && authority.syncChipHand(data)) publish();
     else draw();
-  }, error => toast(error.message), initial);
+  }, error => toast(error.message), initial, {
+    publicTable:() => mode === 'public',
+    isVisible:() => !document.hidden
+  });
   chipReader = reader;
   reader.start();
 }
@@ -1230,6 +1233,7 @@ function draw() {
   const mayChange = !snapshot.scoreboard?.complete && (mode === 'practice' || (host && remote) ||
     (mode === 'resume' && remote?.publicGame && !remote.game.result));
   renderGame($('game'),remote?.game ?? snapshot.game,{
+    playbackHandId:remote?.handId ?? snapshot.chipHandId, recentTricks:remote?.recentTricks,
     names:remote?.names ?? snapshot.players.map(p => p?.name), isHost:host, scoreboard:snapshot.scoreboard,
     seatBalances:mode === 'practice' ? practiceSeatBalances(accountClient.state) : remote?.seatBalances,
     chipDelta:remote?.myDelta, handDeltas:remote?.deltas, settlementSeat:remote?.mySettlementSeat, resumed:serverOnly,

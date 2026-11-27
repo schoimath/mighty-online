@@ -110,14 +110,18 @@ function cardHasLeft(first, next, card) {
   return last?.number === first.game.trickNo && Boolean(last?.cards?.some(matches) || matches(last?.finalPlay));
 }
 
-export function followChipHand(request, handId, op, onState, onError, initial) {
+export function followChipHand(request, handId, op, onState, onError, initial, {publicTable, isVisible} = {}) {
   let current = null, closed = false, timer, busy = false, writing = null, submitting = false, changingPace = false, failures = 0;
   let wakeRevision = -1, wakeAfterRead = false;
   let requestOrder = 0, acceptedOrder = 0;
   let clockOffset = null;
+  let playCursor = null, turnObservedAt = 0;
   function accept(data, order) {
     if (closed || data.handId !== handId || !data.game || (current && data.revision < current.revision)) return;
     if (current && data.revision === current.revision && order < acceptedOrder) return;
+    // An unchanged turn can last longer than a cursor's lifetime. Keep the
+    // renewed proof for the next read without repainting the current turn.
+    playCursor = typeof data.playCursor === 'string' ? data.playCursor : null;
     if (Number.isFinite(data.serverNow)) {
       // A delayed response should never give a player extra time on the clock.
       const offset = Date.now() - data.serverNow;
@@ -136,6 +140,10 @@ export function followChipHand(request, handId, op, onState, onError, initial) {
     }
     acceptedOrder = order;
     const settingsOnly = sameDecisionAfterUpdate(current, data);
+    if (!current || current.game.phase !== data.game.phase || current.game.turn !== data.game.turn ||
+        current.game.trickNo !== data.game.trickNo || current.game.dealNo !== data.game.dealNo) {
+      turnObservedAt = Date.now();
+    }
     current = data;
     onState(data, false, settingsOnly);
   }
@@ -147,8 +155,23 @@ export function followChipHand(request, handId, op, onState, onError, initial) {
     if (busy || writing || closed) return;
     const due = current?.dueAt;
     const remaining = due + (clockOffset ?? 0) - Date.now();
-    const minimumWait = current?.turnDeadline === due && remaining > 0 ? 0 : tableDelay(450, current?.pace);
-    const delay = Number.isFinite(due) ? Math.min(3200, Math.max(minimumWait, remaining + 50)) : 2600;
+    let minimumWait = current?.turnDeadline === due && remaining > 0 ? 0 : tableDelay(450, current?.pace);
+    let maximumWait = 3200;
+    if (current?.game.phase === 'play' && publicTable?.() && isVisible?.()) {
+      const turn = current.game.turn;
+      if (current.bots?.[turn] === true) {
+        // A slow response may already have consumed most of the delay to
+        // the next bot. Read close to its scheduled turn in that case.
+        minimumWait = 120;
+      } else if (current.bots?.[turn] === false && current.seat !== turn) {
+        // The server table has no peer wake-up for another person's click.
+        // Follow quick plays closely, then ease off while someone is thinking.
+        const thinking = Date.now() - turnObservedAt;
+        if (thinking < 4000) maximumWait = 800;
+        else if (thinking < 10000) maximumWait = 1600;
+      }
+    }
+    const delay = Number.isFinite(due) ? Math.min(maximumWait, Math.max(minimumWait, remaining + 50)) : Math.min(maximumWait,2600);
     if (failures) schedule(Math.min(12000, 2000 * failures));
     else if (wakeAfterRead || wakeRevision > (current?.revision ?? -1)) schedule(0);
     else schedule(delay);
@@ -160,7 +183,7 @@ export function followChipHand(request, handId, op, onState, onError, initial) {
     wakeRevision = -1;
     const order = ++requestOrder;
     try {
-      accept(await request({op, handId}), order);
+      accept(await request(withCursor({op, handId})), order);
       failures = 0;
     } catch (error) {
       if (!closed && !failures++) onError(error);
@@ -168,6 +191,9 @@ export function followChipHand(request, handId, op, onState, onError, initial) {
       busy = false;
       scheduleNext();
     }
+  }
+  function withCursor(payload) {
+    return playCursor ? {...payload, playCursor} : payload;
   }
   // Table setting edits and card plays from one browser must use successive server revisions.
   function write(operation) {
@@ -182,7 +208,7 @@ export function followChipHand(request, handId, op, onState, onError, initial) {
   }
   async function send(payload) {
     const order = ++requestOrder;
-    const data = await request({...payload, handId});
+    const data = await request(withCursor({...payload, handId}));
     accept(data, order);
     return data;
   }

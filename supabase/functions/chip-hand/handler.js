@@ -1,4 +1,5 @@
 import {operateHand} from './hand.js';
+import {liveTrickPlayback} from './playback.js';
 import {settlements} from '../../../table-scoring.js';
 
 const headers = {'content-type':'application/json; charset=utf-8', 'cache-control':'no-store',
@@ -45,6 +46,7 @@ export function repository(url, publicKey, serviceKey, bearer, send, lobbyEffect
 // Auth's verified identity is the only path to a private seat. The service key
 // only travels to this deployment's own PostgREST endpoint.
 export function chipHandler({url, publicKey, serviceKey, send = fetch}) {
+  const playback = liveTrickPlayback(serviceKey);
   return async request => {
     if (request.method === 'OPTIONS') return new Response(null, {status:204, headers});
     if (request.method !== 'POST') return json({error:'POST 요청을 사용해 주세요.'}, 405);
@@ -70,7 +72,7 @@ export function chipHandler({url, publicKey, serviceKey, send = fetch}) {
         id = user.id;
       }
       const db = repository(url, publicKey, serviceKey, bearer, send);
-      return json(await operateHand(payload, id, db));
+      return json(await operateHand(payload, id, db, Date.now(), playback));
     } catch (error) {
       if (error.status) return json({error:error.message, ...(error.code ? {code:error.code} : {})}, error.status);
       // Validation errors from the shared Korean-language game rules.

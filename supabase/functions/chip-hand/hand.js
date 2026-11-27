@@ -235,7 +235,7 @@ async function changeTableSetting(row, input, save, now) {
   }
 }
 
-async function controlHand(input, id, db, hand, now) {
+async function controlHand(input, id, db, hand, now, show) {
   const legacy = input.op === 'pace' || input.op === 'auto-play';
   if (!legacy) check(typeof input.credential === 'string' && /^[0-9a-f]{64}$/.test(input.credential) &&
     Number.isSafeInteger(input.term) && input.term>0, '방장 권한을 확인해 주세요.', 403);
@@ -245,7 +245,7 @@ async function controlHand(input, id, db, hand, now) {
   check(context?.hand, '해당 판을 찾을 수 없습니다.', 404);
   if (input.op !== 'room-takeover') {
     const row = await changeTableSetting(context.hand, input, save, now);
-    const receipt = present(row, legacy ? id : null, now);
+    const receipt = await show(row, legacy ? id : null);
     return legacy ? receipt : {...receipt, publicGame:receipt.game};
   }
   for (let retry = 0; !context.hand.state.round.result; retry++) {
@@ -260,13 +260,13 @@ async function controlHand(input, id, db, hand, now) {
     if (leaving.includes(row.state.round.turn) || (timed && !usesTurnClock(row.state))) scheduleTurn(row.state, now);
     context = await save(row);
   }
-  const receipt = present(context.hand, null, now);
+  const receipt = await show(context.hand, null);
   return {...receipt, publicGame:receipt.game};
 }
 
 // All persistence goes through trusted, transactional RPCs. The original
 // account roster is immutable even after a seat's bot flag changes.
-export async function operateHand(input, accountId, db, now = Date.now()) {
+export async function operateHand(input, accountId, db, now = Date.now(), playback) {
   check(input && typeof input === 'object' && !Array.isArray(input), '요청을 확인해 주세요.');
   const {op} = input;
   const roomControl = op === 'room-takeover' || op === 'room-pace' || op === 'room-auto-play';
@@ -277,7 +277,11 @@ export async function operateHand(input, accountId, db, now = Date.now()) {
   if (op === 'active') return {handId:await db.active()};
   check(uuid(input.handId), '판 번호가 올바르지 않습니다.');
   const hand = input.handId.toLowerCase();
-  if (roomControl || op === 'pace' || op === 'auto-play') return controlHand(input, id, db, hand, now);
+  function show(row, viewer) {
+    const receipt = present(row, viewer, now);
+    return playback ? playback(receipt, row.state.round, input.playCursor) : receipt;
+  }
+  if (roomControl || op === 'pace' || op === 'auto-play') return controlHand(input, id, db, hand, now, show);
   if (op === 'ready' || op === 'start') {
     const spec = manifestOf(input);
     const hash = await hashManifest(spec);
@@ -288,7 +292,7 @@ export async function operateHand(input, accountId, db, now = Date.now()) {
       return {ready:true, seat};
     }
     check(id === spec.host, '방장만 판을 시작할 수 있습니다.', 403);
-    return present(await startHand(db, hand, spec, hash, now), id, now);
+    return show(await startHand(db, hand, spec, hash, now), id);
   }
 
   let row = await db.read(hand);
@@ -340,5 +344,5 @@ export async function operateHand(input, accountId, db, now = Date.now()) {
   } else changed = advanceDue(row, now, op === 'tick');
   if (changed) row = await db.save(row);
   if (op === 'tick') return {handId:hand, revision:row.revision, settled:row.settled};
-  return present(row, publicRead ? null : id, now);
+  return show(row, publicRead ? null : id);
 }
