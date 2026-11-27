@@ -850,6 +850,7 @@ function mountTable(root) {
       <span class="g-nav-divider"></span><span class="g-nav-phase">게임 테이블</span>
       <nav class="g-nav-links" aria-label="게임 안내">
         <button type="button" class="g-btn g-top" data-do="rules" aria-haspopup="dialog" aria-controls="modal">게임 규칙</button>
+        <button type="button" class="g-btn g-top" data-do="connect-lobby" title="대기실에 연결해 방 채팅과 다음 판 자리 예약을 이용합니다." hidden>대기실 연결</button>
       </nav>
       <div class="g-nav-actions"><button type="button" class="g-btn g-top g-sound" data-do="sound" aria-label="효과음">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9h4l5-4v14l-5-4H3z"/><path class="g-sound-on" d="M16 8a6 6 0 0 1 0 8m3-11a10 10 0 0 1 0 14"/><path class="g-sound-off" d="m16 9 5 6m0-6-5 6"/></svg><span>효과음</span>
@@ -958,6 +959,10 @@ function redraw(ui, newDeal = false) {
   }
   updateTurnCountdown(ui);
   root.querySelector(".g-nav-phase").textContent = view.seat < 0 ? "테이블 관전" : "게임 테이블";
+  const lobbyButton = root.querySelector('[data-do="connect-lobby"]');
+  lobbyButton.hidden = !options.onConnectLobby;
+  lobbyButton.disabled = Boolean(options.connectingLobby);
+  lobbyButton.textContent = options.connectingLobby ? "대기실 연결 중…" : "대기실 연결";
   const leaveButton = root.querySelector('[data-do="leave"]');
   leaveButton.textContent = options.departing ? "나가기 예약 중" : "나가기";
   const nameAt = seat => nameAtSeat(ui, seat);
@@ -1094,6 +1099,7 @@ function bind(ui) {
     }
     if (kind === "close-records") return ui.root.querySelector(".g-records-dialog").close();
     if (kind === "rules") return ui.options.onRules?.();
+    if (kind === "connect-lobby") return ui.options.onConnectLobby?.();
     if (kind === "leave") return ui.options.onLeave?.();
     if (kind === "replay") return ui.options.onReplay?.();
     if (kind === "toggle-next-round") return ui.options.onToggleNextRound?.();

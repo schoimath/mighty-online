@@ -43,11 +43,32 @@ export async function listPublicRooms({signal,client} = {}) {
   if (!Array.isArray(rooms) || rooms.length !== PUBLIC_ROOM_LIMIT ||
       !rooms.every((room, i) => room.slot === i + 1 && room.code === 'PUB00' + (i + 1) &&
         ['empty','waiting','playing','finished','settling'].includes(room.phase) &&
+        (room.liveHandId == null || (room.phase === 'playing' && accountIdValid(room.liveHandId))) &&
         (room.watchHandId == null || (room.phase === 'settling' && accountIdValid(room.watchHandId))) &&
         (room.signalRoute == null || validSignalRoute(room.signalRoute)))) {
     throw new Error('공개 테이블 목록을 불러오지 못했습니다. 다시 시도해 주세요.');
   }
   return rooms;
+}
+
+// Recheck the slot after a failed peer connection. A replacement host or a
+// different hand should get its own chance to admit the visitor normally.
+export function canWatchAfterHostFailure(failed, current) {
+  return Boolean(failed && current.phase === 'playing' && current.liveHandId &&
+    current.code === failed.code && current.liveHandId === failed.liveHandId &&
+    current.signalRoute === failed.signalRoute);
+}
+
+export async function readPublicHand(request, code, handId, signal) {
+  signal.throwIfAborted();
+  if (!accountIdValid(handId)) throw new Error('관전할 판을 확인하지 못했습니다. 테이블 목록을 새로고침해 주세요.');
+  const data = await request({op:'watch',handId});
+  signal.throwIfAborted();
+  if (data?.handId !== handId || data.room !== code || data.seat !== -1 || data.game?.seat !== -1 ||
+      !Array.isArray(data.game.hand) || data.game.hand.length) {
+    throw new Error('테이블의 관전 정보를 확인하지 못했습니다. 다시 입장해 주세요.');
+  }
+  return data;
 }
 
 export async function reserveDirectoryRoom(client,{store,code,slot = null,name,hostName}) {

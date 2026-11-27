@@ -287,7 +287,7 @@ export async function joinRoom(rawCode, rawName, {onMessage, onClose, onError, o
     peer.on('close', () => unavailable('방장과의 연결이 종료되었습니다.'));
     peer.on('connection', incoming => incoming.close());
     try {
-      onProgress?.('방장에게 연결 중…');
+      onProgress?.('대기실에 연결 중…');
       link = peer.connect(address, {
         label: CHANNEL, reliable: true, serialization: 'binary', metadata: {name, intent, accountId, memberKey, returnRoom}
       });

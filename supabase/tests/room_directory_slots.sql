@@ -70,10 +70,23 @@ begin
   insert into mighty_private.hands(id,room,host_id,seats,manifest,state) values
     (hand,'PUB001',replacement,array[replacement,null,null,null,null],repeat('a',64),'{}'),
     (other_hand,'PRIV01',replacement,array[replacement,null,null,null,null],repeat('b',64),'{}');
-  update mighty_private.directory_slots set summary=summary||jsonb_build_object('watchHandId',other_hand) where room_id=room;
+  update mighty_private.directory_slots set summary=summary||jsonb_build_object('watchHandId',other_hand,'liveHandId',other_hand) where room_id=room;
   set local role anon;
-  assert not (public.mighty_directory_list()->0 ? 'watchHandId');
+  rows:=public.mighty_directory_list();
+  assert rows->0->>'liveHandId'=hand::text and not (rows->0 ? 'watchHandId');
+  assert position(other_hand::text in rows::text)=0;
   reset role;
+  update mighty_private.directory_slots set summary=summary||'{"phase":"waiting"}'::jsonb where room_id=room;
+  assert not (public.mighty_directory_list()->0 ? 'liveHandId');
+  update mighty_private.directory_slots set summary=summary||'{"phase":"playing"}'::jsonb where room_id=room;
+  update mighty_private.chat_hand_links set host_id=founder where hand_id=hand;
+  assert not (public.mighty_directory_list()->0 ? 'liveHandId');
+  update mighty_private.chat_hand_links set host_id=replacement,room_id=first_private where hand_id=hand;
+  assert not (public.mighty_directory_list()->0 ? 'liveHandId');
+  update mighty_private.chat_hand_links set room_id=room where hand_id=hand;
+  update mighty_private.hands set settled=true where id=hand;
+  assert not (public.mighty_directory_list()->0 ? 'liveHandId');
+  update mighty_private.hands set settled=false where id=hand;
   update mighty_private.directory_slots set expires_at=clock_timestamp()-interval '1 second' where room_id=room;
   set local role anon;
   rows:=public.mighty_directory_list();

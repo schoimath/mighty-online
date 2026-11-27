@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {listPublicRooms,reserveDirectoryRoom,watchDirectoryRoom,PUBLIC_ROOM_LIMIT,PRIVATE_ROOM_LIMIT} from '../public-directory.js';
+import {canWatchAfterHostFailure,listPublicRooms,readPublicHand,reserveDirectoryRoom,watchDirectoryRoom,PUBLIC_ROOM_LIMIT,PRIVATE_ROOM_LIMIT} from '../public-directory.js';
 
 const client={url:'https://example.invalid',publishableKey:'test-public',state:{user:{id:'member'}},accessToken:async()=>'member-token'};
 const store={id:'archive',credential:'controller',term:1};
@@ -51,6 +51,39 @@ test('a spectator hand is only advertised for a public table that is settling',a
   await assert.rejects(listPublicRooms({client}),/목록/);
   delete row.watchHandId;
   assert.deepEqual((await listPublicRooms({client}))[3],row);
+});
+
+test('a live fallback belongs to the same playing table, hand and host route as the failed connection',async t=>{
+  const handId=crypto.randomUUID(), route='a'.repeat(32);
+  const playing={...slots[1],phase:'playing',signalRoute:route,liveHandId:handId};
+  let row=playing;
+  transport(t,()=>[slots[0],row,...slots.slice(2)]);
+  assert.deepEqual((await listPublicRooms({client}))[1],playing);
+  assert.equal(canWatchAfterHostFailure(null,playing),false);
+  assert.equal(canWatchAfterHostFailure(playing,{...playing}),true);
+  for (const changed of [{phase:'empty'}, {code:'PUB001'}, {liveHandId:crypto.randomUUID()}, {liveHandId:null}, {signalRoute:'b'.repeat(32)}]) {
+    assert.equal(canWatchAfterHostFailure(playing,{...playing,...changed}),false);
+  }
+  for (const changed of [{phase:'waiting'}, {phase:'settling'}, {liveHandId:'invalid'}]) {
+    row={...playing,...changed};
+    await assert.rejects(listPublicRooms({client}),/목록/);
+  }
+});
+
+test('fallback reads only the public projection of this hand, and honours cancellation during a read',async()=>{
+  const handId=crypto.randomUUID(), code='PUB002', controller=new AbortController();
+  const view={handId,room:code,seat:-1,game:{seat:-1,hand:[]}};
+  const calls=[];
+  const request=async payload=>{calls.push(payload);return view;};
+  assert.equal(await readPublicHand(request,code,handId,controller.signal),view);
+  assert.deepEqual(calls,[{op:'watch',handId}]);
+  for (const changed of [{room:'PUB001'},{handId:crypto.randomUUID()},{seat:0},{game:{seat:0,hand:[]}},
+    {game:{seat:-1,hand:['SA']}}]) {
+    await assert.rejects(readPublicHand(async()=>({...view,...changed}),code,handId,controller.signal),/관전 정보/);
+  }
+  await assert.rejects(readPublicHand(async()=>{controller.abort();return view;},code,handId,controller.signal),{name:'AbortError'});
+  await assert.rejects(readPublicHand(request,code,handId,controller.signal),{name:'AbortError'});
+  assert.equal(calls.length,1);
 });
 
 test('a public reservation loser gets the same code; private creation uses an unnamed slot and the explicit title',async t=>{

@@ -2,7 +2,7 @@ import {clearGame, renderGame, rulesContent, THINKING_TIME_HELP, updateGameAutoP
 import {botTurnDelay, normalizeGameSpeed, paceMultiplier} from './table-timing.js';
 import {createNextRoundTimer} from './next-round.js';
 import {hostRoom, joinRoom, normalizeRoomCode} from './network.js';
-import {listPublicRooms, reserveDirectoryRoom, watchDirectoryRoom} from './public-directory.js';
+import {canWatchAfterHostFailure, listPublicRooms, readPublicHand, reserveDirectoryRoom, watchDirectoryRoom} from './public-directory.js';
 import {renderPublicTables, renderPublicAudience, publicTableName} from './public-room-ui.js';
 import {HostSession} from './session.js';
 import {hostBackups, validBackup} from './host-transfer.js';
@@ -59,6 +59,7 @@ let workerUnavailable = false;
 let pendingConnect = null;
 let dialogRevision = 0;
 let roomCode = '';
+let watchOnlyRoom = null;
 let publicListing = null;
 const directoryReleases = new Map();
 let backups, backupTicket, reconnecting, restoreTimer, memberKey;
@@ -506,6 +507,7 @@ window.addEventListener('pagehide', event => {
   }
   dialogRevision++;
   if (!pendingConnect || transport) return;
+  if (mode === 'spectate') { cancelRoomConnection(); draw(); return; }
   if ($('modal').open && $('setup-form')) closeModal();
   else if (mode === 'joining') stopSession();
 });
@@ -680,6 +682,7 @@ function stopSession(message, {returnToObserver = false, navigatingAway = false}
   oldTransport?.close();
   authority = snapshot = null;
   roomCode = '';
+  watchOnlyRoom = null;
   mode = returnToObserver ? 'joining' : 'lobby';
   resetRoomChat();
   if ($('modal').open) closeModal();
@@ -792,6 +795,7 @@ function finishReservedDeparture() {
 }
 
 function requestLeave() {
+  if (mode === 'spectate' && pendingConnect) { cancelRoomConnection(); draw(); }
   if (mode === 'joining' && pendingConnect && !transport) { stopSession(); return; }
   if (mode === 'lobby' || preparing || leavingGeneration === generation) return;
   const canWatch = mode === 'host' && snapshot.publicRoom && !snapshot.spectator &&
@@ -1059,6 +1063,37 @@ function drawAudience() {
   });
 }
 
+async function reconnectSpectatorLobby() {
+  const watched = watchOnlyRoom;
+  if (mode !== 'spectate' || !watched || pendingConnect) return;
+  const controller = new AbortController();
+  pendingConnect = controller;
+  draw();
+  try {
+    await connectPublicWithDeadline(controller, async () => {
+      const {signal} = controller;
+      const rooms = await listPublicRooms({signal});
+      signal.throwIfAborted();
+      const room = rooms.find(entry => entry.slot === watched.slot && entry.code === watched.code);
+      if (!room || !['waiting','playing','finished'].includes(room.phase)) {
+        throw new Error('지금은 대기실이 닫혀 있습니다.');
+      }
+      const name = accountClient.state.user?.nickname || nickname;
+      await connectRoom('join', name, watched.code, signal,
+        {publicRoom:true, slot:watched.slot, intent:'watch', signalRoute:room.signalRoute});
+    });
+  } catch (error) {
+    if (pendingConnect === controller && watchOnlyRoom === watched) {
+      mode = 'spectate';
+      if (chipReader?.current) snapshot = serverOnlySnapshot(chipReader.current);
+      toast(error.message || '대기실에 연결하지 못했습니다.');
+    }
+  } finally {
+    if (pendingConnect === controller) pendingConnect = null;
+    if (mode === 'spectate' && watchOnlyRoom === watched) draw();
+  }
+}
+
 async function changeReservation(wanted, seat) {
   if (!snapshot?.spectator) return;
   const token = generation;
@@ -1108,6 +1143,8 @@ function draw() {
     names:remote?.names ?? snapshot.players.map(p => p?.name), isHost: Boolean(authority), scoreboard:snapshot.scoreboard,
     seatBalances:mode === 'practice' ? practiceSeatBalances(accountClient.state) : remote?.seatBalances,
     chipDelta:remote?.myDelta, handDeltas:remote?.deltas, settlementSeat:remote?.mySettlementSeat, resumed:serverOnly,
+    onConnectLobby:mode === 'spectate' && watchOnlyRoom ? reconnectSpectatorLobby : undefined,
+    connectingLobby:Boolean(pendingConnect),
     turnDeadline:remote ? chipReader.localTurnDeadline : null,
     thinkingDeadline:remote ? chipReader.localThinkingDeadline : null,
     timeBankMs:remote?.timeBankMs,
@@ -1508,7 +1545,7 @@ function followInheritedHand(session, handId, store) {
   trackChipHand(handId);
 }
 
-async function connectRoom(kind, name, code, signal, {roundLimit, publicRoom, intent, slot=null, recovery=null, signalRoute, onProgress}) {
+async function connectRoom(kind, name, code, signal, {roundLimit, publicRoom, intent, slot=null, recovery=null, signalRoute, onProgress, peerTimeout=10000}) {
   const token = recovery ? generation : ++generation;
   memberKey ??= crypto.randomUUID()+crypto.randomUUID();
   const active = () => token === generation && !signal.aborted;
@@ -1679,10 +1716,10 @@ async function connectRoom(kind, name, code, signal, {roundLimit, publicRoom, in
       backupTicket=null;
     } else rememberRoom({roundLimit});
   } else {
-    if (!recovery) mode = 'joining';
+    if (!recovery && mode !== 'spectate') mode = 'joining';
     link = await joinRoom(code,name,{
       signal, intent, signalRoute, accountId:accountClient.state.user?.id, memberKey,returnRoom:recovery?.roomId,
-      ...(onProgress ? {onProgress,timeout:10000} : {}),
+      ...(onProgress ? {onProgress,timeout:peerTimeout} : {}),
       onMessage(packet) {
         if (!active()) return;
         if (validBackup(packet) && (!chatRoomId || chatRoomId === packet.roomId) &&
@@ -1727,6 +1764,7 @@ async function connectRoom(kind, name, code, signal, {roundLimit, publicRoom, in
           // A host can already be in the waiting room or the next hand while
           // this tab wakes up. Finish showing the reserved hand's own receipt.
           if (departureHand && packet.view?.chipHandId !== departureHand) { chipReader?.wake(); return; }
+          if (mode === 'spectate' && watchOnlyRoom) mode = 'joining';
           snapshot = packet.view;
           snapshot.nextRound = receivedCountdown(snapshot.nextRound, snapshot.chipHandId, packet.sentAt);
           if (!snapshot.chipHost && !snapshot.hostTransfer && intent !== 'watch') {
@@ -1767,6 +1805,7 @@ async function connectRoom(kind, name, code, signal, {roundLimit, publicRoom, in
     mode = 'guest';
   }
   roomCode = link.code;
+  watchOnlyRoom = null;
   transport = link;
   if (pendingConnect?.signal === signal) pendingConnect = null;
   if ($('modal').open) $('modal').close();
@@ -1785,7 +1824,7 @@ async function enterPublicTable(name, code, signal, options, showStatus) {
     await directoryReleases.get(code);
   }
   const started = Date.now();
-  let failure;
+  let failedRoom;
   for (let attempt = 0; attempt < 4; attempt++) {
     signal.throwIfAborted();
     const rooms = await listPublicRooms({signal});
@@ -1794,24 +1833,29 @@ async function enterPublicTable(name, code, signal, options, showStatus) {
     renderPublicTables(rooms);
     const room = rooms.find(entry => entry.slot === options.slot && entry.code === code);
     if (!room) throw new Error('공개 테이블 목록을 다시 확인해 주세요.');
-    if (room.phase === 'settling' || options.watchHandId) {
+    const watchAfterFailure = canWatchAfterHostFailure(failedRoom, room);
+    if (room.phase === 'settling' || options.watchHandId || watchAfterFailure) {
       // The hand on the tile may have finished while the entry form was open.
       // Follow that deal through its result even if the permanent slot is already free.
-      const handId = options.watchHandId ?? room.watchHandId;
-      if (!accountIdValid(handId)) throw new Error('관전할 판을 확인하지 못했습니다. 테이블 목록을 새로고침해 주세요.');
+      const handId = options.watchHandId ?? room.watchHandId ?? room.liveHandId;
       showStatus('진행 중인 판에 관전으로 연결 중…');
-      const data = await chipRequest({op:'watch',handId});
-      signal.throwIfAborted();
-      if (data.handId !== handId || data.room !== code || data.seat !== -1 || data.game?.seat !== -1) {
-        throw new Error('테이블의 관전 정보를 확인하지 못했습니다. 다시 입장해 주세요.');
+      let data;
+      try {
+        data = await readPublicHand(chipRequest,code,handId,signal);
+      } catch (error) {
+        if (!watchAfterFailure || signal.aborted || error.status !== 404 || attempt === 3) throw error;
+        failedRoom = null;
+        continue;
       }
       ++generation;
       activeRead = null;
       mode = 'spectate';
       roomCode = code;
+      watchOnlyRoom = watchAfterFailure ? {code,slot:room.slot} : null;
       if (pendingConnect?.signal === signal) pendingConnect = null;
       if ($('modal').open) closeModal();
       trackChipHand(handId,data);
+      if (watchAfterFailure) toast('대기실에 연결되지 않아 진행 중인 판을 관전합니다.');
       window.scrollTo(0,0);
       return;
     }
@@ -1821,16 +1865,16 @@ async function enterPublicTable(name, code, signal, options, showStatus) {
     if (empty && !accountClient.state.user) throw Object.assign(
         new Error('빈 테이블을 처음 열려면 이메일 인증을 마친 계정으로 로그인해 주세요. 열린 테이블은 로그인 없이 관전할 수 있습니다.'),
         {code:'host_login'});
-    if (failure && !empty && (attempt === 3 || Date.now()-started >= 8000)) break;
-    showStatus(empty ? '빈 테이블을 여는 중…' : failure ? '방장 연결을 다시 확인하는 중…' : '방장에게 연결 중…');
+    if (failedRoom && !empty && !room.liveHandId && (attempt === 3 || Date.now()-started >= 8000)) break;
+    showStatus(empty ? '빈 테이블을 여는 중…' : failedRoom ? '대기실 연결을 다시 확인하는 중…' : '대기실에 연결 중…');
     try {
       const actorName = accountClient.state.user?.nickname || name;
       return await connectRoom(empty ? 'create' : 'join', actorName, code, signal,
-        {...options,intent:'watch',signalRoute:room.signalRoute,onProgress:showStatus});
+        {...options,intent:'watch',signalRoute:room.signalRoute,onProgress:showStatus,peerTimeout:room.liveHandId ? 5500 : 10000});
     } catch (error) {
       if (!error.retryable || signal.aborted) throw error;
-      failure = error;
-      if (attempt < 3) await sleep(500 * (attempt+1));
+      failedRoom = room;
+      if (!room.liveHandId && attempt < 3) await sleep(500 * (attempt+1));
     }
   }
   throw new Error('아직 방장에게 연결되지 않습니다. 다시 시도하거나 다른 테이블을 선택해 주세요.');

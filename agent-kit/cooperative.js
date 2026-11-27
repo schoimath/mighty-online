@@ -1,6 +1,6 @@
 import {botDecision, policyPlay} from '../engine.js';
 import {protectPartner} from '../lab/partnership-policy.js';
-import {withTableStrategy} from '../lab/table-strategy.js?v=1.1.20261127110309';
+import {withTableStrategy} from '../lab/table-strategy.js?v=1.1.20261127111118';
 
 export default {
   apiVersion:1,
