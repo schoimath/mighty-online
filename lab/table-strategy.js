@@ -1,8 +1,8 @@
 import {withJokerStatus} from '../table-joker.js';
-import {conserveMightyOnTrumpAce, conserveOpeningJoker, protectCalledJoker} from '../table-tactics.js?v=1.1.20261127193124';
+import {conserveMightyOnTrumpAce, conserveOpeningJoker, protectCalledJoker} from '../table-tactics.js?v=1.1.20261127193934';
 import {preferTrumpLead} from '../table-trump-lead.js';
-import {preferSideAcePlan} from '../table-side-ace.js?v=1.1.20261127193124';
-import {coordinateFriendPlay} from '../table-friend-play.js?v=1.1.20261127193124';
+import {preferSideAcePlan} from '../table-side-ace.js?v=1.1.20261127193934';
+import {coordinateFriendPlay} from '../table-friend-play.js?v=1.1.20261127193934';
 
 export function withTableStrategy(view, choose) {
   const opening = conserveOpeningJoker(withJokerStatus(view));

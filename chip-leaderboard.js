@@ -12,7 +12,14 @@ export function setupChipLeaderboard(section, client) {
     for (const member of data.items) {
       const row = document.createElement('tr');
       row.dataset.rank = member.rank;
-      row.insertCell().textContent = (member.tied ? '공동 ' : '') + number.format(member.rank) + '위';
+      const place = row.insertCell();
+      place.textContent = (member.tied ? '공동 ' : '') + number.format(member.rank) + '위';
+      if (member.rank >= 1 && member.rank <= 3) {
+        const medal = document.createElement('span');
+        medal.className = 'rank-medal';
+        medal.setAttribute('aria-hidden','true');
+        place.prepend(medal);
+      }
       const nickname = document.createElement('th');
       nickname.scope = 'row';
       nickname.textContent = member.nickname;
