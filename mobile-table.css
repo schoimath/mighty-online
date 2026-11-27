@@ -32,6 +32,8 @@
   .g-round-tags:has(.g-friend-tag[hidden]) { margin-inline-start: 0; }
   .g-round-tag, .g-friend-tag { padding: 2px 5px; font-size: .73rem; }
   .g-match-progress { order: 1; font-size: .73rem; }
+  .g-match-progress small:not(:empty) { display: block; }
+  .g-match-progress small:not(:empty)::before { content: none; }
   .g-records-open { order: 2; min-height: 32px; }
   .g-pace { order: 3; }
   .g-seat-clock { font-size: .69rem; }
@@ -150,7 +152,6 @@
     height: 42px; margin: 0 6px; flex-wrap: nowrap; gap: 5px;
   }
   .g-screen:is([data-phase="bid"],[data-preparing]) .g-heading h1 { white-space: nowrap; }
-  .g-screen:is([data-phase="bid"],[data-preparing]) .g-match-progress,
   .g-screen[data-phase="bid"] .g-round-tags, .g-screen[data-preparing] .g-friend-tag { display: none; }
   .g-screen:is([data-phase="bid"],[data-preparing]) .g-layout { display: block; }
   .g-screen:is([data-phase="bid"],[data-preparing]) :is(.g-decision-surface,.g-public-audience) { margin-inline: 6px; }

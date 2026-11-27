@@ -1,4 +1,5 @@
 import {normalizeGameSpeed, tableDelay} from './table-timing.js';
+import {matchesOfferedSeries} from './table-series.js';
 
 // A bearer token goes directly to the configured game service. Peers exchange
 // hand IDs and one-hand consent notices, never tokens or personal projections.
@@ -38,7 +39,8 @@ export function chipManifest(plan, room, host, accounts) {
   if (!humans.length) throw new Error('칩 대국에는 칩을 보유한 참가자가 한 명 이상 필요합니다.');
   if (new Set(humans).size !== humans.length) throw new Error('한 계정은 한 자리에서만 참가할 수 있습니다.');
   return {handId:crypto.randomUUID(), room, host, seats, names:plan.seats.map(p => p.name),
-    models:plan.models, rules:plan.rules, firstSeat:plan.firstSeat, ...(pace === 'normal' ? {} : {pace})};
+    models:plan.models, rules:plan.rules, firstSeat:plan.firstSeat, ...(pace === 'normal' ? {} : {pace}),
+    ...(plan.series ? {series:plan.series} : {})};
 }
 
 export function offeredSeat(snapshot, spec, room, userId) {
@@ -47,6 +49,7 @@ export function offeredSeat(snapshot, spec, room, userId) {
       !Array.isArray(spec.seats) || spec.seats.length !== 5) return -1;
   const pace = dealPace(spec.pace);
   if (!pace || pace !== dealPace(snapshot.pace)) return -1;
+  if (!matchesOfferedSeries(spec.series, snapshot.scoreboard)) return -1;
   // Old hosts may already have offered a deal with an explicit clock flag.
   // The original manifest must reach the server unchanged for consent.
   if (spec.autoPlay !== undefined && typeof spec.autoPlay !== 'boolean') return -1;

@@ -63,14 +63,16 @@ test('human and AI declarers finish the tenth trick with a card and ordinary set
       if (room.botTurn) room.runBot(action);
       else room.act(room.round.turn, room.revision, action);
     };
-    assert.equal(room.view(1).game.choices.canDeclareSetting, true);
+    const job = room.settingCheckPosition();
+    assert.equal(room.finishSettingCheck(job, analyzeSetting(job)), true);
+    assert.equal(room.view(1).game.choices.settingGuaranteed, true);
     for (const card of ['HA','H3','H4','H5','H2']) play(card);
     assert.equal(room.round.trickNo, 10);
     assert.equal(room.view(1).game.choices.canDeclareSetting, false);
     assert.deepEqual(room.view(1).game.choices.plays, [{card:'SA'}]);
     const revision = room.revision;
-    if (guest) assert.throws(() => room.act(1, revision, {type:'claim'}), /1~9/);
-    else assert.equal(room.tryBotClaim(), null);
+    if (guest) assert.throws(() => room.act(1, revision, {type:'claim'}), /세팅/);
+    else assert.equal(room.tryBotClaim(), false);
     assert.equal(room.revision, revision);
     if (guest) play('SA');
     else room.runBot(undefined, 42);
@@ -82,24 +84,26 @@ test('human and AI declarers finish the tenth trick with a card and ordinary set
   }
 });
 
-test('each live AI declares publicly before verification; cancellation falls back to an ordinary bot turn', () => {
+test('each live AI plays normally after an inconclusive check and claims only a proven line', () => {
   for (const model of ['heuristic','recurrent_balanced','contract_search']) {
     const room = new HostSession('방장', undefined, Array(5).fill(model));
     room.start();
     Object.assign(room.round, drawTrumps());
-    const waiting = room.tryBotClaim();
+    const waiting = room.settingCheckPosition();
     assert.ok(waiting);
-    assert.equal(room.view(0).game.claimPending, true);
-    assert.equal(room.tryBotClaim(), null);
-    assert.equal(room.abandonClaim(waiting), true);
-    assert.equal(room.tryBotClaim(), null);
+    assert.equal(room.view(0).game.claimPending, undefined);
+    assert.equal(room.tryBotClaim(), false);
+    assert.equal(room.finishSettingCheck(waiting, {success:false,indeterminate:true}), false);
+    assert.equal(room.tryBotClaim(), false);
     room.runBot({type:'play', card:'CA'});
     assert.equal(room.round.trick[0].card, 'CA');
 
     Object.assign(room.round, drawTrumps());
-    const job = room.tryBotClaim();
+    const job = room.settingCheckPosition();
     const verdict = analyzeSetting(job);
-    assert.equal(room.finishClaim(job, verdict), true);
+    assert.equal(room.finishSettingCheck(job, verdict), true);
+    assert.equal(room.tryBotClaim(), true);
+    assert.equal(room.tryBotClaim(), false);
     for (let seat = 0; seat < 5; seat++) {
       const {game, scoreboard} = room.view(seat);
       assert.equal(game.result.setting.success, true);

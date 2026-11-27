@@ -2,6 +2,7 @@ import {handOutcome, isCoveredSeat, scoreTable, seatPile, seatStanding, settingP
 import {DECK, DEFAULT_RULES, leadSuit, mighty, pointsIn} from "./engine.js";
 import {VERSION} from "./release.js";
 import {jokerWasPlayed, withJokerStatus} from "./table-joker.js";
+import {seriesFromBoard} from "./table-series.js";
 import {playTableSound, soundControl, toggleSound} from "./sound.js";
 import {AUCTION_BEAT_MS, FRIEND_ANNOUNCEMENT_MS, normalizeGameSpeed, paceMultiplier, tableDelay} from "./table-timing.js";
 import {settlementDetails, settlements, TABLE_SCORING_VERSION} from "./table-scoring.js";
@@ -295,7 +296,8 @@ function emptyTableMarkup(ui, nameAt) {
     return '<div class="g-setting-compat"><strong>이 방은 세팅 선언을 지원하지 않아요</strong><small>이번 판이 끝나면 방장이 게임을 새로고침하고 새 방을 열어 주세요.</small></div>';
   }
   let label = view.phase === "play" ? "첫 카드를 기다리는 중" : labels[view.phase];
-  if (view.claimPending || ui.claimSubmitting) label = "세팅 판정 중";
+  if (view.claimPending) label = "세팅 판정 중";
+  else if (ui.claimSubmitting) label = "세팅 정산 중";
   else if (view.settingAwaitingFriend) label = "초구 프렌드 결정";
   else if (view.phase === "play" && view.seat === view.turn) label = "첫 카드를 내세요";
   else if (view.phase === "result" && view.result.setting) label = view.result.setting.success ? "세팅 성공" : "세팅 실패";
@@ -391,8 +393,10 @@ function renderTrick(ui, nameAt) {
 }
 
 function canDeclareSetting(ui) {
-  const {view} = ui;
-  return view.phase === "play" && view.trickNo < 10 && view.hand.length > 1 && view.seat === view.turn && view.choices.canDeclareSetting &&
+  const {view, latest} = ui;
+  return view.choices.settingGuaranteed === true && latest.choices.settingGuaranteed === true &&
+    view.dealNo === latest.dealNo && view.trickNo === latest.trickNo && view.seat === latest.seat &&
+    view.phase === "play" && view.trickNo < 10 && view.hand.length > 1 && view.seat === view.turn && view.choices.canDeclareSetting &&
     !ui.resolving && !ui.playPending && !ui.claimSubmitting && !view.claimPending;
 }
 
@@ -703,14 +707,18 @@ function claimClick(ui, kind) {
   dialog.close();
   if (kind !== "confirm-claim" || !canDeclareSetting(ui)) return;
 
-  ui.claimSubmitting = true;
+  const pending = ui.claimSubmitting = {seat:ui.view.seat, dealNo:ui.view.dealNo, trickNo:ui.view.trickNo};
   ui.pendingCard = null;
   redraw(ui);
-  if (ui.options.onAction({type:"claim"}) === false) {
-    ui.claimSubmitting = false;
+  const finish = () => {
+    if (ui.claimSubmitting !== pending) return;
+    ui.claimSubmitting = null;
     redraw(ui);
     ui.root.querySelector('[data-do="claim"]')?.focus({preventScroll:true});
-  }
+  };
+  const result = ui.options.onAction({type:"claim"});
+  if (result?.then) result.then(finish, finish);
+  else if (result === false) finish();
 }
 
 function settingLineMarkup(view) {
@@ -892,7 +900,8 @@ function renderRecords(ui) {
 }
 
 function tableNotice(view, ui) {
-  if (view.claimPending || ui.claimSubmitting) return "세팅 판정 중입니다.";
+  if (view.claimPending) return "세팅 판정 중입니다.";
+  if (ui.claimSubmitting) return "세팅을 정산하고 있습니다.";
   if (view.settingAwaitingFriend) return "세팅 실패 · 초구 프렌드를 정하기 위해 첫 트릭을 진행합니다.";
   if (view.phase === "bid" && view.misdealCount) return "파토 · 점수 카드가 없는 손패가 있어 다시 나눴습니다.";
   return "";
@@ -912,7 +921,7 @@ function mountTable(root) {
     </div></header>
     <div class="g-main">
       <div class="g-heading"><div class="g-eyebrow"><span class="g-table-kicker"><i aria-hidden="true">♠</i> 마이티 · 5인전</span>
-        <span class="g-match-progress" hidden></span><small class="g-release-note">v${VERSION}</small>
+        <span class="g-match-progress" hidden><span></span><small></small></span><small class="g-release-note">v${VERSION}</small>
         <button type="button" class="g-records-open" data-do="records" aria-haspopup="dialog" aria-controls="g-records-dialog">대국 기록</button></div>
         <div class="g-title-row"><div class="g-title-context"><h1></h1><div class="g-round-tags"><span class="g-round-tag"></span><span class="g-friend-tag" aria-live="polite" aria-atomic="true" hidden></span></div></div>
           <label class="g-pace"><span>진행 속도</span>
@@ -938,10 +947,9 @@ function mountTable(root) {
       <div class="modal-inner"><h2 id="g-records-title">대국 기록</h2>
         <button type="button" class="close-icon" data-do="close-records" aria-label="대국 기록 닫기">×</button>
         <div class="g-records-body"></div></div></dialog>
-    <dialog class="modal g-claim-dialog" aria-labelledby="g-claim-title" aria-describedby="g-claim-description g-claim-warning">
+    <dialog class="modal g-claim-dialog" aria-labelledby="g-claim-title" aria-describedby="g-claim-description">
       <div class="modal-inner"><h2 id="g-claim-title">세팅을 선언할까요?</h2>
-        <p id="g-claim-description">다른 사람이 어떤 카드를 내도 남은 <b class="g-claim-count"></b>개 트릭을 주공 혼자 모두 딸 수 있어야 합니다.</p>
-        <p id="g-claim-warning"><strong>실패하면 남은 점수 카드는 모두 야당이 가져갑니다.</strong></p>
+        <p id="g-claim-description">남은 <b class="g-claim-count"></b>개 트릭을 모두 딸 수 있습니다. 선언하면 내 카드 순서를 모두에게 공개하고 바로 정산합니다.</p>
         <div class="room-actions"><button type="button" class="plain-button" data-do="cancel-claim" autofocus>취소</button><button type="button" class="primary-button" data-do="confirm-claim">세팅 선언하기</button></div>
       </div></dialog></div>`;
   soundControl(root.querySelector('[data-do="sound"]'));
@@ -1006,13 +1014,21 @@ function redraw(ui, newDeal = false) {
   root.querySelector("h1").textContent = finished ? `${board.rounds}판 경기 종료`
     : view.phase === "play" ? `${view.trickNo}번째 트릭` : combined ? "주공 준비" : labels[view.phase];
   const progress = root.querySelector(".g-match-progress");
-  progress.hidden = !board?.roundLimit || finished;
-  if (!progress.hidden) {
-    const settled = view.phase === "result" || (holdingSettlement(ui) && !ui.preResultBoard);
-    const current = board.rounds + (settled ? 0 : 1);
-    progress.textContent = `${current} / ${board.roundLimit}판`;
-    progress.setAttribute("aria-label", `총 ${board.roundLimit}판 중 ${current}번째 판`);
+  const settled = view.phase === "result";
+  const series = options.series ?? seriesFromBoard(board, settled || (holdingSettlement(ui) && !ui.preResultBoard));
+  progress.hidden = !series && !options.resumed;
+  let current = "판수 미확인", remaining = "", description = "이 판의 경기 판수 정보가 없습니다.";
+  if (series) {
+    const {roundNumber, roundLimit} = series;
+    current = roundLimit === null ? `${roundNumber}판째` : `${roundNumber}/${roundLimit}판`;
+    remaining = roundLimit === null ? "무제한" : `${roundLimit - roundNumber + (settled ? 0 : 1)}판 남음`;
+    description = roundLimit === null ? `무제한 경기의 ${roundNumber}번째 판`
+      : `총 ${roundLimit}판 중 ${roundNumber}번째 판 · ${settled ? "다음 판부터" : "이번 판 포함"} ${remaining}`;
   }
+  progress.firstElementChild.textContent = current;
+  progress.lastElementChild.textContent = remaining;
+  progress.title = description;
+  progress.setAttribute("aria-label", description);
   const final = root.querySelector(".g-match-final");
   if (finished) {
     const summary = scoreTable(board, options.settlementSeat ?? view.seat, {final:true, title:"최종 순위"});
@@ -1320,7 +1336,7 @@ export function clearGame(container) {
   phoneLayout.removeEventListener("change", ui.onPhoneLayout);
   ui.auctionTimer = null;
   ui.resultWasShown = false;
-  ui.view = ui.latest = ui.resolving = ui.signature = ui.playPending = null;
+  ui.view = ui.latest = ui.resolving = ui.signature = ui.playPending = ui.claimSubmitting = null;
   container.replaceChildren();
 }
 
@@ -1387,7 +1403,8 @@ export function renderGame(container, publicView, options = {}) {
       move.card === pending.move.card && move.suit === pending.move.suit && Boolean(move.jokerCall) === Boolean(pending.move.jokerCall));
     if (!canStillPlay) ui.playPending = null;
   }
-  ui.claimSubmitting = false;
+  if (ui.claimSubmitting && (publicView.choices.settingGuaranteed !== true || publicView.seat !== ui.claimSubmitting.seat ||
+      publicView.dealNo !== ui.claimSubmitting.dealNo || publicView.trickNo !== ui.claimSubmitting.trickNo)) ui.claimSubmitting = null;
   if (publicView.phase !== "result") {
     if (options.seatBalances) ui.preResultBalances = options.seatBalances;
     if (options.scoreboard && !options.scoreboard.panelMemberIds) ui.preResultBoard = options.scoreboard;
@@ -1462,7 +1479,7 @@ export function rulesContent(rules = DEFAULT_RULES, scoringVersion = TABLE_SCORI
     <p>${opening} 경매의 승자인 주공은 바닥패를 가져와 3장을 묻습니다. 이때 기루다를 바꾸려면 공약을 2점 이상 올려야 합니다. 묻은 점수는 주공 팀의 점수입니다.</p>
     <h3>프렌드</h3><p>주공이 부른 카드를 가진 사람이 프렌드입니다. 기본 선택은 마이티, 조커, 기루다 A 순서이며 주공이 들고 있거나 묻은 카드는 건너뜁니다. 셋 다 주공에게 있으면 노프렌드가 기본입니다. 노기루다에서는 마이티와 조커가 모두 주공에게 있으면 노프렌드입니다. 부른 카드가 나오면 모두에게 정체가 공개됩니다.${firstFriend} 노프렌드를 선택하거나 주공이 가진 카드나 묻은 카드를 부르면 혼자 플레이합니다.</p>
     <h3>카드 내기</h3><p>주공부터 한 장씩 냅니다. 선이 낸 무늬가 손에 있으면 따라야 합니다. 마이티와 조커는 무늬에 관계없이 낼 수 있습니다. 첫 트릭에서는 다른 무늬를 낼 수 있으면 기루다로 시작할 수 없습니다. 트릭을 이긴 사람이 다음 선입니다.</p>
-    <h3>세팅</h3><p>주공은 1~9트릭에 선을 잡으면 카드를 내기 전에 세팅을 선언할 수 있습니다. 마지막 트릭에는 각자 남은 카드를 냅니다. 다른 네 사람이 어떤 합법적인 카드를 내더라도 주공 혼자 남은 트릭을 모두 딸 수 있으면 성공입니다. 성공하면 남은 점수 카드는 주공이 가져가고, 주공이 낼 수 있는 카드 순서를 보드 중앙에 공개합니다. 실패하면 남은 점수 카드는 모두 야당 몫입니다. 이미 획득한 점수와 묻은 카드는 원래대로 정산합니다. 초구 프렌드를 부르고 첫 트릭 전에 세팅에 실패하면, 프렌드를 정하기 위해 첫 트릭만 진행한 뒤 정산합니다.</p>
+    <h3>세팅</h3><p>주공이 1~9트릭에서 선을 잡고, 다른 네 사람이 어떤 카드를 내도 남은 트릭을 혼자 모두 딸 수 있다고 확인되면 손패 옆에 세팅 선언 버튼이 나타납니다. 선언을 확인하면 남은 점수 카드는 주공이 가져가고, 주공이 낼 수 있는 카드 순서 하나를 보드 중앙에 공개한 뒤 정산합니다. 마지막 트릭에는 각자 남은 카드를 냅니다.</p>
     <h3>마이티와 조커</h3><p>가장 센 카드는 스페이드 A입니다. 스페이드가 기루다일 때는 다이아몬드 A가 마이티입니다. 그다음은 조커, 기루다, 선의 무늬 순입니다. 같은 무늬 안에서는 A가 가장 높고 2가 가장 낮습니다.</p>
     <p>${jokerTiming}</p>
     <p>${jokerCallFrom} 선이 클로버 3으로 조커콜을 선언할 수 있습니다. 조커를 가진 사람은 조커 또는 마이티를 내야 하며, 조커는 그 트릭에서 가장 약합니다. 클로버가 기루다일 때의 조커콜 카드는 스페이드 3입니다. 조커가 한 번 나오면 손패의 조커콜 표식이 사라지고 그 카드는 일반 3으로 냅니다.</p>

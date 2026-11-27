@@ -1,6 +1,7 @@
 import {clearGame, renderGame, rulesContent, updateGameClocks, updateGamePace, updateSeatBalances} from './game-ui.js';
 import {botTurnDelay, normalizeGameSpeed, paceMultiplier} from './table-timing.js';
 import {createNextRoundTimer} from './next-round.js';
+import {handSeries, seriesFromBoard} from './table-series.js';
 import {hostRoom, joinRoom, normalizeRoomCode} from './network.js';
 import {canWatchAfterHostFailure, listPublicRooms, readPublicHand, reserveDirectoryRoom, watchDirectoryRoom} from './public-directory.js';
 import {lobbyCredential, mayConfirmPublicDeal, openPublicLobby, requestPublicLobby} from './public-lobby-client.js';
@@ -55,7 +56,7 @@ let mode = 'lobby';
 let generation = 0;
 let practiceTurnTimer, botDueAt = null, toastTimer;
 let botWorker = null;
-let claimWorker = null;
+let settingAnalysis = null;
 let workerUnavailable = false;
 let pendingConnect = null;
 let dialogRevision = 0;
@@ -205,9 +206,13 @@ function practiceSeatBalances(state) {
 }
 
 function serverOnlySnapshot(data) {
-  const scoreboard = snapshot?.chipHandId === data.handId && (!data.game.result || snapshot.game?.result)
+  const sameHand = snapshot?.chipHandId === data.handId;
+  const listed = listedRooms.find(room => room.code === data.room && room.phase === 'playing' && room.liveHandId === data.handId);
+  const series = data.series ?? (sameHand ? snapshot.series ?? seriesFromBoard(snapshot.scoreboard, Boolean(snapshot.game?.result)) : null)
+    ?? handSeries(listed?.roundNumber, listed?.roundLimit);
+  const scoreboard = sameHand && (!data.game.result || snapshot.game?.result)
     ? snapshot.scoreboard : undefined;
-  return {chipHandId:data.handId, seat:data.seat, spectator:data.seat < 0, pace:data.pace, scoreboard,
+  return {chipHandId:data.handId, seat:data.seat, spectator:data.seat < 0, pace:data.pace, scoreboard, series,
     players:data.names.map((name, i) => ({name, bot:data.bots[i], modelId:data.models[i]})),
     rules:data.game.rules, game:data.game};
 }
@@ -664,9 +669,13 @@ function roomGameOptions(snapshot, host) {
 
 function seriesSummary(board) {
   const limit = board?.roundLimit;
-  const target = limit === 10 || limit === 20 ? limit + '판' : '무제한';
-  const settled = Number.isSafeInteger(board?.rounds) && board.rounds > 0 ? ' · ' + board.rounds + '판 완료' : '';
-  return `<p class="series-summary"><strong>경기 판수</strong> ${target}${settled}</p>`;
+  let target = '판수 미확인';
+  if (limit === null) target = '무제한' + (board.rounds > 0 ? ' · ' + board.rounds + '판 완료' : '');
+  else if (limit === 10 || limit === 20) {
+    target = limit + '판';
+    if (Number.isSafeInteger(board.rounds)) target += ' · ' + Math.max(0, limit - board.rounds) + '판 남음';
+  }
+  return `<p class="series-summary"><strong>경기 판수</strong> ${target}</p>`;
 }
 
 function showRules() {
@@ -706,8 +715,8 @@ function stopSession(message, {returnToObserver = false, navigatingAway = false}
   botDueAt = null;
   botWorker?.terminate();
   botWorker = null;
-  claimWorker?.terminate();
-  claimWorker = null;
+  settingAnalysis?.worker?.terminate();
+  settingAnalysis = null;
   workerUnavailable = false;
   const oldTransport = transport;
   transport = null;
@@ -1212,6 +1221,7 @@ function draw() {
   renderGame($('game'),remote?.game ?? snapshot.game,{
     playbackHandId:remote?.handId ?? snapshot.chipHandId, recentTricks:remote?.recentTricks,
     names:remote?.names ?? snapshot.players.map(p => p?.name), isHost:host, scoreboard:snapshot.scoreboard,
+    series:remote?.series ?? snapshot.series ?? seriesFromBoard(snapshot.scoreboard, Boolean(snapshot.game.result)),
     seatBalances:mode === 'practice' ? practiceSeatBalances(accountClient.state) : remote?.seatBalances,
     chipDelta:remote?.myDelta, handDeltas:remote?.deltas, settlementSeat:remote?.mySettlementSeat, resumed:serverOnly,
     onConnectLobby:mode === 'spectate' && watchOnlyRoom ? reconnectSpectatorLobby : undefined,
@@ -1277,14 +1287,18 @@ function draw() {
           if (hand === chipReader) toast(error.message);
           return false;
         });
-        if (action.type === 'play' || action.type === 'prepare') return receipt;
+        if (action.type === 'play' || action.type === 'prepare' || action.type === 'claim') return receipt;
         void receipt.then(() => { if (hand === chipReader) draw(); });
         return true;
       }
       if (mode === 'practice' && authority) {
         if (checkPracticeClock()) return false;
         const revision = snapshot.revision;
-        try { submitTurn(authority, authority.hostSeat, revision, action); return true; }
+        try {
+          authority.act(authority.hostSeat, revision, action);
+          publish();
+          return true;
+        }
         catch (error) {
           if (authority.revision !== revision) publish();
           toast(error.message);
@@ -1354,56 +1368,39 @@ function publish() {
   snapshot = authority.hostView();
   draw();
   backups?.share(); publicListing?.refresh();
-  if (mode === 'practice' && authority.botTurn) {
-    schedulePracticeBot(botTurnDelay(snapshot.game, authority.pace));
-  } else if (mode === 'practice') checkPracticeClock();
+  if (mode === 'practice') {
+    checkPracticeSetting(authority);
+    if (authority.botTurn) schedulePracticeBot(botTurnDelay(snapshot.game, authority.pace));
+    else checkPracticeClock();
+  }
 }
 
-function submitTurn(session, seat, revision, action) {
-  const position = session.act(seat, revision, action);
-  publish();
-  if (position) verifyClaim(session, position);
-}
-
-function verifyClaim(session, position) {
-  let worker;
-  const releaseWorker = () => {
-    worker?.terminate();
-    if (claimWorker === worker) claimWorker = null;
-  };
-  const failed = () => {
-    if (session !== authority || !session.abandonClaim(position)) return;
-    releaseWorker();
-    const message = '세팅 판정을 완료하지 못했습니다. 점수는 그대로이며 다시 선언하거나 카드를 낼 수 있습니다.';
-    toast(message);
-    for (const [id, seat] of session.connections) {
-      if (seat === position.declarer) transport?.send(id, {type:'error', message});
-    }
-    publish();
-  };
+function checkPracticeSetting(session) {
+  const position = session.settingCheckPosition();
+  if (settingAnalysis?.position === position) return;
+  settingAnalysis?.worker?.terminate();
+  settingAnalysis = null;
+  if (!position) return;
+  const task = settingAnalysis = {position, worker:null};
   const finish = verdict => {
-    if (session !== authority) return;
-    try {
-      if (!session.finishClaim(position, verdict)) return;
-    } catch {
-      failed();
-      return;
+    if (settingAnalysis !== task || session !== authority) return;
+    task.worker?.terminate();
+    settingAnalysis = null;
+    if (session.finishSettingCheck(position, verdict) && !session.botTurn) {
+      snapshot = session.hostView();
+      draw();
     }
-    releaseWorker();
-    publish();
   };
   const retryLocally = async () => {
-    releaseWorker();
+    if (settingAnalysis !== task) return;
+    task.worker?.terminate();
     try {
       const {analyzeSetting} = await import('./table-claim.js');
-      if (session === authority) finish(analyzeSetting(position));
-    } catch {
-      failed();
-    }
+      if (settingAnalysis === task) finish(analyzeSetting(position,{maxWork:300}));
+    } catch { finish(null); }
   };
   try {
-    worker = new Worker(new URL(`./claim-worker.js?v=${VERSION}`, import.meta.url), {type:'module'});
-    claimWorker = worker;
+    const worker = task.worker = new Worker(new URL(`./claim-worker.js?v=${VERSION}`, import.meta.url), {type:'module'});
     worker.onmessage = event => finish(event.data);
     worker.onerror = event => { event.preventDefault(); retryLocally(); };
     worker.onmessageerror = retryLocally;
@@ -1416,10 +1413,8 @@ function verifyClaim(session, position) {
 function takeBotTurn() {
   const session = authority;
   if (!session?.botTurn) return;
-  const claim = session.tryBotClaim();
-  if (claim) {
+  if (session.tryBotClaim()) {
     publish();
-    verifyClaim(session, claim);
     return;
   }
   const revision = session.revision;
@@ -1428,7 +1423,7 @@ function takeBotTurn() {
   function finish(action, memory) {
     // The room can change while the worker is thinking, for example when a guest leaves.
     if (authority !== session || session.revision !== revision || !session.botTurn) return;
-    session.runBot(action, seed, memory);
+    if (!session.tryBotClaim()) session.runBot(action, seed, memory);
     publish();
   }
   if (workerUnavailable) {

@@ -41,11 +41,9 @@ export class HostSession {
   #lastSettlement = new Map();
   #botMemory = Array(5).fill(null);
   #guestDecisions = Array.from({length:5}, () => []);
-  #claim = null;
-  #skipBotClaim = false;
+  #settingCheck = null;
   #practiceBanks = Array(5).fill(null);
   #practiceDeadline = null;
-  #pausedPracticeMs = null;
   #lastTimedAction = null;
   chipHandId = null;
   #chipRevision = -1;
@@ -332,10 +330,7 @@ export class HostSession {
     }
     this.players[seat] = this.round ? this.botPlayer(seat) : null;
     this.#practiceBanks[seat] = null;
-    if (this.round?.turn === seat) {
-      this.#practiceDeadline = null;
-      this.#pausedPracticeMs = null;
-    }
+    if (this.round?.turn === seat) this.#practiceDeadline = null;
     if (!this.chipHandId && this.round && this.round.phase !== 'result' && hasSeatMemory(this.botModels[seat])) {
       this.#botMemory[seat] = memoryForReplacement(this.botModels[seat], this.#guestDecisions[seat]);
       this.#guestDecisions[seat] = [];
@@ -470,7 +465,8 @@ export class HostSession {
       const id = seat === this.hostSeat ? null : Array.from(this.connections).find(([, n]) => n === seat)?.[0];
       return {id, name:player.name};
     });
-    return {seats, firstSeat, models:[...this.botModels], rules:{...this.rules}, pace:this.pace};
+    return {seats, firstSeat, models:[...this.botModels], rules:{...this.rules}, pace:this.pace,
+      series:{roundNumber:this.#completedRounds + 1, roundLimit:this.#roundLimit}};
   }
 
   start() {
@@ -484,7 +480,7 @@ export class HostSession {
     this.#resetBotMemory();
     this.players = this.players.map((p, i) => p ?? this.botPlayer(i));
     this.#practiceBanks = this.players.map(player => this.chipHandId || player.bot ? null : THINKING_TIME_MS);
-    this.#pausedPracticeMs = null;
+    this.#settingCheck = null;
     this.#lastTimedAction = null;
     this.#startPracticeTurn();
     this.#dealtPlayers = (this.publicRoom || this.chipHandId) ? [...this.players] : null;
@@ -549,55 +545,52 @@ export class HostSession {
     if (this.chipHandId) throw new Error('칩 대국의 수는 게임 서버에서 처리합니다.');
     if (!this.round || !Number.isInteger(seat) || seat < 0 || seat > 4 || this.players[seat]?.bot) throw new Error('플레이어 자리를 확인해 주세요.');
     if (revision !== this.revision) throw new Error('테이블 상태가 바뀌었습니다. 다시 선택해 주세요.');
-    if (this.#claim) throw new Error('세팅을 판정하고 있습니다.');
     if (this.round.turn === seat && this.assistExpiredTurn()) throw new Error('시간이 지나 AI가 이번 수를 대신했습니다.');
-    if (action?.type === 'claim') return this.#beginClaim(seat);
+    if (action?.type === 'claim') { this.#declareSetting(seat); return; }
     this.#applyTurn(seat, action);
   }
 
-  #beginClaim(seat) {
-    if (!canDeclareSetting(this.round, seat)) throw new Error('세팅은 1~9번째 트릭에서 주공이 선을 잡고 카드를 내기 전에 선언할 수 있습니다.');
+  settingCheckPosition() {
+    if (this.chipHandId || !this.round || !canDeclareSetting(this.round, this.round.turn)) return null;
+    if (this.#settingCheck?.revision === this.revision) return this.#settingCheck.pending;
     const {phase, turn, declarer, trickNo, trick, hands, bid, rules} = this.round;
-    // This position goes only to the host's local solver. Peers receive view().
-    this.#claim = structuredClone({phase, turn, declarer, trickNo, trick, hands, bid, rules});
-    if (this.#practiceDeadline !== null) {
-      const now = Date.now();
-      this.#pausedPracticeMs = Math.max(0, this.#practiceDeadline - now);
-      this.#finishPracticeTurn(seat, now);
-    }
-    this.revision++;
-    return this.#claim;
+    // The hands stay on the practice authority. Network snapshots disclose only a proven offer to the declarer.
+    const pending = !this.botTurn || shouldDeclareSetting(botObservation(this.round, turn))
+      ? structuredClone({phase, turn, declarer, trickNo, trick, hands, bid, rules}) : null;
+    this.#settingCheck = {revision:this.revision, pending, proof:null};
+    return pending;
   }
 
-  tryBotClaim() {
-    if (!this.botTurn || this.#skipBotClaim || !canDeclareSetting(this.round, this.round.turn)) return null;
-    const view = botObservation(this.round, this.round.turn);
-    return shouldDeclareSetting(view) ? this.#beginClaim(view.seat) : null;
-  }
-
-  finishClaim(position, verdict) {
-    if (!position || this.#claim !== position) return false;
-    resolveSetting(this.round, this.round.declarer, verdict);
-    this.#claim = null;
-    this.#pausedPracticeMs = null;
-    this.#startPracticeTurn();
-    this.#recordResult();
-    this.revision++;
+  finishSettingCheck(position, verdict) {
+    const check = this.#settingCheck;
+    if (!position || check?.pending !== position || check.revision !== this.revision) return false;
+    check.pending = null;
+    if (verdict?.success !== true || !Array.isArray(verdict.line) || verdict.line.length !== position.hands[position.declarer].length) return false;
+    check.proof = verdict;
     return true;
   }
 
-  abandonClaim(position) {
-    if (!position || this.#claim !== position) return false;
-    this.#claim = null;
-    if (this.#pausedPracticeMs !== null) this.#practiceDeadline = Date.now() + this.#pausedPracticeMs;
-    this.#pausedPracticeMs = null;
-    this.#skipBotClaim = Boolean(this.players[position.declarer]?.bot);
+  #hasSettingProof(seat) {
+    return this.#settingCheck?.revision === this.revision && !!this.#settingCheck.proof && canDeclareSetting(this.round, seat);
+  }
+
+  #declareSetting(seat) {
+    if (!this.#hasSettingProof(seat)) throw new Error('남은 트릭을 모두 딸 수 있는 주공만 세팅을 선언할 수 있습니다.');
+    resolveSetting(this.round, seat, this.#settingCheck.proof);
+    this.#settingCheck = null;
+    this.#finishPracticeTurn(seat, Date.now());
+    this.#recordResult();
     this.revision++;
+  }
+
+  tryBotClaim() {
+    if (!this.botTurn || !this.#hasSettingProof(this.round.turn)) return false;
+    this.#declareSetting(this.round.turn);
     return true;
   }
 
   get botTurn() {
-    return Boolean(!this.chipHandId && !this.#claim && this.round && this.round.phase !== 'result' && this.players[this.round.turn]?.bot);
+    return Boolean(!this.chipHandId && this.round && this.round.phase !== 'result' && this.players[this.round.turn]?.bot);
   }
 
   get activeTurnDeadline() { return this.#practiceDeadline; }
@@ -646,7 +639,6 @@ export class HostSession {
   }
 
   #resetBotMemory() {
-    this.#skipBotClaim = false;
     this.#botMemory.fill(null);
     this.#guestDecisions = Array.from({length:5}, () => []);
   }
@@ -666,7 +658,7 @@ export class HostSession {
     applyAction(this.round, seat, action, undefined, track ? this.#guestDecisions[seat] : undefined);
     this.#finishPracticeTurn(seat, now);
     this.#startPracticeTurn();
-    this.#skipBotClaim = false;
+    this.#settingCheck = null;
     if (this.round.dealNo !== dealNo) this.#resetBotMemory();
     else if (!track && memory != null) this.#botMemory[seat] = structuredClone(memory);
     this.#recordResult();
@@ -739,14 +731,8 @@ export class HostSession {
   #view(seat, id) {
     const swap = this.#swapAt(seat);
     const spectator = seat === -1;
-    const projection = this.round && (this.chipHandId ? this.round : spectator ? getSpectatorView(this.round) : getView(this.round, seat));
+    const projection = this.round && (this.chipHandId ? this.round : spectator ? getSpectatorView(this.round) : getView(this.round, seat, this.#hasSettingProof(seat)));
     const game = this.chipHandId ? projection : projection && withJokerStatus(projection, jokerWasPlayed(this.round));
-    if (game && this.#claim) {
-      game.claimPending = true;
-      game.turn = null;
-      game.choices.canDeclareSetting = false;
-      game.choices.plays = [];
-    }
     if (!this.chipHandId && game?.phase === 'discard' && seat === game.declarer) {
       game.incomingCards = [...(this.round.knownKitty || [])];
     }

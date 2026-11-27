@@ -32,31 +32,23 @@ function finishSetting(state, success, friendTrick = []) {
 // A verdict comes exclusively from the host's solver, never a network action.
 export function resolveSetting(state, seat, verdict) {
   if (!canDeclareSetting(state, seat)) throw new Error('세팅은 1~9번째 트릭에서 주공이 선을 잡고 카드를 내기 전에 선언할 수 있습니다.');
-  const success = typeof verdict === 'boolean' ? verdict : verdict?.success;
-  if (typeof success !== 'boolean') throw new Error('세팅 판정이 완료되지 않았습니다.');
-  let line;
-  if (success && typeof verdict === 'object') {
-    const hand = [...state.hands[seat]];
-    if (!Array.isArray(verdict.line) || verdict.line.length !== hand.length) throw new Error('세팅 카드 순서가 올바르지 않습니다.');
-    line = [];
-    for (const move of verdict.line) {
-      const legal = legalPlays({...state, trickNo:state.trickNo + line.length}, hand).find(play =>
-        play.card === move?.card && play.suit === move.suit && play.jokerCall === move.jokerCall);
-      if (!legal) throw new Error('세팅 카드 순서가 올바르지 않습니다.');
-      hand.splice(hand.indexOf(legal.card), 1);
-      line.push(legal);
-    }
+  if (verdict?.success !== true) throw new Error('남은 트릭을 모두 딸 수 있다고 확인된 경우에만 세팅할 수 있습니다.');
+  const hand = [...state.hands[seat]];
+  if (!Array.isArray(verdict.line) || verdict.line.length !== hand.length) throw new Error('세팅 카드 순서가 올바르지 않습니다.');
+  const line = [];
+  for (const move of verdict.line) {
+    const legal = legalPlays({...state, trickNo:state.trickNo + line.length}, hand).find(play =>
+      play.card === move?.card && play.suit === move.suit && play.jokerCall === move.jokerCall);
+    if (!legal) throw new Error('세팅 카드 순서가 올바르지 않습니다.');
+    hand.splice(hand.indexOf(legal.card), 1);
+    line.push(legal);
   }
-  if (!success && state.call.kind === 'first' && !state.friendKnown) {
-    // Identify the partner before charging individual settlements.
-    state.settingAwaitingFriend = true;
-    return state;
-  }
-  finishSetting(state, success);
-  if (line) state.result.setting.line = line;
+  finishSetting(state, true);
+  state.result.setting.line = line;
   return state;
 }
 
+// Complete a penalty already recorded by an older version before the first friend was known.
 // The engine judges the opening trick and determines its friend normally.
 // Restore the previous piles because the claim had already awarded every
 // unplayed honor, including the ones used for that trick, to the opposition.

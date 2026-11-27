@@ -68,6 +68,8 @@
 .g-eyebrow i { color: #ddbc76; font: normal 1.1rem Georgia, serif; }
 .g-release-note { margin-inline-start: auto; color: #b1c3b5; font-size: .74rem; font-weight: 400; white-space: nowrap; }
 .g-match-progress { line-height: inherit; color: #cad7c6; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.g-match-progress small { font-size: inherit; }
+.g-match-progress small:not(:empty)::before { content: " · "; }
 .g-round-tags { display: flex; align-items: center; gap: 5px; min-width: 0; max-width: 100%; }
 .g-round-tags:has(.g-friend-tag[hidden]) { margin-inline-start: auto; }
 .g-round-tag, .g-friend-tag { color: #c2d4c5; border: 1px solid #486151; border-radius: 20px; padding: 5px 11px; font-size: .8rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
@@ -323,10 +325,6 @@ html:has(.g-screen) { scrollbar-gutter: stable; }
   font-size: .85rem; font-weight: 650; white-space: nowrap;
 }
 .g-btn.g-claim-open:hover { background: #3e513c; }
-.g-claim-dialog #g-claim-warning {
-  margin-block: 14px 20px; padding: 9px 12px; border-inline-start: 3px solid #ab6234;
-  color: #713f23; background: #f6ede0; word-break: keep-all;
-}
 .g-claim-dialog h2, .g-claim-dialog p { word-break: keep-all; }
 .g-claim-dialog .room-actions { justify-content: flex-end; }
 .g-claim-dialog button:focus-visible { outline-color: #8c5b19; }

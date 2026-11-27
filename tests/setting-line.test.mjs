@@ -47,8 +47,9 @@ test('a ninth-trick claim includes the demanded suit for the final Joker and a f
   const lost = endgame([['SA','H3'], ...hands.slice(1)]);
   const failed = analyzeSetting(lost);
   assert.deepEqual(failed,{success:false});
-  resolveSetting(lost,2,failed);
-  assert.equal(getView(lost,0).result.setting.line,undefined);
+  const before = structuredClone(lost);
+  assert.throws(() => resolveSetting(lost,2,failed));
+  assert.deepEqual(lost,before);
 });
 
 test('malformed or repeated leads cannot clear the hands or settle the claim', () => {

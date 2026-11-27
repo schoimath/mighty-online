@@ -1,7 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {HostSession} from '../session.js';
-import {analyzeSetting} from '../table-claim.js';
 
 function makeRoom(limit) {
   const room = new HostSession('방장', undefined, Array(5).fill('heuristic'), limit);
@@ -17,11 +16,13 @@ function openHand(room) {
   submit({type:'friend', kind:'none'});
 }
 
-function finishByClaim(room) {
-  const job = room.act(room.round.turn, room.revision, {type:'claim'});
-  const verdict = analyzeSetting(job);
-  assert.equal(room.finishClaim(job, verdict), true);
-  assert.equal(room.finishClaim(job, verdict), false);
+function playToResult(room) {
+  while (room.round.phase === 'play') {
+    const seat = room.round.turn;
+    const action = {type:'play', ...room.view(seat).game.choices.plays[0]};
+    if (room.botTurn) room.runBot(action);
+    else room.act(seat, room.revision, action);
+  }
 }
 
 test('the goal is locked after the first deal and the tenth settlement closes the match exactly once', () => {
@@ -30,17 +31,11 @@ test('the goal is locked after the first deal and the tenth settlement closes th
   for (let n = 1; n <= 10; n++) {
     room.start();
     openHand(room);
+    if (n === 10) room.removeGuest(4);
+    playToResult(room);
     if (n === 1) {
-      while (room.round.phase === 'play') {
-        const seat = room.round.turn;
-        const move = room.view(seat).game.choices.plays[0];
-        room.act(seat, room.revision, {type:'play', ...move});
-      }
       room.returnToRoom();
       assert.throws(() => room.setRoundLimit(20));
-    } else {
-      if (n === 10) room.removeGuest(4);
-      finishByClaim(room);
     }
     const board = room.view(0).scoreboard;
     assert.equal(board.rounds, n);
@@ -83,7 +78,7 @@ test('20 rounds and unlimited rounds count settled hands and skip all-pass redea
     for (let n = 1; n <= (limit ?? 21); n++) {
       if (n > 1) room.start();
       openHand(room);
-      finishByClaim(room);
+      playToResult(room);
       const board = room.view(1).scoreboard;
       assert.equal(board.rounds, n);
       assert.equal(board.complete, n === limit);

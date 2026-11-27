@@ -133,7 +133,7 @@ test('public lobby seats, full-table FIFO and spectator-only membership', () => 
   assert.equal(room.publicSummary().humanCount, 5);
 });
 
-test('spectators get public tricks and covered piles, no hands or controls even while a claim is pending', () => {
+test('spectators get public tricks and covered piles, no hands or controls while a setting is checked', () => {
   const room = table();
   room.start();
   const bidRevision = room.revision;
@@ -166,11 +166,13 @@ test('spectators get public tricks and covered piles, no hands or controls even 
   step(room,{type:'friend',kind:'card',card:called});
   assert.equal(room.view(2).game.selfRole, 'friend');
   assert.equal(view().friend, null);
-  const position = room.act(0,room.revision,{type:'claim'});
+  const position = room.settingCheckPosition();
+  assert.ok(position);
   checkPrivate();
-  assert.equal(view().claimPending, true);
-  assert.equal(view().turn, null);
-  room.abandonClaim(position);
+  assert.equal(view().claimPending, undefined);
+  assert.equal(view().turn, 0);
+  assert.equal(view().choices.settingGuaranteed, undefined);
+  room.finishSettingCheck(position, null);
   while (room.round.phase === 'play') {
     checkPrivate();
     const g = view();

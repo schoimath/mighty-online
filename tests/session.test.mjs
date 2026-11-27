@@ -105,7 +105,7 @@ test('solo practice shares three minutes across decisions and assists only the o
   assert.equal(view().turnDeadline, null);
 });
 
-test('shared practice keeps distinct reserves, freezes during a claim and refreshes at the next hand', t => {
+test('shared practice keeps distinct reserves running during proof and refreshes them at the next hand', t => {
   t.mock.timers.enable({apis:['Date'], now:1000});
   const room = fullRoom();
   room.start();
@@ -118,13 +118,15 @@ test('shared practice keeps distinct reserves, freezes during a claim and refres
   submit({type:'discard',cards:room.hostView().game.hand.slice(0,3)});
   submit({type:'friend',kind:'none'});
   t.mock.timers.tick(180_000);
-  const job = submit({type:'claim'});
-  assert.equal(room.hostView().turnDeadline, null);
-  t.mock.timers.tick(200_000);
-  assert.equal(room.assistExpiredTurn(), false);
-  assert.equal(room.abandonClaim(job), true);
-  assert.equal(room.hostView().turnDeadline, Date.now() + 9000);
-  assert.equal(room.finishClaim(submit({type:'claim'}), false), true);
+  const job = room.settingCheckPosition();
+  const deadline = room.hostView().turnDeadline;
+  assert.equal(deadline, Date.now() + 9000);
+  assert.throws(() => submit({type:'claim'}));
+  assert.equal(room.hostView().turnDeadline, deadline);
+  t.mock.timers.tick(9000);
+  assert.equal(room.assistExpiredTurn(), true);
+  assert.equal(room.finishSettingCheck(job, {success:true,line:[]}), false);
+  while (room.round.phase === 'play') submit({type:'play', ...room.view(room.round.turn).game.choices.plays[0]});
   assert.equal(room.hostView().turnDeadline, null);
   assert.deepEqual(room.hostView().seatTimeBanks, Array(5).fill(null));
   room.start();

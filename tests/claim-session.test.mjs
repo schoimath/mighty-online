@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {HostSession} from '../session.js';
 import {createGame} from '../table-deal.js';
-import {canSweepRemaining} from '../table-claim.js';
+import {analyzeSetting} from '../table-claim.js';
 import {rngFor} from '../lab/game.js';
 import {settlements} from '../table-scoring.js';
 
@@ -20,48 +20,64 @@ function openAsGuest() {
   return room;
 }
 
-test('a guest claim is adjudicated on the host, survives a disconnect and settles only once', () => {
+test('only a proven declarer can confirm once; the private line becomes public at settlement', () => {
   const room = openAsGuest();
-  const member = room.players[1].memberId;
+  Object.assign(room.round, {trickNo:9, hands:[['D9','H2'],['SA','HA'],['H3','DJ'],['H4','DK'],['H5','DQ']]});
   const revision = room.revision;
-  assert.equal(room.view(1).game.choices.canDeclareSetting, true);
-  assert.throws(() => room.act(0, revision, {type:'claim'}));
-  const job = room.act(1, revision, {type:'claim', success:true, hands:[]});
-  assert.deepEqual(job.hands, room.round.hands);
-  assert.equal(canSweepRemaining(job), false);
-  const waiting = room.view(0);
-  assert.equal(waiting.game.claimPending, true);
-  assert.equal(waiting.game.turn, null);
-  assert.equal(waiting.game.hands, undefined);
-  assert.deepEqual(waiting.game.hand, room.round.hands[0]);
-  assert.deepEqual(room.view(1).game.choices.plays, []);
+  const job = room.settingCheckPosition();
+  assert.ok(job);
+  assert.equal(room.view(1).game.choices.canDeclareSetting, false);
+  assert.ok(room.view(1).game.choices.plays.length);
+  assert.throws(() => room.act(1, revision, {type:'claim',success:true,line:[{card:'SA'},{card:'HA'}]}));
+  assert.equal(room.revision, revision);
+  assert.equal(room.handoffState(), null);
+  const proof = analyzeSetting(job);
+  assert.equal(proof.success, true);
+  assert.equal(room.finishSettingCheck(structuredClone(job), proof), false);
+  assert.equal(room.finishSettingCheck(job, proof), true);
+  assert.equal(room.finishSettingCheck(job, proof), false);
+  assert.equal(room.settingCheckPosition(), null);
+  for (let i = 0; i < 5; i++) {
+    const {game} = room.view(i);
+    assert.equal(game.choices.canDeclareSetting, i === 1);
+    assert.equal(!!game.choices.settingGuaranteed, i === 1);
+    assert.equal(game.hands, undefined);
+    assert.equal(game.choices.line, undefined);
+    assert.equal(game.setting, undefined);
+    if (i !== 1) assert.throws(() => room.act(i, revision, {type:'claim'}));
+  }
+  room.act(1, revision, {type:'claim', success:false, line:[]});
   assert.throws(() => room.act(1, revision, {type:'claim'}));
-  assert.throws(() => room.act(1, room.revision, {type:'play',card:job.hands[1][0]}));
-  assert.equal(room.finishClaim(structuredClone(job), true), false);
-  room.removeGuest('guest1');
-  assert.equal(room.botTurn, false);
-  assert.equal(room.finishClaim(job, false), true);
-  assert.equal(room.finishClaim(job, false), false);
-  assert.equal(room.view(0).game.result.setting.success, false);
-  const board = room.view(0).scoreboard;
-  assert.equal(board.rounds, 1);
-  assert.equal(board.members.find(m => m.id === member).total, settlements(room.round.result,'N')[1]);
-  assert.equal(board.members.reduce((sum, m) => sum + m.total, 0), 0);
+  for (let i = 0; i < 5; i++) {
+    const {game,scoreboard} = room.view(i);
+    assert.deepEqual(game.result.setting.line, proof.line);
+    assert.equal(game.result.setting.success, true);
+    assert.equal(scoreboard.rounds, 1);
+    assert.equal(scoreboard.members.reduce((sum, m) => sum + m.total, 0), 0);
+    assert.equal(scoreboard.members.find(m => m.seat === 1).total, settlements(room.round.result,'N')[1]);
+  }
   room.start();
-  assert.equal(room.view(0).scoreboard.rounds, 1);
-  assert.equal(room.finishClaim(job, true), false);
+  assert.equal(room.finishSettingCheck(job, proof), false);
 });
 
-test('an interrupted verification releases the same hand without any score or penalty', () => {
+test('a losing or interrupted check leaves legal moves, time and score intact; stale results cannot re-enable it', () => {
   const room = openAsGuest();
-  const before = room.view(1).game;
-  const job = room.act(1, room.revision, {type:'claim'});
-  assert.throws(() => room.finishClaim(job, undefined));
-  assert.equal(room.abandonClaim(job), true);
-  assert.equal(room.abandonClaim(job), false);
-  assert.deepEqual(room.view(1).game, before);
+  Object.assign(room.round, {trickNo:9, hands:[['SA','H2'],['D9','HA'],['H3','DJ'],['H4','DK'],['H5','DQ']]});
+  const before = room.view(1);
+  const job = room.settingCheckPosition();
+  const verdict = analyzeSetting(job);
+  assert.equal(verdict.success, false);
+  assert.equal(room.finishSettingCheck(job, verdict), false);
+  assert.equal(room.settingCheckPosition(), null);
+  assert.throws(() => room.act(1, room.revision, {type:'claim',success:true,line:[]}));
+  assert.deepEqual(room.view(1).game, before.game);
+  assert.equal(room.view(1).turnDeadline, before.turnDeadline);
   assert.equal(room.view(1).scoreboard.rounds, 0);
-  const retry = room.act(1, room.revision, {type:'claim'});
-  assert.equal(room.finishClaim(job, false), false);
-  assert.equal(room.finishClaim(retry, canSweepRemaining(retry)), true);
+
+  const other = openAsGuest();
+  const stale = other.settingCheckPosition();
+  other.act(1, other.revision, {type:'play', ...other.view(1).game.choices.plays[0]});
+  assert.equal(other.finishSettingCheck(stale, {success:true, line:stale.hands[1].map(card=>({card}))}), false);
+  assert.equal(other.view(1).game.choices.canDeclareSetting, false);
+  assert.equal(other.view(1).scoreboard.rounds, 0);
 });

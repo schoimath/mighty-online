@@ -1,3 +1,5 @@
+import {matchesOfferedSeries} from './table-series.js';
+
 // Keep each visitor's membership separate from the host role. The credential
 // lets a tab reconnect after a reload, including when its owner is anonymous.
 export function lobbyCredential(slot, account) {
@@ -50,7 +52,8 @@ export function mayConfirmPublicDeal(view, offer, room, account) {
   const seat = view.spectator ? view.reservation?.seat : view.seat;
   const seated = Number.isInteger(seat) && seat >= 0 && seat < 5;
   if (seated ? offer.seats[seat] !== account : !view.isHost || offer.seats.includes(account)) return false;
-  return (offer.pace ?? 'normal') === view.pace && (offer.autoPlay === undefined || typeof offer.autoPlay === 'boolean') &&
+  return matchesOfferedSeries(offer.series, view.scoreboard) &&
+    (offer.pace ?? 'normal') === view.pace && (offer.autoPlay === undefined || typeof offer.autoPlay === 'boolean') &&
     view.botModels.every((id,index) => offer.models?.[index] === id) &&
     Object.entries(view.rules).every(([key,value]) => offer.rules?.[key] === value);
 }

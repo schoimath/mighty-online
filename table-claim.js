@@ -3,7 +3,7 @@ import {DECK, jokerActive, legalPlays, mighty, strength} from './engine.js';
 // The declarer must keep the lead throughout, so every follower responds to the
 // same lead, independently of earlier followers. An inactive Joker lead already
 // loses to the first ordinary card and never needs to be expanded.
-export function analyzeSetting(round) {
+export function analyzeSetting(round, {maxWork = 160_000} = {}) {
   if (round.phase !== 'play' || round.turn !== round.declarer || round.trick.length) {
     throw new Error('주공이 선을 잡은 트릭에서만 세팅을 판정할 수 있습니다.');
   }
@@ -27,6 +27,11 @@ export function analyzeSetting(round) {
   const rankOrder = cards => cards.map((card, i) => [card, i])
     .sort(([a], [b]) => DECK.indexOf(a) - DECK.indexOf(b));
   const sortedOthers = others.map(rankOrder);
+  let work = 0;
+  const exhausted = Symbol('setting search limit');
+  function spend() {
+    if (++work > maxWork) throw exhausted;
+  }
 
   function leads(mask) {
     if (ownLeads[mask]) return ownLeads[mask];
@@ -46,6 +51,7 @@ export function analyzeSetting(round) {
     // Mask size fixes the trick number, including opening/final Joker effects.
     const cache = replyCaches[seat], key = mask * (own.length * 6) + lead.id;
     if (cache.has(key)) return cache.get(key);
+    spend();
     const options = legalPlays(lead.state, held(others[seat], mask));
     let next = null;
     if (!options.some(({card}) => strength(card, round.bid.suit, lead.state.trick, lead.active) > lead.value)) {
@@ -78,6 +84,7 @@ export function analyzeSetting(round) {
   }
 
   function solve(ownMask, hands) {
+    spend();
     const relevantNow = relevantCards(ownMask);
     const key = hands.reduce((value, hand, seat) => value * base + (hand & relevantNow[seat]), 0);
     const known = memo[ownMask].get(key);
@@ -85,6 +92,7 @@ export function analyzeSetting(round) {
     // One lead must withstand every reply. Recurse after the cards are shown
     // so the declarer's next lead can depend on what all four players played.
     for (const lead of leads(ownMask)) {
+      spend();
       const options = [];
       for (let seat = 0; seat < hands.length; seat++) {
         const replies = response(seat, hands[seat], lead);
@@ -113,20 +121,23 @@ export function analyzeSetting(round) {
     return null;
   }
 
-  let hands = others.map(() => full);
-  let lead = solve(full, hands);
-  if (!lead) return {success:false};
-  // Replay one branch of the proven strategy. The first representative reply
-  // from each seat is legal and was among the branches checked by allReplies.
-  // Only declarer leads are public. Other replies may yield a different line.
-  const line = [];
-  while (lead) {
-    line.push(lead.move);
-    if (!lead.next) break;
-    hands = hands.map((mask, seat) => response(seat, mask, lead)[0]);
-    lead = solve(lead.next, hands);
+  try {
+    let hands = others.map(() => full);
+    let lead = solve(full, hands);
+    if (!lead) return {success:false};
+    // Replay one branch of the proven strategy. Only the declarer's leads are public.
+    const line = [];
+    while (lead) {
+      line.push(lead.move);
+      if (!lead.next) break;
+      hands = hands.map((mask, seat) => response(seat, mask, lead)[0]);
+      lead = solve(lead.next, hands);
+    }
+    return {success:true, line};
+  } catch (error) {
+    if (error !== exhausted) throw error;
+    return {success:false, indeterminate:true};
   }
-  return {success:true, line};
 }
 
 export function canSweepRemaining(round) {

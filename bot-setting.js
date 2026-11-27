@@ -1,7 +1,7 @@
 import {DECK, jokerActive, leadSuit, legalPlays, mighty, strength} from './engine.js';
 
-// A claim commits the bot before the host checks the actual deal. Prove a
-// sufficient line using only this seat's cards and the tricks everyone saw.
+// The bot considers a claim using its own cards and the tricks everyone saw.
+// The game verifies the strategy against the actual deal before accepting it.
 export function shouldDeclareSetting(view) {
   if (view.phase !== 'play' || view.turn !== view.seat || view.declarer !== view.seat ||
       view.trick.length || view.trickNo >= 10 || view.hand.length < 2 || view.settingAwaitingFriend) return false;

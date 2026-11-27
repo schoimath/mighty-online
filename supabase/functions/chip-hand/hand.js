@@ -3,6 +3,7 @@ import {applyAction, canDeclareSetting, createGame, getSpectatorView, getView, r
 import {analyzeSetting} from '../../../table-claim.js';
 import {shouldDeclareSetting} from '../../../bot-setting.js';
 import {settlements} from '../../../table-scoring.js';
+import {handSeries} from '../../../table-series.js';
 import {jokerWasPlayed, withJokerStatus} from '../../../table-joker.js';
 import {decideTableTurn, hasSeatMemory, isModelId, memoryForReplacement} from '../../../lab/table-agents.js';
 import {botTurnDelay, HUMAN_TURN_MS, normalizeGameSpeed, paceMultiplier, THINKING_TIME_MS} from '../../../table-timing.js';
@@ -31,10 +32,12 @@ function manifestOf(request) {
   const pace = normalizeGameSpeed(request.pace);
   check(request.pace === undefined || pace === request.pace, '테이블 진행 속도를 확인해 주세요.');
   check(request.autoPlay === undefined || typeof request.autoPlay === 'boolean', '10초 자동진행 설정을 확인해 주세요.');
+  const series = handSeries(request.series?.roundNumber, request.series?.roundLimit);
+  check(request.series === undefined || series, '경기 판수를 확인해 주세요.');
   // Keep default settings out of the hash so existing signed-off tables can start.
   return {host:host.toLowerCase(), room, seats:normalized, names:names.map(n => n.trim()),
     models, rules:validateRules(request.rules), firstSeat, ...(pace === 'normal' ? {} : {pace}),
-    ...(request.autoPlay === false ? {autoPlay:false} : {})};
+    ...(request.autoPlay === false ? {autoPlay:false} : {}), ...(series ? {series} : {})};
 }
 
 async function hashManifest(spec) {
@@ -91,6 +94,7 @@ function scheduleTurn(state, now, botTime = now, previousSeat) {
 
 function createState(spec, manifest, now) {
   const state = {manifest, names:spec.names, models:spec.models, firstSeat:spec.firstSeat, pace:normalizeGameSpeed(spec.pace), autoPlay:true,
+    ...(spec.series ? {series:spec.series} : {}),
     round:createGame({firstSeat:spec.firstSeat, rules:spec.rules}), bots:spec.seats.map(id => id === null),
     thinkingTime:spec.seats.map(id => id ? THINKING_TIME_MS : 0),
     history:Array.from({length:5}, () => []), memory:Array(5).fill(null), dueAt:null};
@@ -104,13 +108,26 @@ function nameAt(row, seat) {
     ? SUBSTITUTE_NAMES[seat] : row.state.names[seat];
 }
 
+// Polls and revision-preserving clock changes can read the same deal many
+// times. Include every solver input, so a cached line cannot cross positions.
+const settingProofs = new Map();
+function settingProof(round, seat) {
+  if (!canDeclareSetting(round, seat)) return null;
+  const key = JSON.stringify([round.declarer, round.trickNo, round.bid.suit, round.rules, round.hands]);
+  if (!settingProofs.has(key)) {
+    if (settingProofs.size >= 64) settingProofs.delete(settingProofs.keys().next().value);
+    settingProofs.set(key, analyzeSetting(round));
+  }
+  return settingProofs.get(key);
+}
+
 function present(row, id, now) {
   const {state} = row, round = state.round;
   const owner = id ? row.seats.indexOf(id) : -1;
   const seat = owner >= 0 && !state.bots[owner] ? owner : -1;
   const seenJoker = jokerWasPlayed(round);
   const publicGame = (id === row.host || seat < 0) ? withJokerStatus(getSpectatorView(round), seenJoker) : null;
-  const game = seat >= 0 ? withJokerStatus(getView(round, seat), seenJoker) : publicGame;
+  const game = seat >= 0 ? withJokerStatus(getView(round, seat, settingProof(round, seat)?.success), seenJoker) : publicGame;
   if (game.phase === 'discard' && seat === game.declarer) game.incomingCards = [...round.knownKitty];
   const deltas = round.result ? settlements(round.result, round.bid.suit) : null;
   const deadline = turnDeadline(state);
@@ -124,6 +141,7 @@ function present(row, id, now) {
   const seatBalances = row.seats.map((account, i) =>
     account && (!state.bots[i] || row.settled) && Number.isSafeInteger(row.seatBalances?.[i]) ? row.seatBalances[i] : null);
   return {handId:row.hand, room:row.room, revision:row.revision, seat, game, bots:state.bots,
+    ...(state.series ? {series:state.series} : {}),
     names:state.names.map((_, i) => nameAt(row, i)), seatBalances, models:state.models, firstSeat:state.firstSeat, pace:normalizeGameSpeed(state.pace),
     autoPlay:true, dueAt:deadline ?? state.dueAt, turnDeadline:deadline, serverNow:now, lastTimedAction:state.lastTimedAction ?? null,
     thinkingDeadline, seatTimeBanks, timeBankMs:state.thinkingTime ? THINKING_TIME_MS : 0,
@@ -149,8 +167,9 @@ function move(row, action, now, memory = null, botTime = now) {
   const name = nameAt(row, seat);
   const track = !s.bots[seat] && hasSeatMemory(s.models[seat]);
   if (action?.type === 'claim') {
-    check(canDeclareSetting(r, seat), '현재 세팅을 선언할 수 없습니다.');
-    resolveSetting(r, seat, analyzeSetting(r));
+    const proof = settingProof(r, seat);
+    check(proof?.success, '남은 트릭을 모두 딸 수 있다고 확인된 경우에만 세팅할 수 있습니다.', 409);
+    resolveSetting(r, seat, proof);
   } else {
     applyAction(r, seat, action, undefined, track ? s.history[seat] : undefined);
     if (r.dealNo !== before) {
@@ -186,7 +205,7 @@ function advanceDue(row, now, catchup) {
     const assisted = !s.bots[seat];
     const view = withJokerStatus(botObservation(s.round, seat));
     const memory = assisted ? memoryForReplacement(s.models[seat], s.history[seat]) : s.memory[seat];
-    const next = !assisted && canDeclareSetting(s.round, seat) && shouldDeclareSetting(view)
+    const next = !assisted && shouldDeclareSetting(view) && settingProof(s.round, seat)?.success
       ? {action:{type:'claim'}}
       : decideTableTurn({modelId:s.models[seat], view, memory});
     move(row, next.action, now, next.memory, catchup && !finishing && !assisted ? due : now);
@@ -349,16 +368,20 @@ export async function operateHand(input, accountId, db, now = Date.now(), playba
   } else if (op === 'act') {
     check(seat >= 0 && !state.bots[seat], '현재 이 자리에서 카드를 낼 수 없습니다.', 403);
     check(Number.isSafeInteger(input.revision), '판의 버전을 확인해 주세요.');
+    const claiming = input.action?.type === 'claim';
     for (let retry = 0; !row.state.round.result &&
          input.revision >= firstPlayableRevision(row) && input.revision <= row.revision; retry++) {
       check(retry < 4, '설정이 변경되고 있습니다. 잠시 후 카드를 다시 내 주세요.', 409);
       check(!row.state.bots[seat] && row.state.round.turn === seat, '지금은 내 차례가 아닙니다.');
-      if (row.state.soloPresenceUntil != null) updateSoloPresence(row.state, now);
       const deadline = turnDeadline(row.state);
+      if (claiming) check(deadline === null || now < deadline, '세팅을 선언할 시간이 지났습니다.', 409);
+      if (row.state.soloPresenceUntil != null) updateSoloPresence(row.state, now);
       if (deadline !== null && now >= deadline) advanceDue(row, now, false);
       else move(row, input.action, now);
       row = await db.save(row);
     }
+    if (claiming) check(row.state.round.result?.setting?.success && row.state.round.declarer === seat,
+      '차례가 바뀌었습니다. 현재 패를 확인해 주세요.', 409);
   } else {
     const renew = op === 'view' && seat >= 0 && !state.bots[seat] && !state.round.result &&
       state.soloPresenceUntil != null && state.soloPresenceUntil - now <= 45_000;

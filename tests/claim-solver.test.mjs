@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {DECK, DEFAULT_RULES, legalPlays, winningPlay} from '../engine.js';
 import {rngFor} from '../lab/game.js';
-import {canSweepRemaining} from '../table-claim.js';
+import {analyzeSetting, canSweepRemaining} from '../table-claim.js';
 
 function position(hands, suit='H', rules={}, declarer=0) {
   return {phase:'play', turn:declarer, declarer, hands, bid:{suit}, trick:[],
@@ -87,6 +87,7 @@ test('ten winning trumps can be claimed with arbitrary off-suit discards', () =>
   const cards=['H5','H6','H7','H8','H9','H10','HJ','HQ','HK','HA'];
   const side=DECK.filter(c=>!cards.includes(c) && c!=='SA' && c!=='JK');
   const game=position([cards,...Array.from({length:4},(_,i)=>side.slice(10*i,10*i+10))]);
+  assert.deepEqual(analyzeSetting(game,{maxWork:1}),{success:false,indeterminate:true});
   assert.equal(canSweepRemaining(game),true);
   assert.throws(()=>canSweepRemaining({...game,turn:3}));
   assert.throws(()=>canSweepRemaining({...game,trick:[{seat:0,card:'H5'}]}));

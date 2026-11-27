@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import {operateHand} from '../supabase/functions/chip-hand/hand.js';
 import {chipHandler} from '../supabase/functions/chip-hand/handler.js';
 import {settlements} from '../table-scoring.js';
-import {validateRules} from '../engine.js';
+import {DECK, pointsIn, validateRules} from '../engine.js';
+import {createGame} from '../table-deal.js';
 import {botTurnDelay, tableDelay} from '../table-timing.js';
 
 const host = 'b11255ac-bd23-4fd4-af36-aaaaaaaaaaaa';
@@ -14,7 +15,7 @@ const game = {handId, host, room:'TABLE2', seats:[host,guest,null,null,null],
   names:['방장','친구','AI 별','AI 구름','AI 바다'], models:Array(5).fill('heuristic'), firstSeat:0};
 const at = 1_800_000_000_000;
 
-function table() {
+function table(initialRound) {
   let row = null, charges = 0;
   let operator = {id:host, term:1, credential:'a'.repeat(64), departedSeats:[]};
   let beforeNextSave = null;
@@ -28,6 +29,7 @@ function table() {
           for (const player of new Set([spec.host,...spec.seats.filter(Boolean)])) {
             assert.deepEqual(grants.get(player),{hand,room:spec.room,seat:spec.seats.indexOf(player),hash:state.manifest});
           }
+          if (initialRound) state.round = clone(initialRound);
           row = {hand, room:spec.room, host:spec.host, seats:spec.seats, revision:0, state:clone(state), settled:false,
             seatBalances:spec.seats.map(id => id === host ? 120 : id === guest ? 300 : null)};
         }
@@ -65,6 +67,21 @@ function table() {
     beforeNextSave(callback) { beforeNextSave = callback; }};
 }
 
+test('the deal number and limit survive new player and spectator reads without lobby standings', async () => {
+  for (const series of [{roundNumber:3,roundLimit:10},{roundNumber:20,roundLimit:20},{roundNumber:38,roundLimit:null}]) {
+    const t = table(), spec = {...game,series};
+    await t.call(host,'ready',spec);
+    await t.call(guest,'ready',spec);
+    await assert.rejects(t.call(host,'start',{...spec,series:{roundNumber:1,roundLimit:10}}));
+    assert.deepEqual((await t.call(host,'start',spec)).series,series);
+    assert.deepEqual((await t.call(guest,'view')).series,series);
+    assert.deepEqual((await t.call(null,'watch')).series,series);
+  }
+  for (const series of [null,{roundNumber:1},{roundNumber:11,roundLimit:10},{roundNumber:0,roundLimit:null}]) {
+    await assert.rejects(table().call(host,'ready',{...game,series}), /경기 판수/);
+  }
+});
+
 test('verified seats consent to one match specification and receive separate projections', async () => {
   const t = table();
   await t.call(host,'ready',game);
@@ -74,6 +91,7 @@ test('verified seats consent to one match specification and receive separate pro
   await t.call(guest,'ready',game);
   await assert.rejects(t.call(host,'start',{...game, firstSeat:1}));
   const first = await t.call(host,'start',game);
+  assert.equal(first.series,undefined);
   assert.equal(first.seat,0);
   assert.equal(first.game.hand.length,10);
   assert.equal(first.publicGame.seat,-1);
@@ -156,6 +174,47 @@ test('a chip hand commits burial and friend once and only publishes the finished
   assert.equal((await t.call(host,'act',{revision,action})).revision,result.revision);
   assert.deepEqual(t.row().state.history[0],history);
   assert.equal(t.charges(),0);
+});
+
+test('only the declarer receives verified eligibility; a stale or unproven chip claim cannot move or settle the hand', async () => {
+  for (const guaranteed of [true,false]) {
+    const hands = [['HA','C3'],['JK','C2'],['D4','D2'],['S8','S4'],[guaranteed ? 'D6' : 'SA','D5']];
+    const captured = [DECK.filter(c=>pointsIn([c]) && !hands.flat().includes(c)),[],[],[],[]];
+    const round = Object.assign(createGame(),{phase:'play',turn:0,declarer:0,trickNo:9,hands,discarded:[],kitty:[],
+      bid:{suit:'H',points:14,seat:0},call:{kind:'none'},captured,scores:captured.map(cards=>cards.length)});
+    const t = table(round);
+    for (const id of [host,guest]) await t.call(id,'ready',game);
+    const view = await t.call(host,'start',game);
+    assert.equal(view.game.choices.canDeclareSetting,guaranteed);
+    assert.equal(view.game.choices.settingGuaranteed,guaranteed ? true : undefined);
+    for (const publicView of [view.publicGame,(await t.call(guest,'view')).game,(await t.call(null,'watch')).game]) {
+      assert.equal(publicView.choices.canDeclareSetting,false);
+      assert.equal(publicView.choices.settingGuaranteed,undefined);
+    }
+    assert.equal(view.game.result,null);
+    assert.equal(view.game.choices.line,undefined);
+    const before = t.row();
+    const fake = {type:'claim',success:true,line:[{card:'HA'},{card:'C3'}]};
+    await assert.rejects(t.call(guest,'act',{revision:0,action:fake}));
+    await assert.rejects(t.call(host,'act',{revision:1,action:fake}),{status:409});
+    await assert.rejects(t.call(host,'act',{revision:0,action:fake},view.turnDeadline),{status:409});
+    assert.deepEqual(t.row(),before);
+    if (guaranteed) {
+      const finished = await t.call(host,'act',{revision:0,action:fake});
+      const line = [{card:'C3',jokerCall:true},{card:'HA'}];
+      assert.deepEqual(finished.game.result.setting.line,line);
+      assert.deepEqual((await t.call(null,'watch')).game.result.setting.line,line);
+      const retry = await t.call(host,'act',{revision:0,action:fake});
+      assert.equal(retry.revision,finished.revision);
+      assert.equal(t.charges(),1);
+    } else {
+      await assert.rejects(t.call(host,'act',{revision:0,action:fake}),{status:409});
+      assert.deepEqual(t.row(),before);
+      const played = await t.call(host,'act',{revision:0,action:{type:'play',card:'HA'}});
+      assert.equal(played.game.trick[0].card,'HA');
+      assert.equal(t.charges(),0);
+    }
+  }
 });
 
 test('server plays abandoned hands to completion and only its terminal deltas are settled', async () => {

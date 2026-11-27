@@ -165,6 +165,9 @@ test('chip seats bind a verified account, its room, seat, host and table setting
   const spec = chipManifest(plan,code,owner,accounts);
   const view = guestSnapshot(table,'connection');
   assert.deepEqual(spec.seats,[owner,guest,null,null,null]);
+  assert.deepEqual(spec.series,{roundNumber:1,roundLimit:10});
+  assert.equal(offeredSeat(view,{...spec,series:undefined},code,guest),1);
+  assert.equal(offeredSeat(view,{...spec,series:{roundNumber:2,roundLimit:10}},code,guest),-1);
   assert.deepEqual(spec.names,['방장','참가자','AI 별','AI 구름','AI 바다']);
   assert.equal(offeredSeat(view,spec,code,guest),1);
   assert.equal(offeredSeat(view,spec,'ABC234',guest),-1);

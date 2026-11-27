@@ -69,14 +69,14 @@ export function applyAction(state, seat, action, randomSource, history) {
   return result;
 }
 
-export function getView(state, seat) {
+export function getView(state, seat, settingAvailable = false) {
   const view = project(state, seat);
   if (view.choices.discard) {
     // The presence of this private choice list advertises the atomic command
     // to new clients. Legacy clients continue to submit the two choices separately.
     view.choices.discardFriends = project({...state, phase:'friend'}, seat).choices.friends;
   }
-  return withTableRules(state, view);
+  return withTableRules(state, view, settingAvailable);
 }
 
 export function getSpectatorView(state) {
@@ -91,9 +91,10 @@ export function getSpectatorView(state) {
     call, trick, trickNo, lastTrick, result, scores, captured});
 }
 
-function withTableRules(state, view) {
+function withTableRules(state, view, settingAvailable = false) {
   if (state.phase === 'play' || state.result?.setting) {
-    view.choices.canDeclareSetting = canDeclareSetting(state, view.seat);
+    view.choices.canDeclareSetting = settingAvailable === true && canDeclareSetting(state, view.seat);
+    if (view.choices.canDeclareSetting) view.choices.settingGuaranteed = true;
     view.settingAwaitingFriend = Boolean(state.settingAwaitingFriend);
   }
   if (state.result?.setting?.success === false) {
