@@ -260,13 +260,17 @@ html:has(.g-screen) { scrollbar-gutter: stable; }
   box-shadow: 0 0 0 4px #bb8be34d, 0 0 14px #ddaaff80;
 }
 .g-joker-call-play .g-card-face, .g-hand-joker-call .g-card-face { background: linear-gradient(140deg, #fffbff, #eadcf8); border-color: #ab85c6; }
-.g-mighty-tag, .g-joker-call-tag {
+.g-joker-play { border-radius: 6px; outline: 2px solid #ee9f98; }
+.g-joker-play .g-joker-medallion { color: #963f46; border-color: #bd656a; }
+.g-joker-play .g-card-joker small { visibility: hidden; }
+.g-mighty-tag, .g-joker-call-tag, .g-joker-tag {
   position: absolute; left: 50%; bottom: 3%; transform: translateX(-50%);
   padding: 2px 4px; border: 1px solid #f5d784; border-radius: 4px;
   background: #4f3719; color: #fff0bd; font: 750 .7rem/1 "Malgun Gothic", sans-serif;
   white-space: nowrap;
 }
 .g-joker-call-tag { border-color: #e2c5ff; color: #fff4ff; background: #533468; }
+.g-joker-tag { bottom: 1%; padding: 1px 2px; border-color: #f4b1a8; color: #fff4ea; background: #78353b; }
 .g-call-announcement { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .g-played > span { display: block; margin: 3px -4px 0; color: #d7e3cf; font-size: .75rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .g-hand-card :is(.g-mighty-tag, .g-joker-call-tag) { bottom: 4%; padding: 1px 3px; font-size: clamp(9px, .9vw, 11px); pointer-events: none; }
@@ -545,6 +549,14 @@ html:has(.g-screen) { scrollbar-gutter: stable; }
   }
   .g-joker-call-play .g-card-face::after { background: linear-gradient(110deg, transparent 38%, #fbf4ffed 50%, transparent 62%); }
   .g-mighty-play .g-mighty-tag, .g-joker-call-play .g-joker-call-tag { animation: g-mighty-title 360ms 110ms ease-out backwards; }
+  .g-joker-play { --joker-landing: calc(var(--play-time) * var(--table-pace)); }
+  .g-joker-play .g-joker-medallion { animation: g-joker-turn 450ms var(--joker-landing) ease-out backwards; }
+  .g-joker-play .g-joker-tag { animation: g-mighty-title 220ms var(--joker-landing) ease-out backwards; }
+  .g-joker-play .g-card-joker::after {
+    content: ""; position: absolute; left: 50%; top: 54%; width: 43%; aspect-ratio: 1;
+    border: 2px solid #d5807d; border-radius: 2px; opacity: 0; pointer-events: none;
+    animation: g-joker-flare 420ms var(--joker-landing) ease-out;
+  }
   .g-trick.g-collecting .g-played {
     animation: g-gather-cards calc(390ms * var(--table-pace)) cubic-bezier(.52, .03, .8, .55) forwards;
   }
@@ -579,6 +591,15 @@ html:has(.g-screen) { scrollbar-gutter: stable; }
 @keyframes g-mighty-title {
   from { opacity: .2; transform: translate(-50%, 5px) scale(.75); }
   to { opacity: 1; transform: translate(-50%, 0); }
+}
+@keyframes g-joker-turn {
+  from { transform: translate(-50%, -50%) rotate(-90deg) scale(.7); }
+  70% { transform: translate(-50%, -50%) rotate(56deg) scale(1.1); }
+  to { transform: translate(-50%, -50%) rotate(45deg); }
+}
+@keyframes g-joker-flare {
+  from { opacity: .9; transform: translate(-50%, -50%) rotate(0deg) scale(.7); }
+  to { opacity: 0; transform: translate(-50%, -50%) rotate(45deg) scale(1.7); }
 }
 @keyframes g-gather-cards {
   from { opacity: 1; transform: none; }

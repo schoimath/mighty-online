@@ -317,6 +317,10 @@ function renderTable(ui, nameAt) {
   renderTrick(ui, nameAt);
 }
 
+function moveKey(move) {
+  return [move.seat, move.card, move.suit || '', Boolean(move.jokerCall)].join('/');
+}
+
 function renderTrick(ui, nameAt) {
   const {view, root, playPending} = ui;
   const felt = root.querySelector(".g-felt");
@@ -341,7 +345,6 @@ function renderTrick(ui, nameAt) {
   }
   // Keep the clicked card mounted when its authoritative move arrives. A rejected
   // play (or another choice made in a second tab) only replaces the differing suffix.
-  const moveKey = move => [move.seat, move.card, move.suit || '', Boolean(move.jokerCall)].join('/');
   let kept = 0;
   while (kept < moves.length && trick.children[kept]?.dataset.move === moveKey(moves[kept])) kept++;
   while (trick.children.length > kept) trick.lastElementChild.remove();
@@ -351,18 +354,28 @@ function renderTrick(ui, nameAt) {
     const offset = (move.seat - Math.max(0, view.seat) + 5) % 5;
     const isMighty = move.card === mighty(view.bid.suit);
     const called = move.jokerCall && (!view.jokerPlayed || moves.some(play => play.card === "JK"));
+    const freeJoker = move.card === "JK" && !moves[0].jokerCall;
     const ruff = move.card[0] === view.bid.suit && lead !== view.bid.suit;
     const label = nameAt(move.seat) + " · " + cardName(move.card) + (called ? " · 조커콜" : isMighty ? " · 마이티" : "");
     const caption = move.suit ? suitMark(move.suit) + " 요구" : escapeHtml(nameAt(move.seat));
-    const effect = called ? " g-joker-call-play" : isMighty ? " g-mighty-play" : "";
-    const badge = called ? jokerCallBadge : isMighty ? mightyBadge : "";
+    let effect = "", badge = "", landingSound = ruff ? "ruff" : "";
+    if (called) {
+      effect = " g-joker-call-play";
+      badge = jokerCallBadge;
+      landingSound = "jokerCall";
+      felt.querySelector(".g-call-announcement").textContent = label;
+    } else if (isMighty) {
+      effect = " g-mighty-play";
+      badge = mightyBadge;
+    } else if (freeJoker) {
+      effect = " g-joker-play";
+      badge = '<b class="g-joker-tag" aria-hidden="true">조커</b>';
+      landingSound = "joker";
+    }
     trick.insertAdjacentHTML("beforeend", `<div class="g-played g-played-${offset}" data-play-seat="${move.seat}"><div class="g-on-table${effect}" role="img" aria-label="${escapeHtml(label)}">${cardFace(move.card)}${badge}</div><span class="g-play-label">${caption}</span></div>`);
     trick.lastElementChild.dataset.move = moveKey(move);
     const face = trick.lastElementChild.firstElementChild;
-    if (called) {
-      felt.querySelector(".g-call-announcement").textContent = label;
-      face.dataset.landingSound = "jokerCall";
-    } else if (ruff) face.dataset.landingSound = "ruff";
+    if (landingSound) face.dataset.landingSound = landingSound;
     if (!motionEnabled()) {
       if (face.dataset.landingSound) playTableSound(face.dataset.landingSound);
       continue;
@@ -1230,14 +1243,17 @@ function finishCollection(ui) {
   else displayLatest(ui);
 }
 
-function displayChipPlays(ui) {
+function displayChipPlays(ui, pending) {
   if (ui.timer || ui.resolving) { updateTurnCountdown(ui); return; }
   const step = nextTablePlay(ui.view, ui.latest, ui.completedTricks);
   if (!step || document.hidden) { displayLatest(ui); return; }
   const now = performance.now();
   const gap = tableDelay(step.behind > 0 ? 170 : 240, ui.options.pace);
   const remaining = (ui.playShownAt ?? -Infinity) + gap - now;
-  if (remaining > 1) {
+  // An acknowledged local card is already on the felt. Holding the preceding
+  // frame here would remove it and replay its landing sound and animation.
+  const alreadyShown = pending?.trickNo === step.number && moveKey(pending.move) === moveKey(step.move);
+  if (remaining > 1 && !alreadyShown) {
     // A newer authoritative frame has arrived, so the held frame must never
     // submit a decision (even if its player is also next in the new trick).
     if (ui.view.turn !== null) {
@@ -1278,7 +1294,7 @@ function collectTrick(ui) {
     el.style.setProperty("--collect-rotate", ((2 - i) * 7) + "deg");
     if (covered) {
       face.replaceChildren();
-      face.classList.remove("g-mighty-play", "g-joker-call-play");
+      face.classList.remove("g-mighty-play", "g-joker-call-play", "g-joker-play");
       face.setAttribute("aria-label", "덮은 카드");
     }
   }
@@ -1379,7 +1395,7 @@ export function renderGame(container, publicView, options = {}) {
   ui.options = options;
   paintPace(ui);
   if (replay) {
-    displayChipPlays(ui);
+    displayChipPlays(ui, pending);
     return;
   }
   // The first frame (or a changed seat, deal or resumed tab) starts live.

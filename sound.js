@@ -21,6 +21,7 @@ const cues = {
   deal: {duration: .20, strokes: [0, .045, .093], decay: .019, tone: 125, tap: .10},
   play: {duration: .105, strokes: [0], decay: .014, tone: 150, tap: .46},
   ruff: {duration: .24, strokes: [0, .032, .046], decay: .021, tone: 190, tap: .24},
+  joker: {duration: .42, strokes: [0], decay: .012, tone: 150, tap: .25},
   collect: {duration: .23, strokes: [0, .065], decay: .038, tone: 105, tap: .12}
 };
 
@@ -85,6 +86,19 @@ function makeSound(kind) {
     return buffer;
   }
   const buffer = paperSound(cues[kind]);
+  if (kind === "joker") {
+    // The card flick leads into two grace notes and a longer, lower pluck.
+    const samples = buffer.getChannelData(0), rate = buffer.sampleRate;
+    for (const [onset, note, decay] of [[.012, 659.25, .032], [.066, 622.25, .032], [.124, 493.88, .078]]) {
+      const start = Math.round(onset * rate);
+      for (let i = start; i < samples.length; i++) {
+        const t = (i - start) / rate, phase = 2 * Math.PI * note * t;
+        const envelope = Math.min(1, t / .003, (samples.length - 1 - i) / (rate * .012)) * Math.exp(-t / decay);
+        samples[i] += envelope * (.50 * Math.sin(phase) + .15 * Math.sin(3 * phase) * Math.exp(-t / .022));
+      }
+    }
+    return buffer;
+  }
   if (kind !== "ruff") return buffer;
   // A short paper flick lands on a lower, resonant table knock.
   const samples = buffer.getChannelData(0);
