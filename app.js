@@ -4,6 +4,7 @@ import {createNextRoundTimer} from './next-round.js';
 import {handSeries, seriesFromBoard} from './table-series.js';
 import {hostRoom, joinRoom, normalizeRoomCode} from './network.js';
 import {canWatchAfterHostFailure, listPublicRooms, readPublicHand, reserveDirectoryRoom, watchDirectoryRoom} from './public-directory.js';
+import {subscribeDirectoryEvents} from './directory-events.js';
 import {lobbyCredential, mayConfirmPublicDeal, openPublicLobby, requestPublicLobby} from './public-lobby-client.js';
 import {renderPublicTables, renderPublicAudience, publicTableName} from './public-room-ui.js';
 import {HostSession} from './session.js';
@@ -71,6 +72,8 @@ let publicReader = null, inheritedHand = null;
 let pausedAfterTransfer = null;
 let directoryScan = null;
 let directoryTimer;
+let stopDirectoryEvents = null, directoryConnected = false, directoryChanged = false;
+let directoryLastRead = -Infinity;
 let listedRooms = [];
 const chat = setupChat(sendChat);
 let chatRoomId = null;
@@ -415,6 +418,10 @@ function showScreen(screen) {
 
 function pauseDirectory() {
   clearTimeout(activeTimer);
+  stopDirectoryEvents?.();
+  stopDirectoryEvents = null;
+  directoryConnected = directoryChanged = false;
+  directoryLastRead = -Infinity;
   clearTimeout(directoryTimer);
   directoryScan?.abort();
   directoryScan = null;
@@ -434,30 +441,53 @@ function releaseUnusedRoom(store, code) {
   trackDirectoryRelease(code,watchDirectoryRoom(accountClient,{store,getSummary:()=>null}).close());
 }
 
+function queueDirectoryChange() {
+  if (mode !== 'lobby' || pendingConnect || document.hidden || directoryChanged) return;
+  directoryChanged = true;
+  if (!directoryScan) scheduleDirectoryRead();
+}
+
+function scheduleDirectoryRead(idleDelay) {
+  clearTimeout(directoryTimer);
+  // A burst of seat changes needs one fresh list. A change during a read
+  // needs another read, as it may have arrived after the server's snapshot.
+  const delay = directoryChanged ? Math.max(0, 1000 - (performance.now() - directoryLastRead)) : idleDelay;
+  directoryTimer = setTimeout(refreshDirectory, delay);
+}
+
 async function refreshDirectory() {
   if (mode !== 'lobby' || pendingConnect || document.hidden || directoryScan) return;
   chipLeaderboard.refreshIfStale();
   clearTimeout(directoryTimer);
   const controller = new AbortController();
   directoryScan = controller;
-  let nextScan = 45000;
-  renderPublicTables(listedRooms, {loading:true});
+  directoryChanged = false;
+  directoryLastRead = performance.now();
+  stopDirectoryEvents ??= subscribeDirectoryEvents(accountClient, {
+    onChange:queueDirectoryChange,
+    onStatus(connected) {
+      if (directoryConnected === connected) return;
+      directoryConnected = connected;
+      queueDirectoryChange();
+    }
+  });
+  let nextScan;
+  if (!listedRooms.length) renderPublicTables(listedRooms, {loading:true});
   try {
     const rooms = await listPublicRooms({signal:controller.signal});
     if (controller.signal.aborted) return;
     listedRooms = rooms;
-    if (rooms.some(room => room.phase === 'settling')) nextScan = 8000;
+    nextScan = rooms.some(room => room.phase === 'settling') ? 8000 : 45000;
     renderPublicTables(rooms);
   } catch (error) {
     if (!controller.signal.aborted) {
-      listedRooms = [];
       renderPublicTables(listedRooms, {error:error.message});
       nextScan = 15000;
     }
   } finally {
     if (directoryScan === controller) {
       directoryScan = null;
-      directoryTimer = setTimeout(refreshDirectory, nextScan);
+      scheduleDirectoryRead(directoryConnected ? nextScan : 5000);
     }
   }
 }
@@ -527,6 +557,7 @@ $('modal').addEventListener('cancel', event => { event.preventDefault(); closeMo
 $('modal').addEventListener('click', event => { if (event.target === $('modal')) closeModal(); });
 let restoreRoomLobby = false;
 window.addEventListener('pagehide', event => {
+  if (mode === 'lobby') pauseDirectory();
   if (mode === 'public') {
     // On reload the tab can prove the same membership again. The server
     // expires abandoned visitors and transfers the role independently.
@@ -549,6 +580,9 @@ window.addEventListener('pagehide', event => {
   else if (mode === 'joining') stopSession();
 });
 window.addEventListener('pageshow', event => {
+  if (event.persisted && mode === 'lobby' && !restoreRoomLobby) {
+    refreshDirectory(); refreshActiveHand(); return;
+  }
   if (event.persisted && mode === 'practice') { checkPracticeClock(); return; }
   if (event.persisted && mode === 'public') { publicLobby.wake(); return; }
   if (!event.persisted || !restoreRoomLobby) return;
