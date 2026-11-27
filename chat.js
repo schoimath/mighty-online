@@ -55,6 +55,64 @@ function saveChatSetting(key, value) {
   try { localStorage.setItem(key, JSON.stringify(value)); } catch {}
 }
 
+function resizeDockedChat(panel, grip, scroll) {
+  const key = 'mighty-chat-vertical-height';
+  const rootStyle = document.documentElement.style;
+  let height = readChatSetting(key), drag = null;
+  if (Number.isSafeInteger(height) && height > 0) rootStyle.setProperty('--chat-vertical-height',height + 'px');
+
+  function syncRange() {
+    if (grip.hidden || !panel.isConnected) return;
+    const style = getComputedStyle(panel);
+    const current = Math.round(panel.getBoundingClientRect().height);
+    grip.setAttribute('aria-valuemin',String(Math.ceil(parseFloat(style.minHeight))));
+    grip.setAttribute('aria-valuemax',String(Math.floor(parseFloat(style.maxHeight))));
+    grip.setAttribute('aria-valuenow',String(current));
+    grip.setAttribute('aria-valuetext',`${current}픽셀`);
+  }
+  function setHeight(value) {
+    const atBottom = scroll.scrollHeight - scroll.clientHeight - scroll.scrollTop < 30;
+    if (value === null) {
+      height = null;
+      rootStyle.removeProperty('--chat-vertical-height');
+    } else {
+      height = bound(Math.round(value),Number(grip.getAttribute('aria-valuemin')),Number(grip.getAttribute('aria-valuemax')));
+      rootStyle.setProperty('--chat-vertical-height',height + 'px');
+    }
+    if (atBottom) scroll.scrollTop = scroll.scrollHeight;
+    syncRange();
+  }
+  grip.addEventListener('pointerdown', event => {
+    if (!event.isPrimary || event.button !== 0 || drag) return;
+    syncRange();
+    drag = {id:event.pointerId, y:event.clientY, height:panel.getBoundingClientRect().height};
+    grip.setPointerCapture(event.pointerId);
+  });
+  grip.addEventListener('pointermove', event => {
+    if (drag?.id !== event.pointerId || (event.clientY === drag.y && !drag.moved)) return;
+    drag.moved = true;
+    setHeight(drag.height + event.clientY - drag.y);
+  });
+  grip.addEventListener('lostpointercapture', event => {
+    if (drag?.id !== event.pointerId) return;
+    if (drag.moved) saveChatSetting(key,height);
+    drag = null;
+  });
+  grip.addEventListener('keydown', event => {
+    if (event.key === 'Home') {
+      setHeight(null);
+    } else if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+      syncRange();
+      const step = event.shiftKey ? 64 : 16;
+      setHeight(panel.getBoundingClientRect().height + (event.key === 'ArrowUp' ? -step : step));
+    } else return;
+    event.preventDefault();
+    saveChatSetting(key,height);
+  });
+  new ResizeObserver(syncRange).observe(panel);
+  window.addEventListener('resize',syncRange);
+}
+
 function positionFloatingChat(panel, title, grip) {
   const viewport = window.visualViewport;
   const saved = readChatSetting('mighty-chat-position');
@@ -159,8 +217,10 @@ export function setupChat(send) {
   const submit = el('chat-send'), feedback = el('chat-feedback'), empty = el('chat-empty');
   const earlier = el('chat-older'), disclosure = el('chat-disclosure');
   const title = el('chat-title'), grip = el('chat-resize'), form = el('chat-form');
+  const heightGrip = el('chat-height-grip');
   const modeButtons = Array.from(panel.querySelectorAll('[data-chat-mode]'));
   const layoutFloating = positionFloatingChat(panel,title,grip);
+  resizeDockedChat(panel,heightGrip,scroll);
   const log = new ChatLog();
   const mine = new Set();
   let device = null, ownSend = null, failed = null, earlierPage = null, hasMore = false;
@@ -206,6 +266,7 @@ export function setupChat(send) {
     panel.hidden = !open;
     reopen.hidden = open;
     grip.hidden = !floating;
+    heightGrip.hidden = layout !== 'vertical';
     if (floating) {
       title.tabIndex = 0;
       title.title = '끌거나 방향키로 이동 · Home으로 위치 초기화';

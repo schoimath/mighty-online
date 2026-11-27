@@ -44,12 +44,14 @@
 .g-layout > .chat-dock { grid-column:1; }
 .room-page > .chat-dock { width:min(600px,100%); }
 .chat-dock[data-chat-layout="floating"] { display: contents; }
-.chat-dock[data-chat-layout="vertical"] .chat-panel {
-  height: clamp(270px, 53dvh, 440px);
-  max-height: none;
+:root {
+  --chat-sidebar-default: clamp(270px, 53dvh, 440px);
+  --chat-sidebar-max: max(168px, calc(100dvh - 16px));
+  --chat-sidebar-height: clamp(168px, var(--chat-vertical-height, var(--chat-sidebar-default)), var(--chat-sidebar-max));
 }
+.chat-dock[data-chat-layout="vertical"] .chat-panel { height: var(--chat-sidebar-height); max-height: var(--chat-sidebar-max); }
 @media (min-width: 1024px) and (min-height: 541px), (min-width: 1024px) and (pointer: fine) {
-  .g-layout, .room-page { --chat-sidebar-height: clamp(320px, 78dvh, 660px); }
+  :root { --chat-sidebar-default: clamp(320px, 78dvh, 660px); }
   .g-main:has(.chat-dock[data-chat-layout="vertical"]) { width: 100%; max-width: 1340px; }
   .g-layout:has(> .chat-dock[data-chat-layout="vertical"]) {
     grid-template-columns: minmax(0, 1fr) clamp(250px, 24vw, 315px);
@@ -65,7 +67,6 @@
     justify-content: center; column-gap: 14px;
   }
   .room-page > .chat-dock[data-chat-layout="vertical"] { align-self: start; margin-block: 12px; }
-  .chat-dock[data-chat-layout="vertical"] .chat-panel { height: var(--chat-sidebar-height); }
 }
 .chat-reopen { width:100%; min-height:40px; background:#ecf3e9; color:#294d38; border:1px solid #8a9f8c; border-radius:9px; font-weight:700; }
 @media (pointer: fine) {
@@ -85,6 +86,14 @@
   outline: 2px solid #f5d18e; outline-offset: 1px;
 }
 #chat-resize { display: none; }
+#chat-height-grip {
+  display: grid; flex: 0 0 22px; width: 100%; place-items: center; cursor: ns-resize;
+  touch-action: none; user-select: none; background: #eff3eb; color: #708474;
+}
+#chat-height-grip::before { content: ""; width: 34px; height: 3px; border-radius: 2px; background: currentColor; }
+#chat-height-grip:is(:hover,:focus-visible,:active) { color: #315740; background: #e0eadc; }
+#chat-height-grip:focus-visible { outline: 2px solid #42674e; outline-offset: -2px; }
+@media (pointer: coarse) { #chat-height-grip { flex-basis: 30px; } }
 .chat-panel[data-chat-layout="floating"] {
   position: fixed; z-index: 30; left: var(--chat-x); top: var(--chat-y);
   width: var(--chat-width); height: var(--chat-height); min-height: 0; max-height: none;

@@ -130,6 +130,7 @@
 .audience-seat button { margin-inline-start: auto; }
 #game .public-audience {
   --audience-ink: #e8efe7; --audience-muted: #bbcebf; --audience-chip: #294b3a; --audience-line: #40604f;
+  grid-column: 1;
   background: #1c382c;
 }
 #game .public-audience button { font-size: .85rem; font-weight: 700; }

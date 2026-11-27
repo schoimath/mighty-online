@@ -528,13 +528,13 @@ function bidControls(view, ui) {
   const suits = [...new Set(bids.map(b => b.suit))];
   const points = bids.filter(b => b.suit === ui.bidSuit).map(b => [b.points, b.points + "점"]);
   if (!bids.length) return '<h2>패스할 차례예요</h2><p>20점 노기루다가 최고 공약입니다.</p>';
-  let hint = "손패에서 가장 많은 무늬가 먼저 선택돼요.";
+  let hint = "";
   if (view.bid) {
     hint = ui.bidSuit === "N" && view.bid.suit !== "N"
       ? `노기루다는 현재 공약과 같은 ${escapeHtml(view.bid.points)}점부터 부를 수 있어요.`
       : `${suitInfo[ui.bidSuit][1]}는 ${escapeHtml(points[0][0])}점부터 부를 수 있어요.`;
   }
-  return `<h2>공약을 정하세요</h2><p>${hint}</p>${suitPicker("기루다","bidSuit",suits,ui.bidSuit)}${select("공약 점수", "bidPoints", points, ui.bidPoints)}`;
+  return `<h2>공약을 정하세요</h2>${hint ? `<p>${hint}</p>` : ""}${suitPicker("기루다","bidSuit",suits,ui.bidSuit)}${select("공약 점수", "bidPoints", points, ui.bidPoints)}`;
 }
 function combinedPreparation(view) {
   return phoneLayout.matches && view.phase === "discard" && view.seat >= 0 && view.turn === view.seat &&
@@ -915,8 +915,8 @@ function mountTable(root) {
         </div>
         <section class="g-round-result g-action" aria-label="판 결과" hidden></section>
         <section class="g-match-final" aria-label="경기 최종 결과" hidden></section>
+        <section class="g-public-audience public-audience" hidden></section>
       </div>
-      <section class="g-public-audience public-audience" hidden></section>
     </div>
     <dialog id="g-records-dialog" class="modal g-records-dialog" aria-labelledby="g-records-title">
       <div class="modal-inner"><h2 id="g-records-title">대국 기록</h2>

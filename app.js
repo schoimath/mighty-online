@@ -1037,20 +1037,18 @@ function drawRoom() {
     room.append(roomPanel);
   }
   const startHint = snapshot.preparing ? '참가자 계정과 칩 잔액을 확인하고 있습니다.' : host
-    ? (!occupied ? '한 명 이상 자리에 앉으면 게임을 시작할 수 있습니다.' : occupied < 5 ? '빈자리 ' + (5 - occupied) + '곳은 AI가 맡습니다.' : '다섯 자리가 모두 찼습니다.')
+    ? (!occupied ? '한 명 이상 자리에 앉으면 게임을 시작할 수 있습니다.' : occupied === 5 ? '다섯 자리가 모두 찼습니다.' : '')
     : snapshot.spectator ? '방장이 게임을 시작하면 보드에서 관전할 수 있습니다.' : '방장이 게임을 시작하면 카드를 받습니다.';
   const startSection = '<div class="room-start"><div class="room-start-actions">' + (host
-    ? '<button type="button" id="start-round" class="round-start-button" aria-describedby="room-start-hint"' + (!occupied || snapshot.preparing ? ' disabled' : '') + '>' +
+    ? '<button type="button" id="start-round" class="round-start-button"' + (startHint ? ' aria-describedby="room-start-hint"' : '') + (!occupied || snapshot.preparing ? ' disabled' : '') + '>' +
       (snapshot.preparing ? '참가자 확인 중…' : '게임 시작') + '</button>'
     : '') + (canWatch ? '<button type="button" class="plain-button" id="lobby-watch">관전석으로</button>' : '') +
-    '<button type="button" class="plain-button" id="room-leave">나가기</button></div><p id="room-start-hint">' + startHint + '</p></div>';
-  roomPanel.innerHTML = '<h1>' + (snapshot.publicRoom ? '공개 게임 대기실' : '게임 대기실') + '</h1><p>' +
-    (snapshot.publicRoom ? '관전 중에도 빈자리에 앉을 수 있습니다.' : '친구에게 방 코드나 초대 링크를 보내 주세요.') + '</p>' +
+    '<button type="button" class="plain-button" id="room-leave">나가기</button></div>' + (startHint ? '<p id="room-start-hint">' + startHint + '</p>' : '') + '</div>';
+  roomPanel.innerHTML = '<h1>' + (snapshot.publicRoom ? '공개 게임 대기실' : '게임 대기실') + '</h1>' +
+    (snapshot.publicRoom ? '' : '<p>친구에게 방 코드나 초대 링크를 보내 주세요.</p>') +
     '<div class="room-code-section"><span>방 코드</span><strong class="room-code">' + escape(roomCode) + '</strong><button id="copy-invite" class="plain-button">초대 링크 복사</button></div>' +
     '<div class="seat-heading"><h2>' + (canChoose ? '자리 선택' : '참가자') + '</h2><span>참가 ' + occupied + ' / 5</span></div>' +
-    (canChoose ? '<p class="seat-hint">' + (snapshot.spectator
-      ? (occupied < 5 ? '참가하려면 원하는 빈자리를 누르세요.' : '다섯 자리가 모두 찼습니다. 아래에서 다음 자리를 예약할 수 있습니다.')
-      : '자리 번호 순으로 진행합니다. 빈자리에 앉거나 다른 참가자에게 교환을 요청하세요.') + '</p>' : '') +
+    (canChoose && snapshot.spectator && occupied === 5 ? '<p class="seat-hint">다섯 자리가 모두 찼습니다. 아래에서 다음 자리를 예약할 수 있습니다.</p>' : '') +
     '<ol class="seat-list ' + (canChoose ? 'seat-map' : 'seat-readonly') + '" aria-label="자리 번호 순서">' + seats + '</ol>' + swapPanel +
     startSection + roomGameOptions(snapshot, host) +
     ruleEditor(activeRules(), {room:true, editable:host}) +

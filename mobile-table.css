@@ -121,6 +121,9 @@
   .g-screen[data-phase="bid"] .g-hand {
     inset: auto 0 0 auto; width: var(--bid-side); height: auto; max-height: calc(100dvh - 48px); overflow-y: auto;
   }
+  .g-screen[data-phase="bid"][data-seated] .g-public-audience {
+    width: var(--bid-side); max-width: 100%; justify-self: center;
+  }
   .g-screen[data-phase="bid"] .g-cards { grid-template-columns: repeat(5,minmax(0,1fr)); }
   .g-screen[data-phase="bid"] .g-bid-actions .g-btn { padding-inline: 3px; }
   .g-screen .g-felt {
@@ -150,9 +153,10 @@
   .g-screen:is([data-phase="bid"],[data-preparing]) .g-match-progress,
   .g-screen[data-phase="bid"] .g-round-tags, .g-screen[data-preparing] .g-friend-tag { display: none; }
   .g-screen:is([data-phase="bid"],[data-preparing]) .g-layout { display: block; }
+  .g-screen:is([data-phase="bid"],[data-preparing]) :is(.g-decision-surface,.g-public-audience) { margin-inline: 6px; }
   .g-screen:is([data-phase="bid"],[data-preparing]) .g-decision-surface {
     display: flex; flex-direction: column; min-height: calc(100cqh - 42px);
-    gap: 6px; margin-inline: 6px; padding-bottom: max(8px,env(safe-area-inset-bottom));
+    gap: 6px; padding-bottom: max(8px,env(safe-area-inset-bottom));
   }
   .g-screen[data-phase="bid"][data-seated] .g-decision-surface {
     height: calc(100cqh - 42px);
