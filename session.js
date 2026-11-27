@@ -46,9 +46,10 @@ export class HostSession {
   chipHandId = null;
   #chipRevision = -1;
 
-  constructor(hostName, rules = DEFAULT_RULES, botModels, roundLimit = null, {publicRoom = false, hostSpectator = false, pace, modelChoice = commonModelChoice(botModels)} = {}) {
+  constructor(hostName, rules = DEFAULT_RULES, botModels, roundLimit = null, {publicRoom = false, hostSpectator = false, pace, autoPlay = true, modelChoice = commonModelChoice(botModels)} = {}) {
     this.publicRoom = publicRoom === true;
     this.pace = normalizeGameSpeed(pace);
+    this.autoPlay = autoPlay !== false;
     this.#hostName = hostName;
     this.players = Array(5).fill(null);
     this.hostSeat = this.publicRoom && hostSpectator ? -1 : 0;
@@ -91,7 +92,7 @@ export class HostSession {
         choices:{canPass:false, bids:[], discard:false, contracts:[], friends:[], plays:[], canDeclareSetting:false}};
       for (const key of fields) if (Object.hasOwn(game,key)) round[key] = game[key];
     }
-    return structuredClone({version:1, publicRoom:this.publicRoom, rules:this.rules, pace:this.pace,
+    return structuredClone({version:1, publicRoom:this.publicRoom, rules:this.rules, pace:this.pace, autoPlay:this.autoPlay,
       models:this.botModels, modelChoice:this.modelChoice, roundLimit:this.#roundLimit, revision:this.revision, hostSeat:this.hostSeat,
       hostMemberId:this.#hostMemberId,
       players:this.players, connections:[...this.connections], observers:[...this.#observers],
@@ -113,7 +114,8 @@ export class HostSession {
     }
     const peers = new Map(state.connections), observers = new Map(state.observers);
     const name = state.players[state.hostSeat]?.name ?? observers.get(null);
-    const session = new HostSession(name,state.rules,state.models,state.roundLimit,{publicRoom:state.publicRoom,pace:state.pace,modelChoice:state.modelChoice});
+    const session = new HostSession(name,state.rules,state.models,state.roundLimit,
+      {publicRoom:state.publicRoom,pace:state.pace,autoPlay:state.autoPlay,modelChoice:state.modelChoice});
     session.hostSeat = state.hostSeat;
     session.players = state.players;
     session.connections = peers;
@@ -435,6 +437,13 @@ export class HostSession {
     if (!this.round) this.revision++;
   }
 
+  setAutoPlay(enabled) {
+    if (typeof enabled !== 'boolean') throw new Error('10초 자동진행 설정을 확인해 주세요.');
+    if (this.autoPlay === enabled) return;
+    this.autoPlay = enabled;
+    if (!this.round) this.revision++;
+  }
+
   get #complete() {
     return this.#roundLimit !== null && this.#completedRounds >= this.#roundLimit;
   }
@@ -453,7 +462,7 @@ export class HostSession {
       const id = seat === this.hostSeat ? null : Array.from(this.connections).find(([, n]) => n === seat)?.[0];
       return {id, name:player.name};
     });
-    return {seats, firstSeat, models:[...this.botModels], rules:{...this.rules}, pace:this.pace};
+    return {seats, firstSeat, models:[...this.botModels], rules:{...this.rules}, pace:this.pace, autoPlay:this.autoPlay};
   }
 
   start() {
@@ -489,7 +498,10 @@ export class HostSession {
   syncChipHand(reply) {
     if (reply.handId !== this.chipHandId || reply.revision <= this.#chipRevision || reply.publicGame?.seat !== -1) return false;
     this.#chipRevision = reply.revision;
-    if (!this.round?.result || !reply.publicGame.result) this.pace = normalizeGameSpeed(reply.pace);
+    if (!this.round?.result || !reply.publicGame.result) {
+      this.pace = normalizeGameSpeed(reply.pace);
+      this.autoPlay = reply.autoPlay !== false;
+    }
     this.round = reply.publicGame;
     for (let seat = 0; seat < 5; seat++) {
       if (reply.bots[seat] && this.players[seat] && !this.players[seat].bot) {
@@ -692,7 +704,7 @@ export class HostSession {
     return {revision: this.revision, chipHandId:this.chipHandId, chipRevision:this.#chipRevision, seat, hostSeat: this.hostSeat, swap: swap ? {...swap} : null,
       publicRoom:this.publicRoom, spectator, spectators, reservation:positions.get(id) ?? null, supportsReservedExit:true,
       supportsOpenSeatChoice:this.publicRoom,
-      rules: {...this.rules}, pace:this.pace, botModels: [...this.botModels], modelChoice:this.modelChoice, players: roster.map(p => p && {...p}),
+      rules: {...this.rules}, pace:this.pace, autoPlay:this.autoPlay, botModels: [...this.botModels], modelChoice:this.modelChoice, players: roster.map(p => p && {...p}),
       scoreboard: this.#scoreboard(), game};
   }
 }

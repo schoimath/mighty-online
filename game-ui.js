@@ -740,7 +740,7 @@ function updateTurnCountdown(ui) {
   clearTimeout(ui.turnTimer);
   const clock = ui.root.querySelector(".g-turn-clock");
   const deadline = ui.options.turnDeadline;
-  clock.hidden = !Number.isFinite(deadline) || ui.view.turn == null || ui.view.phase === "result";
+  clock.hidden = ui.options.autoPlay === false || !Number.isFinite(deadline) || ui.view.turn == null || ui.view.phase === "result";
   if (clock.hidden) return;
   const remaining = Math.max(0, deadline - Date.now());
   const seconds = Math.ceil(remaining / 1000);
@@ -857,7 +857,10 @@ function mountTable(root) {
         <div class="g-title-row"><div class="g-title-context"><h1></h1><div class="g-round-tags"><span class="g-round-tag"></span><span class="g-friend-tag" aria-live="polite" aria-atomic="true" hidden></span></div></div>
           <label class="g-pace"><span>진행 속도</span>
             <select data-table-pace><option value="slow">느리게</option><option value="normal">보통</option><option value="fast">빠르게</option></select>
-            <strong class="g-pace-value" hidden></strong></label></div></div>
+            <strong class="g-pace-value" hidden></strong></label>
+          <button type="button" class="g-auto-play" data-table-auto-play role="switch" aria-label="10초 자동진행"
+            aria-checked="true" title="사람이 10초 동안 선택하지 않으면 AI가 대신 진행합니다." hidden>
+            <span>10초 자동진행</span><strong aria-hidden="true">켜짐</strong></button></div></div>
       <div class="g-layout">
         <div class="g-decision-surface">
         <section class="g-board" aria-label="게임 테이블"><span class="g-turn-clock" role="timer" aria-live="off" hidden></span><div class="g-felt"><div class="g-felt-line"></div>
@@ -908,6 +911,28 @@ export function updateGamePace(container, pace, pendingPace = null) {
   if (!ui?.options || !container.firstElementChild) return;
   ui.options = {...ui.options, pace, pendingPace};
   paintPace(ui);
+}
+
+function paintAutoPlay(ui) {
+  const {autoPlay, pendingAutoPlay, onAutoPlayChange} = ui.options;
+  const control = ui.root.querySelector('[data-table-auto-play]');
+  control.hidden = typeof autoPlay !== "boolean";
+  if (control.hidden) return;
+  const pending = typeof pendingAutoPlay === "boolean";
+  const enabled = pending ? pendingAutoPlay : autoPlay;
+  control.disabled = pending || typeof onAutoPlayChange !== "function";
+  control.setAttribute("aria-busy", String(pending));
+  control.setAttribute("aria-checked", String(enabled));
+  control.querySelector("strong").textContent = enabled ? "켜짐" : "꺼짐";
+}
+
+export function updateGameAutoPlay(container, autoPlay, pendingAutoPlay = null, turnDeadline) {
+  const ui = cache.get(container);
+  if (!ui?.options || !container.firstElementChild) return;
+  ui.options = {...ui.options, autoPlay, pendingAutoPlay};
+  if (turnDeadline !== undefined) ui.options.turnDeadline = turnDeadline;
+  paintAutoPlay(ui);
+  if (ui.view) updateTurnCountdown(ui);
 }
 
 function redraw(ui, newDeal = false) {
@@ -1032,6 +1057,7 @@ function bind(ui) {
     if (!ui.root.querySelector(".g-screen")) return;
     const el = event.target.closest("button");
     if (!el || el.disabled) return;
+    if (el.hasAttribute("data-table-auto-play")) return ui.options.onAutoPlayChange?.(!ui.options.autoPlay);
     if (el.dataset.card) {
       const card = el.dataset.card;
       if (ui.view.phase === "discard") {
@@ -1244,6 +1270,7 @@ export function renderGame(container, publicView, options = {}) {
   const previousBalances = ui.options?.seatBalances;
   ui.options = options;
   paintPace(ui);
+  paintAutoPlay(ui);
   // A failed opening claim may play one trick solely to identify the friend.
   // Its point cards are awarded by the claim, not to that trick's winner.
   if (publicView.phase === "result" && publicView.result.setting) {

@@ -204,6 +204,10 @@ button.seat-place:hover { border-color:#47744d; background:#ecf4e8; }
   gap: clamp(4px, 1.25vw, 14px); align-items: start;
   margin: 16px 0; container: game-options / inline-size;
 }
+.room-game-options:has(> :nth-child(4)) { grid-template-columns: repeat(4,minmax(0,1fr)); }
+@media (max-width: 440px) {
+  .room-game-options:has(> :nth-child(4)) { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px 12px; }
+}
 .room-game-option, .room-game-options .series-summary {
   display: flex; align-items: center; gap: 4px 6px; min-width: 0; margin: 0;
   color: #415c49; font-size: .88rem; line-height: 1.4;
@@ -217,6 +221,7 @@ button.seat-place:hover { border-color:#47744d; background:#ecf4e8; }
   .room-game-option, .room-game-options .series-summary { flex-direction: column; align-items: stretch; }
   .room-game-option select { width: 100%; padding-inline: 2px; }
 }
+.room-game-options:has(> :nth-child(4)) > * { flex-direction: column; align-items: stretch; }
 .rule-settings {
   min-width: 0; margin: 20px 0; padding: 0 15px 2px;
   border: 1px solid #cbd5c5; border-radius: 10px; background: #f3f6ed;

@@ -12,7 +12,8 @@ export function roomPreferences() {
   const roundLimit = saved?.roundLimit;
   const modelChoice = isModelId(saved?.modelChoice) || saved?.modelChoice === 'random'
     ? saved.modelChoice : commonModelChoice(saved?.models);
-  return {roundLimit:roundLimit === null || roundLimit === 20 ? roundLimit : 10, pace:normalizeGameSpeed(saved?.pace), rules, modelChoice};
+  return {roundLimit:roundLimit === null || roundLimit === 20 ? roundLimit : 10,
+    pace:normalizeGameSpeed(saved?.pace), autoPlay:saved?.autoPlay !== false, rules, modelChoice};
 }
 
 export function rememberRoom(change) {

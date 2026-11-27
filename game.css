@@ -63,6 +63,20 @@
 .g-pace select { min-height: 34px; cursor: pointer; color-scheme: dark; }
 .g-pace select:disabled { cursor: wait; opacity: .7; }
 .g-pace-value { font-weight: 600; }
+.g-screen .g-auto-play {
+  display: inline-flex; flex: none; align-items: center; gap: 6px; padding: 5px 8px;
+  min-height: 34px; border-radius: 6px; border: 1px solid #566f5c;
+  color: #d6dfd1; background: #1b352a; white-space: nowrap; font-size: .82rem; font-weight: 650;
+}
+.g-auto-play strong { color: #c4cec6; font-size: .75rem; }
+.g-auto-play strong::before {
+  content: ""; display: inline-block; width: .5em; height: .5em; margin-right: .3em;
+  border: 1px solid currentColor; border-radius: 50%; vertical-align: .08em;
+}
+.g-auto-play[aria-checked="true"] strong { color: #bce7a6; }
+.g-auto-play[aria-checked="true"] strong::before { background: currentColor; }
+.g-auto-play:enabled:hover { border-color: #b7c7a9; background: #284637; }
+.g-auto-play[aria-busy="true"] { opacity: .75; cursor: wait; }
 .g-heading h1 { margin: 0; color: var(--g-cream); font-size: clamp(1.75rem, 3.4vw, 2.5rem); font-weight: 700; letter-spacing: -.055em; line-height: 1.2; }
 .g-eyebrow { display: flex; align-items: center; gap: 6px; font-size: .8rem; font-weight: 600; color: #b9c8b3; }
 .g-eyebrow i { color: #ddbc76; font: normal 1.1rem Georgia, serif; }

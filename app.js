@@ -1,4 +1,4 @@
-import {clearGame, renderGame, rulesContent, updateGamePace, updateSeatBalances} from './game-ui.js';
+import {clearGame, renderGame, rulesContent, updateGameAutoPlay, updateGamePace, updateSeatBalances} from './game-ui.js';
 import {botTurnDelay, normalizeGameSpeed, paceMultiplier} from './table-timing.js';
 import {createNextRoundTimer} from './next-round.js';
 import {hostRoom, joinRoom, normalizeRoomCode} from './network.js';
@@ -79,7 +79,7 @@ let chipReader = null, preparing = null, acceptedOffer = null, resumeHand = null
 let activeRead = null, activeTimer, settlingHand = null;
 let leavingGeneration = null;
 let departureHand = null, departureTimer;
-let pendingPace = null;
+const pendingSettings = {pace:null, autoPlay:null};
 let lastAccount = null, settledChipHand = null;
 let accountUI;
 const nextRound = createNextRoundTimer({
@@ -204,7 +204,7 @@ function practiceSeatBalances(state) {
 function serverOnlySnapshot(data) {
   const scoreboard = snapshot?.chipHandId === data.handId && (!data.game.result || snapshot.game?.result)
     ? snapshot.scoreboard : undefined;
-  return {chipHandId:data.handId, seat:data.seat, spectator:data.seat < 0, pace:data.pace, scoreboard,
+  return {chipHandId:data.handId, seat:data.seat, spectator:data.seat < 0, pace:data.pace, autoPlay:data.autoPlay, scoreboard,
     players:data.names.map((name, i) => ({name, bot:data.bots[i], modelId:data.models[i]})),
     rules:data.game.rules, game:data.game};
 }
@@ -215,7 +215,7 @@ function trackChipHand(handId, initial = null, hintRevision) {
   const watch = mode === 'spectate' || !accountClient.state.user || (mode !== 'resume' &&
     (authority ? authority.hostSeat < 0 && inheritedHand === handId : snapshot?.spectator));
   let lastSeatBalance, lastSeenRevision;
-  const reader = followChipHand(chipRequest, handId, watch ? 'watch' : 'view', (data, balancesOnly, paceOnly) => {
+  const reader = followChipHand(chipRequest, handId, watch ? 'watch' : 'view', (data, balancesOnly, settingsOnly) => {
     if (reader !== chipReader) return;
     const timed = data.lastTimedAction;
     if (lastSeenRevision !== undefined && !data.game.result && data.seat >= 0 &&
@@ -238,15 +238,17 @@ function trackChipHand(handId, initial = null, hintRevision) {
         accountClient.refreshWallet().catch(error => toast(error.message));
       }
     }
-    if (balancesOnly || paceOnly) {
+    if (balancesOnly || settingsOnly) {
       if (snapshot?.chipHandId === handId) {
         updateSeatBalances($('game'), data.seatBalances);
-        if (paceOnly) {
+        if (settingsOnly) {
           if (mode === 'host' && authority.syncChipHand(data)) {
-            broadcastPace(handId, data.pace, data.revision);
+            broadcastTableSettings(handId, data.revision);
+            backups?.share();
           }
           snapshot.pace = data.pace;
-          updateGamePace($('game'), data.pace, pendingPace?.reader === reader ? pendingPace.pace : null);
+          snapshot.autoPlay = data.autoPlay;
+          paintTableSettings(reader, data);
         }
       }
       return;
@@ -265,49 +267,79 @@ function trackChipHand(handId, initial = null, hintRevision) {
   reader.start();
 }
 
-function broadcastPace(handId, pace, revision) {
+function broadcastTableSettings(handId, revision) {
   for (const id of authority.connections.keys()) {
-    transport?.send(id, {type:'table-pace', handId, pace, revision});
+    transport?.send(id, {type:'table-pace', handId, pace:authority.pace, autoPlay:authority.autoPlay, revision});
   }
 }
 
-async function changeGamePace(value) {
-  const pace = normalizeGameSpeed(value);
+function pendingSetting(key, reader) {
+  const request = pendingSettings[key];
+  return request && request.reader === reader ? request.value : null;
+}
+
+function paintTableSettings(reader, settings) {
+  updateGamePace($('game'), settings.pace, pendingSetting('pace', reader));
+  if (mode !== 'practice') {
+    updateGameAutoPlay($('game'), settings.autoPlay, pendingSetting('autoPlay', reader), reader?.localTurnDeadline ?? null);
+  }
+}
+
+async function changeTableSetting(key, value) {
+  const speed = key === 'pace';
   const reader = chipReader;
-  if (pace !== value || preparing || !snapshot?.game || snapshot.scoreboard?.complete) return;
+  if ((speed ? normalizeGameSpeed(value) !== value : typeof value !== 'boolean') ||
+      preparing || !snapshot?.game || snapshot.scoreboard?.complete) return;
   if (mode === 'practice' || (mode === 'host' && authority.round?.result)) {
-    const previous = authority.pace;
-    authority.setPace(pace);
-    snapshot.pace = pace;
-    if (mode === 'practice' && botDueAt !== null) {
-      const remaining = Math.max(0, botDueAt - performance.now());
-      schedulePracticeBot(remaining * paceMultiplier(pace) / paceMultiplier(previous));
+    if (speed) {
+      const previous = authority.pace;
+      authority.setPace(value);
+      if (mode === 'practice' && botDueAt !== null) {
+        const remaining = Math.max(0, botDueAt - performance.now());
+        schedulePracticeBot(remaining * paceMultiplier(value) / paceMultiplier(previous));
+      }
+    } else {
+      if (mode === 'practice') return;
+      authority.setAutoPlay(value);
     }
-    if (mode === 'host') broadcastPace(snapshot.chipHandId, pace, snapshot.chipRevision);
-    rememberRoom({pace});
-    updateGamePace($('game'), pace);
+    snapshot[key] = value;
+    if (mode === 'host') {
+      broadcastTableSettings(snapshot.chipHandId, snapshot.chipRevision);
+      backups?.share();
+    }
+    rememberRoom({[key]:value});
+    paintTableSettings(reader, snapshot);
     return;
   }
   if (!reader || reader.handId !== snapshot.chipHandId || reader.current?.game.result ||
-      pendingPace?.reader === reader || !(mode === 'host' || (mode === 'resume' && reader.current?.publicGame))) return;
-  const request = {reader, pace};
-  pendingPace = request;
-  updateGamePace($('game'), reader.current?.pace, pace);
+      pendingSettings[key]?.reader === reader || !(mode === 'host' || (mode === 'resume' && reader.current?.publicGame))) return;
+  const request = {reader, value};
+  pendingSettings[key] = request;
+  paintTableSettings(reader, reader.current);
   try {
     if (inheritedHand === reader.handId && mode === 'host') {
       const store = roomChat.archive;
-      const data = await chipRequest({op:'room-pace',handId:reader.handId,term:store.term,credential:store.credential,pace});
+      const data = await chipRequest({op:speed ? 'room-pace' : 'room-auto-play',handId:reader.handId,
+        term:store.term,credential:store.credential,[key]:value});
       if (authority && chipReader === reader) {
-        authority.syncChipHand(data); broadcastPace(reader.handId,pace,data.revision);
-        publicReader?.wake(data.revision); reader.wake(data.revision); rememberRoom({pace}); publish();
+        authority.syncChipHand(data); broadcastTableSettings(reader.handId,data.revision);
+        publicReader?.wake(data.revision);
+        rememberRoom({[key]:authority[key]});
+        publish();
+        // Room control returns a spectator projection. Refresh this seat's own
+        // view to pick up the new timer without replacing its private hand.
+        await reader.refresh();
       }
-    } else await reader.changePace(pace);
-    if (chipReader === reader && reader.current?.pace === pace) rememberRoom({pace});
+    } else {
+      if (speed) await reader.changePace(value);
+      else await reader.changeAutoPlay(value);
+      if (chipReader === reader && reader.current?.[key] === value) rememberRoom({[key]:value});
+    }
   } catch (error) {
     if (chipReader === reader) toast(error.message);
   } finally {
-    if (pendingPace === request) pendingPace = null;
-    if (chipReader === reader) updateGamePace($('game'), (authority?.round?.result ? authority.pace : reader.current?.pace) ?? snapshot?.pace);
+    if (pendingSettings[key] === request) pendingSettings[key] = null;
+    if (chipReader === reader) paintTableSettings(reader, authority?.round?.result ? authority : reader.current);
   }
 }
 
@@ -590,7 +622,10 @@ function roomGameOptions(snapshot, host) {
   const series = host && !board?.rounds ? picker('roundLimit', '경기 판수', [[10,'10판'],[20,'20판'],[0,'무제한']], limit) : seriesSummary(board);
   const speed = host ? picker('pace', '진행 속도', Object.entries(paceLabels), selectedPace)
     : `<p class="series-summary"><strong>진행 속도</strong> ${paceLabels[selectedPace]}</p>`;
-  return '<div class="room-game-options">' + series + speed + roomModelOption(snapshot, host) + '</div>';
+  const timed = snapshot.autoPlay !== false;
+  const clock = host ? picker('autoPlay', '10초 자동진행', [['on','켜짐'],['off','꺼짐']], timed ? 'on' : 'off')
+    : `<p class="series-summary"><strong>10초 자동진행</strong> ${timed ? '켜짐' : '꺼짐'}</p>`;
+  return '<div class="room-game-options">' + series + speed + clock + roomModelOption(snapshot, host) + '</div>';
 }
 
 function seriesSummary(board) {
@@ -627,7 +662,7 @@ function stopSession(message, {returnToObserver = false, navigatingAway = false}
   $('room').inert = $('game').inert = false;
   chipReader?.close();
   chipReader = null;
-  pendingPace = null;
+  pendingSettings.pace = pendingSettings.autoPlay = null;
   roomAccounts.clear();
   if (publicListing) trackDirectoryRelease(roomCode,publicListing.close());
   publicListing = null;
@@ -981,6 +1016,13 @@ function drawRoom() {
       publish();
     };
     if (focus?.name === 'pace') pacePicker.focus({preventScroll:true});
+    const autoPlayPicker = room.querySelector('select[name="autoPlay"]');
+    autoPlayPicker.onchange = () => {
+      authority.setAutoPlay(autoPlayPicker.value === 'on');
+      rememberRoom({autoPlay:authority.autoPlay});
+      publish();
+    };
+    if (focus?.name === 'autoPlay') autoPlayPicker.focus({preventScroll:true});
     room.querySelector('[name="modelChoice"]').onchange = event => {
       const modelChoice = event.target.value;
       authority.setModelChoice(modelChoice);
@@ -1057,15 +1099,20 @@ function draw() {
   showScreen('game');
   const remote = chipReader?.handId === snapshot.chipHandId ? chipReader?.current : null;
   const serverOnly = mode === 'resume' || mode === 'spectate';
+  const useRoomSettings = remote?.game.result && !serverOnly;
+  const mayChange = !snapshot.scoreboard?.complete && (mode === 'practice' || (mode === 'host' && remote) ||
+    (mode === 'resume' && remote?.publicGame && !remote.game.result));
   renderGame($('game'),remote?.game ?? snapshot.game,{
     names:remote?.names ?? snapshot.players.map(p => p?.name), isHost: Boolean(authority), scoreboard:snapshot.scoreboard,
     seatBalances:mode === 'practice' ? practiceSeatBalances(accountClient.state) : remote?.seatBalances,
     chipDelta:remote?.myDelta, handDeltas:remote?.deltas, settlementSeat:remote?.mySettlementSeat, resumed:serverOnly,
     turnDeadline:remote ? chipReader.localTurnDeadline : null,
-    pace:remote?.game.result && !serverOnly ? snapshot.pace : remote?.pace ?? snapshot.pace,
-    pendingPace:pendingPace && pendingPace.reader === chipReader ? pendingPace.pace : null,
-    onPaceChange:!snapshot.scoreboard?.complete && (mode === 'practice' || (mode === 'host' && remote) ||
-      (mode === 'resume' && remote?.publicGame && !remote.game.result)) ? changeGamePace : undefined,
+    pace:useRoomSettings ? snapshot.pace : remote?.pace ?? snapshot.pace,
+    pendingPace:pendingSetting('pace', chipReader),
+    onPaceChange:mayChange ? value => changeTableSetting('pace', value) : undefined,
+    autoPlay:mode === 'practice' ? undefined : (useRoomSettings ? snapshot.autoPlay : remote?.autoPlay ?? snapshot.autoPlay),
+    pendingAutoPlay:pendingSetting('autoPlay', chipReader),
+    onAutoPlayChange:mayChange && mode !== 'practice' ? value => changeTableSetting('autoPlay', value) : undefined,
     modelLabels:remote ? remote.models.map((id,i) => remote.bots[i] ? modelLabel(id) : '') :
       snapshot.players.map(p => p?.bot && p.modelId ? modelLabel(p.modelId) : ''),
     replaySetupLabel: mode === 'practice' ? (snapshot.scoreboard?.complete ? '새 연습 경기 설정' : '규칙·AI 바꿔서 시작') : '대기실로 돌아가기',
@@ -1467,7 +1514,7 @@ async function connectRoom(kind, name, code, signal, {roundLimit, publicRoom, in
     const preferences = roomPreferences();
     let session, committedDeal;
     const createSession = () => new HostSession(name, preferences.rules, undefined, roundLimit,
-      {publicRoom, hostSpectator:intent === 'watch', pace:preferences.pace, modelChoice:preferences.modelChoice});
+      {publicRoom, hostSpectator:intent === 'watch', pace:preferences.pace, autoPlay:preferences.autoPlay, modelChoice:preferences.modelChoice});
     let store;
     let reservedPublic = false, reservedPrivate = false;
     if (!recovery && slot) {
@@ -1648,7 +1695,8 @@ async function connectRoom(kind, name, code, signal, {roundLimit, publicRoom, in
         if (packet?.type === 'table-pace' && snapshot?.chipHandId === packet.handId &&
             normalizeGameSpeed(packet.pace) === packet.pace) {
           snapshot.pace = packet.pace;
-          if (snapshot.game?.result) updateGamePace($('game'), packet.pace);
+          if (typeof packet.autoPlay === 'boolean') snapshot.autoPlay = packet.autoPlay;
+          if (snapshot.game?.result) paintTableSettings(chipReader, snapshot);
           else chipReader?.wake(packet.revision);
           return;
         }

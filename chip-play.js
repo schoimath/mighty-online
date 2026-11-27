@@ -5,7 +5,7 @@ import {normalizeGameSpeed, tableDelay} from './table-timing.js';
 export async function callChipService(client, payload) {
   if (!client.url || !client.publishableKey) throw new Error('게임 계정 서버 연결이 필요합니다.');
   const token = payload.op === 'watch' ? null : await client.accessToken();
-  if (!['watch','room-takeover','room-pace'].includes(payload.op) && !token) throw new Error('이메일 확인 후 로그인해 주세요.');
+  if (!['watch','room-takeover','room-pace','room-auto-play'].includes(payload.op) && !token) throw new Error('이메일 확인 후 로그인해 주세요.');
   const headers = {'Content-Type':'application/json', apikey:client.publishableKey};
   if (token) headers.Authorization = 'Bearer ' + token;
   const res = await fetch(client.url.replace(/\/$/, '') + '/functions/v1/chip-hand', {
@@ -27,9 +27,15 @@ function dealPace(value = 'normal') {
   return normalizeGameSpeed(value) === value ? value : null;
 }
 
+function dealAutoPlay(value = true) {
+  return typeof value === 'boolean' ? value : null;
+}
+
 export function chipManifest(plan, room, host, accounts) {
   const pace = dealPace(plan.pace);
   if (!pace) throw new Error('대국 속도를 확인해 주세요.');
+  const autoPlay = dealAutoPlay(plan.autoPlay);
+  if (autoPlay === null) throw new Error('10초 자동진행 설정을 확인해 주세요.');
   const seats = plan.seats.map(p => p.bot ? null : accounts.get(p.id));
   if (!accountIdValid(host) || seats.some(id => id !== null && !accountIdValid(id))) {
     throw new Error('모든 참가자가 계정에 로그인한 뒤 다시 입장해 주세요.');
@@ -38,7 +44,8 @@ export function chipManifest(plan, room, host, accounts) {
   if (!humans.length) throw new Error('칩 대국에는 칩을 보유한 참가자가 한 명 이상 필요합니다.');
   if (new Set(humans).size !== humans.length) throw new Error('한 계정은 한 자리에서만 참가할 수 있습니다.');
   return {handId:crypto.randomUUID(), room, host, seats, names:plan.seats.map(p => p.name),
-    models:plan.models, rules:plan.rules, firstSeat:plan.firstSeat, ...(pace === 'normal' ? {} : {pace})};
+    models:plan.models, rules:plan.rules, firstSeat:plan.firstSeat, ...(pace === 'normal' ? {} : {pace}),
+    ...(autoPlay ? {} : {autoPlay:false})};
 }
 
 export function offeredSeat(snapshot, spec, room, userId) {
@@ -47,6 +54,8 @@ export function offeredSeat(snapshot, spec, room, userId) {
       !Array.isArray(spec.seats) || spec.seats.length !== 5) return -1;
   const pace = dealPace(spec.pace);
   if (!pace || pace !== dealPace(snapshot.pace)) return -1;
+  const autoPlay = dealAutoPlay(spec.autoPlay);
+  if (autoPlay === null || autoPlay !== dealAutoPlay(snapshot.autoPlay)) return -1;
   const seat = snapshot.spectator ? snapshot.reservation?.seat : snapshot.seat;
   if (!Number.isInteger(seat) || seat < 0 || seat > 4 || spec.seats[seat] !== userId) return -1;
   const next = snapshot.nextDeal;
@@ -74,8 +83,13 @@ export function consentWindow(ids, handId, timeout = 30000) {
   };
 }
 
-function onlyPaceChanged(previous, next) {
-  if (!previous || normalizeGameSpeed(previous.pace) === normalizeGameSpeed(next.pace)) return false;
+function sameDecisionAfterUpdate(previous, next) {
+  if (!previous || previous.handId !== next.handId) return false;
+  const settingsChanged = normalizeGameSpeed(previous.pace) !== normalizeGameSpeed(next.pace) ||
+    dealAutoPlay(previous.autoPlay) !== dealAutoPlay(next.autoPlay);
+  const renewedPresence = previous.turnDeadline === null && next.turnDeadline === null &&
+    next.bots?.[next.game?.turn] === false && Number.isFinite(previous.dueAt) && next.dueAt > previous.dueAt;
+  if (!settingsChanged && !renewedPresence) return false;
   return previous.seat === next.seat && ['game','publicGame','names','bots','models'].every(
     field => JSON.stringify(previous[field]) === JSON.stringify(next[field]));
 }
@@ -121,9 +135,9 @@ export function followChipHand(request, handId, op, onState, onError, initial) {
       return;
     }
     acceptedOrder = order;
-    const paceOnly = onlyPaceChanged(current, data);
+    const settingsOnly = sameDecisionAfterUpdate(current, data);
     current = data;
-    onState(data, false, paceOnly);
+    onState(data, false, settingsOnly);
   }
   function schedule(delay) {
     clearTimeout(timer);
@@ -155,7 +169,7 @@ export function followChipHand(request, handId, op, onState, onError, initial) {
       scheduleNext();
     }
   }
-  // A pace edit and a card play from one browser must use successive server revisions.
+  // Table setting edits and card plays from one browser must use successive server revisions.
   function write(operation) {
     const previous = writing;
     const job = (previous ?? Promise.resolve()).catch(() => {}).then(() => {
@@ -174,9 +188,9 @@ export function followChipHand(request, handId, op, onState, onError, initial) {
   }
   async function sendAction(before, action) {
     let response = await send({op:'act', revision:before.revision, action});
-    // Replay only when a newer pace is the sole change to the game and actor.
+    // A table option or a renewed presence lease can advance the revision without a move.
     if (!closed && response.handId === handId && response.revision > before.revision &&
-        onlyPaceChanged(before, response) && onlyPaceChanged(before, current)) {
+        sameDecisionAfterUpdate(before, response) && sameDecisionAfterUpdate(before, current)) {
       response = await send({op:'act', revision:current.revision, action});
     }
     if (action.type === 'play' && !response.game) throw new Error('게임 서버 응답을 확인하지 못했습니다.');
@@ -186,6 +200,7 @@ export function followChipHand(request, handId, op, onState, onError, initial) {
       return Number.isFinite(current?.turnDeadline) ? current.turnDeadline + (clockOffset ?? 0) : null;
     },
     start() { if (initial) accept(initial, 0); schedule(0); },
+    refresh() { return write(() => send({op})); },
     wake(revision) {
       if (closed || current?.game.phase === 'result') return;
       if (Number.isSafeInteger(revision)) {
@@ -207,8 +222,8 @@ export function followChipHand(request, handId, op, onState, onError, initial) {
           const before = current;
           if (before.seat < 0 || before.game.turn !== before.seat || before.game.result) return;
           // A timeout can bring this seat to another decision while a write is
-          // queued. Only a pace-only change preserves the original choice.
-          if (selected.revision !== before.revision && !onlyPaceChanged(selected, before)) return;
+          // queued. A settings edit or renewed lease preserves the original choice.
+          if (selected.revision !== before.revision && !sameDecisionAfterUpdate(selected, before)) return;
           if (!play) return sendAction(before, action);
           if (!sameDealAndSeat(selected, before) || before.game.phase !== 'play' ||
               selected.game.trickNo !== before.game.trickNo || !before.game.hand?.includes(action.card)) return false;
@@ -242,6 +257,19 @@ export function followChipHand(request, handId, op, onState, onError, initial) {
         });
         return current;
       } finally { changingPace = false; }
+    },
+    async changeAutoPlay(autoPlay) {
+      if (closed) return current;
+      if (op !== 'view' || !current?.publicGame || current.game.result) {
+        throw new Error('진행 중인 판의 방장만 10초 자동진행을 변경할 수 있습니다.');
+      }
+      if (typeof autoPlay !== 'boolean') throw new Error('10초 자동진행 설정을 확인해 주세요.');
+      await write(async () => {
+        if (!current.game.result && dealAutoPlay(current.autoPlay) !== autoPlay) {
+          await send({op:'auto-play', autoPlay});
+        }
+      });
+      return current;
     },
     close() { closed = true; clearTimeout(timer); }
   };

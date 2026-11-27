@@ -60,7 +60,7 @@ export function chipHandler({url, publicKey, serviceKey, send = fetch}) {
     try {
       const bearer = request.headers.get('authorization');
       let id = null;
-      const roomControl = ['room-takeover','room-pace'].includes(payload?.op);
+      const roomControl = ['room-takeover','room-pace','room-auto-play'].includes(payload?.op);
       if (!['watch','tick'].includes(payload?.op) && (!roomControl || bearer)) {
         if (!bearer || !/^Bearer [^\s]+$/i.test(bearer)) throw fail('로그인이 필요합니다.', 401);
         const result = await send(url + '/auth/v1/user', {headers:{apikey:publicKey, Authorization:bearer}});

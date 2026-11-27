@@ -39,6 +39,26 @@ test('the selected pace follows the host, seated guests and spectators into the 
   assert.equal(room.round.bid.suit, 'H');
 });
 
+test('the turn assistance setting follows the room through a host change and old checkpoints default to on', () => {
+  const room = new HostSession('방장', undefined, undefined, 10, {publicRoom:true});
+  room.addGuest('guest','친구','play');
+  assert.equal(room.hostView().autoPlay,true);
+  room.setAutoPlay(false);
+  assert.equal(room.viewFor('guest').autoPlay,false);
+  assert.equal(room.plannedTable().autoPlay,false);
+  const checkpoint = room.handoffState();
+  const successor = HostSession.takeOver(checkpoint,'guest');
+  assert.equal(successor.plannedTable().autoPlay,false);
+  delete checkpoint.autoPlay;
+  assert.equal(HostSession.takeOver(checkpoint,'guest').autoPlay,true);
+  room.start();
+  const revision = room.revision;
+  room.setAutoPlay(true);
+  assert.equal(room.viewFor('guest').autoPlay,true);
+  room.act(room.round.turn,revision,{type:'bid',points:14,suit:'H'});
+  assert.equal(room.round.bid.suit,'H');
+});
+
 function finishWithFriend(session, friendSeat) {
   const submit = action => session.botTurn ? session.runBot(action) : session.act(session.round.turn, session.revision, action);
   submit({type: 'bid', points: session.rules.minBid, suit: 'H'});

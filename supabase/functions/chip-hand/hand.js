@@ -31,10 +31,11 @@ function manifestOf(request) {
   check(Number.isInteger(firstSeat) && firstSeat >= 0 && firstSeat < 5, '첫 공약 자리를 확인해 주세요.');
   const pace = normalizeGameSpeed(request.pace);
   check(request.pace === undefined || pace === request.pace, '테이블 진행 속도를 확인해 주세요.');
-  // Old clients consented to the manifest without a pace field. Preserve its
-  // exact serialized shape for normal tables, and bind any other pace to consent.
+  check(request.autoPlay === undefined || typeof request.autoPlay === 'boolean', '10초 자동진행 설정을 확인해 주세요.');
+  // Keep default settings out of the hash so existing signed-off tables can start.
   return {host:host.toLowerCase(), room, seats:normalized, names:names.map(n => n.trim()),
-    models, rules:validateRules(request.rules), firstSeat, ...(pace === 'normal' ? {} : {pace})};
+    models, rules:validateRules(request.rules), firstSeat, ...(pace === 'normal' ? {} : {pace}),
+    ...(request.autoPlay === false ? {autoPlay:false} : {})};
 }
 
 async function hashManifest(spec) {
@@ -44,7 +45,7 @@ async function hashManifest(spec) {
 }
 
 function usesTurnClock(state) {
-  return !state.round.result && !state.bots[state.round.turn] && state.bots.filter(bot => !bot).length >= 2;
+  return state.autoPlay !== false && !state.round.result && !state.bots[state.round.turn] && state.bots.filter(bot => !bot).length >= 2;
 }
 
 function turnDeadline(state) {
@@ -62,7 +63,7 @@ function scheduleTurn(state, now, botTime = now) {
 }
 
 function createState(spec, manifest, now) {
-  const state = {manifest, names:spec.names, models:spec.models, firstSeat:spec.firstSeat, pace:normalizeGameSpeed(spec.pace),
+  const state = {manifest, names:spec.names, models:spec.models, firstSeat:spec.firstSeat, pace:normalizeGameSpeed(spec.pace), autoPlay:spec.autoPlay !== false,
     round:createGame({firstSeat:spec.firstSeat, rules:spec.rules}), bots:spec.seats.map(id => id === null),
     history:Array.from({length:5}, () => []), memory:Array(5).fill(null), dueAt:null};
   scheduleTurn(state, now);
@@ -88,7 +89,7 @@ function present(row, id, now) {
     account && (!state.bots[i] || row.settled) && Number.isSafeInteger(row.seatBalances?.[i]) ? row.seatBalances[i] : null);
   return {handId:row.hand, room:row.room, revision:row.revision, seat, game, bots:state.bots,
     names:state.names.map((_, i) => nameAt(row, i)), seatBalances, models:state.models, firstSeat:state.firstSeat, pace:normalizeGameSpeed(state.pace),
-    dueAt:deadline ?? state.dueAt, turnDeadline:deadline, serverNow:now, lastTimedAction:state.lastTimedAction ?? null,
+    autoPlay:state.autoPlay !== false, dueAt:deadline ?? state.dueAt, turnDeadline:deadline, serverNow:now, lastTimedAction:state.lastTimedAction ?? null,
     deltas, ...(owner >= 0 && deltas ? {myDelta:deltas[owner], mySettlementSeat:owner} : {}),
     ...(id === row.host ? {publicGame} : {})};
 }
@@ -152,33 +153,45 @@ function advanceDue(row, now, catchup) {
   return true;
 }
 
-// A settings change has its own persistence revision but leaves card choices untouched.
-// A move, substitution or presence write ends the contiguous window of settings-only revisions.
+// Settings edits and presence renewals advance storage without changing card choices.
+// A move or substitution ends the contiguous window of playable revisions.
 function firstPlayableRevision(row) {
-  const change = row.state.lastPaceChange;
+  const change = row.state.lastTurnPreservingChange ?? row.state.lastPaceChange;
   return change?.revision === row.revision ? change.from : row.revision;
 }
 
-async function changePace(row, pace, save, now) {
-  check(pace === normalizeGameSpeed(pace), '테이블 진행 속도를 확인해 주세요.');
+function preserveTurn(row) {
+  row.state.lastTurnPreservingChange = {from:firstPlayableRevision(row), revision:row.revision + 1};
+}
+
+async function changeTableSetting(row, input, save, now) {
+  const changingClock = input.op === 'auto-play' || input.op === 'room-auto-play';
+  if (changingClock) check(typeof input.autoPlay === 'boolean', '10초 자동진행 설정을 확인해 주세요.');
+  else check(input.pace === normalizeGameSpeed(input.pace), '테이블 진행 속도를 확인해 주세요.');
   for (let retry = 0; ; retry++) {
     const state = row.state;
     check(!state.round.result, '이 판은 이미 끝났습니다.', 409);
-    const previous = normalizeGameSpeed(state.pace);
-    if (previous === pace) return row;
-    check(retry < 4, '차례가 바뀌었습니다. 진행 속도를 다시 선택해 주세요.', 409);
-    if (state.bots[state.round.turn] && state.dueAt > now) {
-      const remaining = state.dueAt - now;
-      state.dueAt = now + Math.round(remaining * paceMultiplier(pace) / paceMultiplier(previous));
+    const previousPace = normalizeGameSpeed(state.pace);
+    if (changingClock ? (state.autoPlay !== false) === input.autoPlay : previousPace === input.pace) return row;
+    check(retry < 4, '차례가 바뀌었습니다. 설정을 다시 선택해 주세요.', 409);
+    if (changingClock) {
+      const timed = usesTurnClock(state);
+      state.autoPlay = input.autoPlay;
+      if (usesTurnClock(state) !== timed) scheduleTurn(state, now);
+    } else {
+      if (state.bots[state.round.turn] && state.dueAt > now) {
+        const remaining = state.dueAt - now;
+        state.dueAt = now + Math.round(remaining * paceMultiplier(input.pace) / paceMultiplier(previousPace));
+      }
+      state.pace = input.pace;
     }
-    state.pace = pace;
-    state.lastPaceChange = {from:firstPlayableRevision(row), revision:row.revision + 1};
+    preserveTurn(row);
     row = (await save(row)).hand;
   }
 }
 
 async function controlHand(input, id, db, hand, now) {
-  const legacy = input.op === 'pace';
+  const legacy = input.op === 'pace' || input.op === 'auto-play';
   if (!legacy) check(typeof input.credential === 'string' && /^[0-9a-f]{64}$/.test(input.credential) &&
     Number.isSafeInteger(input.term) && input.term>0, '방장 권한을 확인해 주세요.', 403);
   const proof = {legacy, id, credential:legacy ? null : input.credential, term:legacy ? null : input.term};
@@ -186,7 +199,7 @@ async function controlHand(input, id, db, hand, now) {
   let context = await db.control(hand, proof);
   check(context?.hand, '해당 판을 찾을 수 없습니다.', 404);
   if (input.op !== 'room-takeover') {
-    const row = await changePace(context.hand, input.pace, save, now);
+    const row = await changeTableSetting(context.hand, input, save, now);
     const receipt = present(row, legacy ? id : null, now);
     return legacy ? receipt : {...receipt, publicGame:receipt.game};
   }
@@ -211,15 +224,15 @@ async function controlHand(input, id, db, hand, now) {
 export async function operateHand(input, accountId, db, now = Date.now()) {
   check(input && typeof input === 'object' && !Array.isArray(input), '요청을 확인해 주세요.');
   const {op} = input;
-  const roomControl = op === 'room-takeover' || op === 'room-pace';
-  check(roomControl || ['ready','start','active','view','act','leave','pace','watch','tick'].includes(op), '지원하지 않는 요청입니다.');
+  const roomControl = op === 'room-takeover' || op === 'room-pace' || op === 'room-auto-play';
+  check(roomControl || ['ready','start','active','view','act','leave','pace','auto-play','watch','tick'].includes(op), '지원하지 않는 요청입니다.');
   const publicRead = op === 'watch' || op === 'tick';
   const id = accountId?.toLowerCase() ?? null;
   if (!roomControl && !publicRead) check(uuid(id), '이메일 인증 후 로그인해 주세요.', 401);
   if (op === 'active') return {handId:await db.active()};
   check(uuid(input.handId), '판 번호가 올바르지 않습니다.');
   const hand = input.handId.toLowerCase();
-  if (roomControl || op === 'pace') return controlHand(input, id, db, hand, now);
+  if (roomControl || op === 'pace' || op === 'auto-play') return controlHand(input, id, db, hand, now);
   if (op === 'ready' || op === 'start') {
     const spec = manifestOf(input);
     const hash = await hashManifest(spec);
@@ -279,6 +292,7 @@ export async function operateHand(input, accountId, db, now = Date.now()) {
              !state.bots[seat] && !usesTurnClock(state) && state.dueAt - now <= 45_000) {
     // An authenticated read renews the active seat's presence while thinking.
     state.dueAt = now + RECONNECT_MS;
+    preserveTurn(row);
     changed = true;
   } else changed = advanceDue(row, now, op === 'tick');
   if (changed) row = await db.save(row);
